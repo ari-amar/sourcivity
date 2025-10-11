@@ -258,6 +258,148 @@ This project was migrated from the Floot framework to Next.js:
 
 [Add your license here]
 
+## Branch Differences: `Ari-Improvements` vs `main`
+
+The `Ari-Improvements` branch contains significant enhancements and architectural changes from the `main` branch. Here's a comprehensive breakdown:
+
+### 🎯 Major Features Added
+
+#### 1. **AI-Powered Query Validation System**
+- **NEW**: `/api/ai/analyze-query` - Intelligent query specificity analyzer using `llama-3.1-8b-instant`
+- **ENHANCED**: Search suggestions now include vagueness detection with contextual examples
+- **NEW**: `VagueQueryModal` component for educational guidance (soft guidance, no blocking)
+- **NEW**: Live recommendation feature with adaptive UI (mild/severe vagueness indicators)
+- **RESULT**: Users get intelligent guidance toward better searches without frustration
+
+#### 2. **RFQ Cart & Product Management System**
+- **NEW**: `ProductTable` component - Interactive parts table with selection, sorting, and filtering
+- **NEW**: `RFQCart` component - Shopping cart-style RFQ builder with item management
+- **NEW**: `RFQSubmissionModal` - Multi-step RFQ creation with supplier selection
+- **NEW**: `rfqCartContext` - Global state management for RFQ cart items
+- **NEW**: `tableParser.ts` - AI markdown table to structured data parser
+- **NEW**: `sampleProducts.ts` - Mock product data for testing
+- **ENHANCED**: Complete RFQ workflow from search → selection → submission
+
+#### 3. **Search History & Context Management**
+- **NEW**: `SearchHistorySidebar` - Persistent search history with filtering and replay
+- **NEW**: `searchHistoryContext` - Global search history state with localStorage persistence
+- **ENHANCED**: Users can quickly revisit past searches and iterate on queries
+- **ENHANCED**: Search history shows result counts and US-only filter status
+
+#### 4. **Enhanced Table Processing**
+- **NEW**: `tableParser.ts` - Robust markdown-to-structured-data converter
+- **NEW**: Support for dynamic columns determined by AI
+- **NEW**: Clickable links in table cells with proper URL extraction
+- **NEW**: Data validation and normalization for consistent display
+- **ENHANCED**: `SearchResultsContent` now handles complex table structures
+
+### 🗑️ Removed Features (Deprecated/Replaced)
+
+#### Database & Thread Management
+- **REMOVED**: `lib/db.ts` - Database connection module (moved to mockRFQDatabase)
+- **REMOVED**: `lib/logger.ts` - Logging utilities (simplified to console.log)
+- **REMOVED**: `lib/thread-api.ts` - Thread-based conversation system
+- **REMOVED**: `lib/thread-types.ts` - Thread type definitions
+- **REMOVED**: `/api/threads/[id]/route.ts` - Thread detail endpoint
+- **REMOVED**: `/api/threads/route.ts` - Thread list endpoint
+- **REMOVED**: `components/SearchProgressStepper.tsx` - Multi-step search UI
+- **REMOVED**: `middleware.ts` - Custom middleware (not needed)
+- **REMOVED**: All database migration scripts in `/scripts/`
+
+**Rationale**: Simplified architecture by using in-memory mock data instead of full database setup. Production version would replace mockRFQDatabase with real DB calls.
+
+### 📝 Modified Files
+
+#### API Routes
+| File | Changes |
+|------|---------|
+| `app/api/search/parts/route.ts` | Added retry logic with dynamic columns, improved error handling, 30s idle timeout |
+| `app/api/search/suggestions/route.ts` | Integrated AI vagueness detection, returns contextual examples |
+| `app/api/ai/extract-suppliers/route.ts` | Enhanced JSON parsing with fallback logic |
+| `app/api/rfq/route.ts` | Updated to work with mockRFQDatabase structure |
+
+#### Components
+| File | Changes |
+|------|---------|
+| `app/search/page.tsx` | Major refactor: removed stepper UI, added cart integration, enhanced error handling, circuit breaker retry logic |
+| `components/SearchHistorySidebar.tsx` | Complete redesign with filtering, better UX, localStorage sync |
+| `components/SearchResults.tsx` | Simplified, removed threading, added retry UI |
+| `components/SearchResultsContent.tsx` | Enhanced table parsing with tableParser.ts, better link handling |
+| `components/Badge.tsx` | Added variant styling for different statuses |
+| `components/Header.tsx` | Navigation improvements, active state indicators |
+
+#### Core Libraries
+| File | Changes |
+|------|---------|
+| `lib/searchApi.ts` | Added `useColumnDeterminationAndSearch` hook, updated types |
+| `lib/types.ts` | Added `ProductItem`, `RFQCartItem`, vagueness metadata types |
+| `lib/rfq-api.ts` | Updated for mock database compatibility |
+| `app/layout.tsx` | Added `RFQCartProvider` wrapper |
+| `app/providers.tsx` | Added search history and RFQ cart providers |
+
+#### Configuration
+| File | Changes |
+|------|---------|
+| `package.json` | Removed database dependencies (pg, better-sqlite3) |
+| `package-lock.json` | Updated lock file reflecting dependency changes |
+| `.gitignore` | Updated patterns for build artifacts |
+
+### 📚 New Documentation
+- **`ENHANCED_TABLE_UI.md`** - Comprehensive guide to the table parsing system
+- **`PRODUCT_TABLE_UI.md`** - Documentation for ProductTable component usage
+
+### 🔧 Architecture Changes
+
+#### Before (main branch)
+```
+Search → Thread-based results → Database persistence → Conversations
+```
+
+#### After (Ari-Improvements branch)
+```
+Search → AI Column Determination → Cart-based RFQ → Mock Database → Email Tracking
+         ↓
+    Query Validation → Live Recommendations
+         ↓
+    Search History → Quick Replay
+```
+
+### 📊 Statistics
+- **+2,755 insertions** / **-2,238 deletions**
+- **12 new files** created
+- **11 files removed** (deprecated features)
+- **18 files modified** (enhancements)
+- **Net code reduction** while adding features (better architecture)
+
+### 🚀 Performance Improvements
+- Removed database overhead for faster development
+- Optimized search retry logic with circuit breaker
+- Client-side caching for search history
+- Lazy loading for cart and modal components
+
+### 🎨 UX Improvements
+- No more blocking modals - soft guidance only
+- Persistent search history across sessions
+- Cart-based RFQ workflow (familiar e-commerce pattern)
+- Better error messages and retry options
+- Real-time vagueness detection without interruption
+
+### 🔄 Migration Path
+To merge `Ari-Improvements` into `main`:
+1. Review removed database dependencies
+2. Decide on mock vs. real database for production
+3. Update environment variable documentation
+4. Test all search and RFQ workflows
+5. Update deployment configuration
+
+### ⚠️ Breaking Changes
+- Database-dependent features removed (requires migration to mockRFQDatabase or new DB)
+- Thread-based conversations replaced with simpler email tracking
+- Search stepper UI removed in favor of streamlined flow
+- Some utility functions consolidated/simplified
+
+---
+
 ## Support
 
 For issues and questions:
