@@ -3,10 +3,19 @@ from pydantic import BaseModel
 
 class PartsSearchRequest(BaseModel):
 	query: str
-	usSuppliersOnly: Optional[bool] = False
-	predeterminedColumns: Optional[List[str]] = None
+	us_suppliers_only: Optional[bool] = False
+	predetermined_columns: Optional[List[str]] = None
 	page: Optional[int] = 1
 	pageSize: Optional[int] = 50
+
+class PartResponse(BaseModel):
+	partNumber: str
+	description: str
+	supplier: str
+	price: str
+	availability: str
+class PartsSearchResponse(BaseModel):
+	parts: List[PartResponse] = []
 
 class ColumnDeterminationRequest(BaseModel):
 	query: str
