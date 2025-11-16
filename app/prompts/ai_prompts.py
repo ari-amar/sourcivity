@@ -3,13 +3,23 @@ You are an expert industrial parts specialist with deep knowledge of industrial 
 
 Find top 10 {query} from {location_filter} and format as a markdown table with the exact column structure provided.
 
-The table format should be: Part Name & Supplier Type | {pre_defined_columns}
+The table format should be: Part Name & Supplier Type | column1 | column2 | column3 | column4
 
 FORBIDDEN COLUMNS - NEVER INCLUDE:
+- Part Name (it is handled separately)
 - Lead Time, Stock, Availability, Inventory, or any similar time/quantity-based columns
 - Delivery information, shipping times, or stock levels
+- Price, Cost, or any pricing information
 - Any dynamic information that changes frequently
-- Focus only on static product specifications and attributes that don't change
+
+REQUIRED COLUMNS - ALWAYS INCLUDE:
+- The "Part Name & Supplier Type" column should contain descriptive part names that will serve as hyperlink text
+- For each row, provide both a descriptive part name AND the corresponding full-path URL  
+- Column names contained in this list: {predefined_columns} (ignore if this list is empty)
+
+
+Focus ONLY on static, technical product specifications that are crucial for comparison. Do not add any explanation or commentary. Your output must be ONLY the JSON array.`;
+
 
 Requirements:
 - The "Part Name & Supplier Type" column should contain descriptive part names that will serve as hyperlink text
@@ -33,6 +43,7 @@ Requirements:
   * Recycling & EoL Supplier - Companies handling product disposal/recycling
 - Format: [Part Name (Supplier Type)](URL)
 - Use the EXACT supplier type names from the list above including abbreviations in parentheses where specified
+- If predefined columns are provided, use those EXACT column names in the table, otherwise dynamically determine the 4 most relevant columns based on the part category
 
 URL REQUIREMENTS (CRITICAL FOR ACCURACY):
 - ONLY include URLs you are confident exist and lead to actual product pages
@@ -51,6 +62,7 @@ QUALITY CHECKS:
 - Start immediately with results`
     : `You are an expert industrial parts specialist with deep knowledge of industrial supply chains, part specifications, and supplier networks.
 
+Do the following ONLY if the required column list does NOT contain columns aside from Part Name & Supplier Type and URL path:
 Silently determine the category of "{query}" and auto-generate 4 relevant columns that matter most for that specific category type. Always include "Part Name" as the FIRST column.
 
 Category examples and their typical columns:
@@ -73,7 +85,7 @@ CRITICAL REQUIREMENTS FOR ACCURACY:
 5. Cross-reference specifications to ensure consistency
 6. Prioritize well-known, reputable suppliers
 
-Find top 10 {query} from {location_filter} and format as a markdown table with "Part Name & Supplier Type" as the first column + your 4 dynamically determined columns.
+Find top 10 {query} from {location_filter} and format as a markdown table with "Part Name & Supplier Type" as the first column + your 4 dynamically determined or provided columns.
 
 The table format should be: Part Name & Supplier Type | [4 dynamic columns based on category]
 

@@ -1,7 +1,11 @@
+import os
 from fastapi import Request, FastAPI, Response, UploadFile, File, Header, HTTPException
 from models import *
+from services import GroqClient
+from search import groq_part_search
 
 app = FastAPI()
+groq_client = GroqClient(api_key=os.getenv("GROQ_API_KEY"))
 
 @app.get("/api/health")
 async def health_check():
@@ -9,11 +13,22 @@ async def health_check():
 
 @app.post('/api/search/parts')
 async def search_parts(payload: PartsSearchRequest):
-	return {"query": payload.query, "results": []}
 
-@app.post('/api/search/columns')
-async def search_columns(payload: ColumnDeterminationRequest):
-	return {"query": payload.query, "results": []}	
+	if payload.us_suppliers_only:
+		location_filter = "US suppliers only"
+	else:
+		location_filter = "global suppliers"
+
+	if payload.predetermined_columns:
+		columns_str = ", ".join(payload.predetermined_columns)
+	else:
+		columns_str = ""
+
+	part_search_response = groq_part_search(client=groq_client, 
+										 query=payload.query, 
+										 predefined_columns=columns_str,
+										 location_filter=location_filter)
+	return part_search_response.read()
 
 @app.post('/api/search/photo')
 async def search_photo(file: UploadFile = File(None), payload: PhotoSearchRequest = None):
