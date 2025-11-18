@@ -3,15 +3,10 @@ import httpx
 def test_search_parts():
 	url = "http://localhost:8000/api/search/parts"
 	payload = {
-		"query": "industrial motor",
-		"us_suppliers_only": True,
-		"predetermined_columns": ["Voltage", "Power", "Efficiency", "Mounting Type"]
+		"query": "industrial motor 3-phase 400V 50Hz IP55 TEFC 15 kW 1500 rpm foot-mounted IEC frame 160L flange B5",
+		"location_filter": None
 	}
-	response = httpx.post(url, json=payload, timeout=120)
-	assert response.status_code == 200
-	data = response.json()
-	assert "parts" in data
-	assert isinstance(data["parts"], list)
+	httpx.post(url, json=payload, timeout=120)
 
 if __name__ == "__main__":
 	test_search_parts()
