@@ -1,1 +1,1 @@
-from .ai_prompts import *
+from .cloudflare_ai_prompts import *
