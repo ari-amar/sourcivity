@@ -10,7 +10,6 @@ class CloudflareAIClient:
 
 	async def analyze_search_results(self, model: str, query: str, has_query_specs: bool, search_results: dict):
 
-		model_path = re.sub(r'^@cf/', '', model)
 		system_prefix = CLOUDFLARE_SEARCH_ANALYSIS_SYSTEM_PROMPT.strip() + "\n\n"
 		user_content = system_prefix + CLOUDFLARE_SEARCH_ANALYSIS_USER_PROMPT.format(
 						query=query,
