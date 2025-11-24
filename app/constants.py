@@ -1,1 +1,0 @@
-CLOUDFLARE_LLAMA_3_2 = "@cf/meta/llama-3.2-1b-instruct"
