@@ -4,7 +4,7 @@ import httpx
 from services import AnthropicClient, DuckDuckGoClient
 from constants import DATASHEET_CACHE_DIR
 
-def rank_url_by_supplier_llm(url, supplier_info) -> List[str]:
+def rank_url_by_supplier(url, supplier_info) -> List[str]:
     """Assign a quality score to URL based on supplier tier (1=best, 4=worst, 999=avoid)."""
     if not supplier_info:
         return 2  # Neutral score if no supplier info
@@ -73,11 +73,11 @@ async def search_datasheets(anthropic_client: AnthropicClient,
 
 				# Use LLM to validate URL matches query specifications
 				if query_specs:
-					if not await anthropic_client.validate_url_specs_llm(url, query_specs):
+					if not await anthropic_client.validate_url_specs(url, query_specs):
 						continue
 
 				# Rank URL by supplier quality
-				supplier_score = rank_url_by_supplier_llm(url, supplier_info)
+				supplier_score = rank_url_by_supplier(url, supplier_info)
 
 				# Skip gray market sites
 				if supplier_score == 999:

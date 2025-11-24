@@ -21,7 +21,7 @@ class DuckDuckGoClient():
 			pass
 		return redirect_url
 	
-	def search_duckduckgo(self, query, num_results=10):
+	async def search_duckduckgo(self, query, num_results=10):
 		"""Search DuckDuckGo for PDF results using the optimized query."""
 		search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
 
@@ -39,7 +39,7 @@ class DuckDuckGoClient():
 
 		try:
 			# Use POST instead of GET (DuckDuckGo prefers POST for HTML interface)
-			with httpx.client(timeout=120) as client:
+			with httpx.Client(timeout=120) as client:
 				response = client.post(
 				    'https://html.duckduckgo.com/html/',
 				    data={'q': query, 'b': '', 'kl': 'us-en'},
@@ -69,7 +69,6 @@ class DuckDuckGoClient():
 						break
 
 		except Exception as e:
-			if '--verbose' in sys.argv or '-v' in sys.argv:
-				print(f"DuckDuckGo search error: {e}", file=sys.stderr)
+			raise e
 
 		return pdf_links

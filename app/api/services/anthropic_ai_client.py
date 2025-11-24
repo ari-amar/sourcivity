@@ -42,7 +42,7 @@ class AnthropicClient():
 
 		try:
 			async with httpx.AsyncClient(timeout=120) as client:
-				response = client.post(ANTHROPIC_API_URL, headers=headers, json=data, timeout=30)
+				response = await client.post(ANTHROPIC_API_URL, headers=headers, json=data, timeout=30)
 				response.raise_for_status()
 				result = response.json()
 				return result['content'][0]['text']
@@ -67,10 +67,11 @@ class AnthropicClient():
 		search_query_result = await self._call_claude(prompt, system_prompt)
             
 		if not search_query_result:
-			return ""
+			print("No claude response found")
+			return "", ""
 
 		# Clean up the search query
-		search_query = search_query.strip().strip('"\'')
+		search_query = search_query_result.strip().strip('"\'')
 
 		supplier_info = await self.assess_supplier_quality_llm(component_description)
             
