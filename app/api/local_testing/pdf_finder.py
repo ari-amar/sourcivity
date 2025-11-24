@@ -15,7 +15,7 @@ from urllib.parse import quote_plus, urlparse, unquote, parse_qs, quote
 # Anthropic API configuration
 # Get from environment variable or use default
 import os
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "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")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 
 
