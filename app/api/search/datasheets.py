@@ -4,38 +4,6 @@ import httpx
 from services import AnthropicClient, DuckDuckGoClient
 from constants import DATASHEET_CACHE_DIR
 
-def rank_url_by_supplier(url, supplier_info) -> List[str]:
-    """Assign a quality score to URL based on supplier tier (1=best, 4=worst, 999=avoid)."""
-    if not supplier_info:
-        return 2  # Neutral score if no supplier info
-
-    url_lower = url.lower()
-
-    # Check tier 1 (manufacturers/OEMs)
-    if 'tier1_domains' in supplier_info:
-        for domain in supplier_info['tier1_domains']:
-            if domain.lower() in url_lower:
-                return 1
-
-    # Check tier 2 (authorized distributors)
-    if 'tier2_domains' in supplier_info:
-        for domain in supplier_info['tier2_domains']:
-            if domain.lower() in url_lower:
-                return 2
-
-    # Check tier 3 (technical/educational)
-    if 'tier3_domains' in supplier_info:
-        for domain in supplier_info['tier3_domains']:
-            if domain in url_lower:  # .edu, .org
-                return 3
-
-    # Check for gray market/low quality sites to avoid
-    gray_market = ['alibaba', 'aliexpress', 'dhgate', 'ebay', 'rfq', 'quote']
-    for term in gray_market:
-        if term in url_lower:
-            return 999  # Avoid these
-
-    return 4  # Unknown supplier
 
 async def search_datasheets(anthropic_client: AnthropicClient, 
                       duckduck_client: DuckDuckGoClient, 

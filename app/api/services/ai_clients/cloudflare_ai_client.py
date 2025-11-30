@@ -3,11 +3,13 @@ import json
 import re
 from prompts import CLOUDFLARE_SEARCH_ANALYSIS_SYSTEM_PROMPT, CLOUDFLARE_SEARCH_ANALYSIS_USER_PROMPT
 
+### DO NOT USE THIS CLIENT IN CURRENT STATE
 class CloudflareAIClient:
 	def __init__(self, account_id: str, workers_key: str):
 		self.account_id = account_id
 		self.workers_key = workers_key
 
+	
 	async def analyze_search_results(self, model: str, query: str, has_query_specs: bool, search_results: dict):
 
 		system_prefix = CLOUDFLARE_SEARCH_ANALYSIS_SYSTEM_PROMPT.strip() + "\n\n"
