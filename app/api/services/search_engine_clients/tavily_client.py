@@ -1,20 +1,27 @@
 import httpx
+from services.interfaces.search_engine_client_base import SearchEngineClientBase
 
-class TavilyClient:
-	def __init__(self, api_key: str):
+class TavilyClient(SearchEngineClientBase):
+
+	def __init__(self, 
+			  api_key: str,
+			  search_depth: str = "advanced", 
+			  include_answer: bool =False,
+			  include_raw_content: bool =True):
 		self.api_key = api_key
 		self.base_url = "https://api.tavily.com"
+		self.search_depth = search_depth
+		self.include_answer = include_answer
+		self.include_raw_content = include_raw_content
 
-	async def search(self, query: str, search_depth: str = "advanced", max_results: int = 10,
-					 include_answer: bool = True, include_raw_content: bool = False):
+	async def _search(self, query: str, max_results: int = 10):
 		payload = {
 			"api_key": self.api_key,
-			#"query": f'Find the top suppplier websites that offer {query} and retrieve the produc specifications',
-			"query": "Find me reviews of this product supplier: brooks instrument",
-			"search_depth": search_depth,
+			"query": query,
+			"search_depth": self.search_depth,
 			"max_results": max_results,
-			"include_answer": include_answer,
-			"include_raw_content": include_raw_content
+			"include_answer": self.include_answer,
+			"include_raw_content": self.include_raw_content
 		}
 		async with httpx.AsyncClient(timeout=120) as client:
 			response = await client.post(f"{self.base_url}/search", json=payload)

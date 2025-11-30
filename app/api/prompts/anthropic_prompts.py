@@ -1,18 +1,17 @@
 ANTRHOPIC_SEARCH_GEN_SYSTEM_PROMPT = """
 You are the "Industrial Search Optimizer."
-Your goal is to generate a SINGLE Google/DuckDuckGo search query that finds a SINGLE-PRODUCT DATASHEET (NOT catalogs, NOT manuals).
+Your goal is to generate a list of 3-4 Tavily search query that finds a SINGLE-PRODUCT DATASHEET or TECHNICAL SPECIFICATIONS (NOT catalogs, NOT manuals).
 
 ### CRITICAL REQUIREMENTS:
-* Find DATASHEET ONLY - technical specifications for ONE specific product/part number
+* Find DATASHEET OR TECHNICAL INFORMATION PAGE ONLY - technical specifications for ONE specific product/part number
 * EXCLUDE catalogs (multi-product documents)
 * EXCLUDE user manuals, installation guides, brochures
 * MUST be product-specific technical documentation
 
 ### INSTRUCTIONS:
 1. **Analyze the Input:** Identify the specific part number or product model
-2. **Select Technical Fingerprints:** Choose keywords that appear in DATASHEETS ONLY
+2. **Select Technical Fingerprints:** Choose keywords that appear in DATASHEETS OR TECHNICAL INFO PAGES ONLY
 3. **Apply Exclusion Filters:**
-   * MUST use `filetype:pdf`
    * MUST use `datasheet` keyword
    * MUST exclude: `-catalog -brochure -manual -guide -installation -user -series`
    * MUST exclude gray market: `-rfq -quote -alibaba -ebay`
@@ -25,34 +24,33 @@ Your goal is to generate a SINGLE Google/DuckDuckGo search query that finds a SI
 * **Raw Materials:** "material properties" OR "technical data sheet"
 
 ### OUTPUT FORMAT:
-Return ONLY the search query string with exclusions. No JSON, no explanations.
+Return ONLY a comma separated list of the search query strings with exclusions. No JSON, no explanations.
 """
 
 ANTRHOPIC_SEARCH_GEN_USER_PROMPT = """
 Input: "{component_description}"
 
-Generate a search query that finds SINGLE-PRODUCT DATASHEETS ONLY (not catalogs or manuals).
+Generate search queries that find SINGLE-PRODUCT DATASHEET or TECHNCIAL HTML PAGES ONLY (not catalogs or manuals).
 
 Requirements:
 1. Must include "datasheet" keyword
-2. Must use filetype:pdf
-3. Must exclude catalogs: -catalog
-4. Must exclude manuals: -manual -guide -brochure
-5. Focus on specific part number if available
+2. Must exclude catalogs: -catalog
+3. Must exclude manuals: -manual -guide -brochure
+4. Focus on specific part number if available
 
 Examples:
 Input: "LM555 timer"
-Output: LM555 datasheet filetype:pdf -catalog -manual -brochure
+Output: LM555 datasheet filetype:pdf -catalog -manual -brochure, LM555 filetype:html -catalog -manual
 
 Input: "100 sccm mass flow controller"
-Output: 100 sccm mass flow controller datasheet filetype:pdf -catalog -manual
+Output: 100 sccm mass flow controller datasheet filetype:pdf -catalog -manual, sccm mass flow controller 100 sccm datasheet filetype:html -catalog -manual
 
 Input: "SKF 6205 bearing"
 Output: SKF 6205 bearing datasheet filetype:pdf -catalog -series -manual
 
-Now generate the search query for: {component_description}
+Now generate the search queries for: {component_description}
 
-Return ONLY the search query string with exclusions. Keep it focused on SINGLE-PRODUCT datasheets.
+Return ONLY a comma separated list of the search query strings with exclusions. No JSON, no explanations.
 """
 
 ANTRHOPIC_SUPPLIER_QUALITY_SYSTEM_PROMPT = """

@@ -10,8 +10,9 @@ from prompts import (
 	ANTHROPIC_VALIDATE_URL_SYSTEM_PROMPT, ANTHROPIC_VALIDATE_URL_USER_PROMPT
 )
 from constants import ANTHROPIC_API_URL
+from services.interfaces.ai_client_base import AiClientBase
 
-class AnthropicClient():
+class AnthropicClient(AiClientBase):
 
 	def __init__(self, api_key: str):
 		self.api_key=api_key
@@ -59,29 +60,29 @@ class AnthropicClient():
 				pass
 			return None
 
-	async def generate_search_prompt(self, component_description: str):
+	async def _generate_search_prompts(self, component_description: str):
             
 		system_prompt = ANTRHOPIC_SEARCH_GEN_SYSTEM_PROMPT
 		prompt = ANTRHOPIC_SEARCH_GEN_USER_PROMPT.format(component_description=component_description) 
             
-		search_query_result = await self._call_claude(prompt, system_prompt)
+		search_query_result: str = await self._call_claude(prompt, system_prompt)
             
 		if not search_query_result:
 			print("No claude response found")
-			return "", ""
+			return []
 
 		# Clean up the search query
-		search_query = search_query_result.strip().strip('"\'')
+		search_queries = search_query_result.strip().strip('"\'').split(',')
 
-		supplier_info = await self.assess_supplier_quality_llm(component_description)
-            
-		if supplier_info and 'tier1_domains' in supplier_info and len(supplier_info['tier1_domains']) > 0:
-			# Add top 3 Tier 1 suppliers to search query using site: operator
-			top_suppliers = supplier_info['tier1_domains'][:3]
-			site_boost = " (" + " OR ".join([f"site:{domain}" for domain in top_suppliers]) + ")"
-			search_query = search_query + site_boost
+		# supplier_info = await self.assess_supplier_quality_llm(component_description)
+        #     
+		# if supplier_info and 'tier1_domains' in supplier_info and len(supplier_info['tier1_domains']) > 0:
+		# 	# Add top 3 Tier 1 suppliers to search query using site: operator
+		# 	top_suppliers = supplier_info['tier1_domains'][:3]
+		# 	site_boost = " (" + " OR ".join([f"site:{domain}" for domain in top_suppliers]) + ")"
+		# 	search_query = search_query + site_boost
                   
-		return search_query, supplier_info
+		return search_queries
 
 	async def assess_supplier_quality_llm(self, component_description):
 		"""Use LLM to identify the most reliable suppliers for this component category."""

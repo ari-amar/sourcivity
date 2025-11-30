@@ -2,8 +2,9 @@ import sys
 from bs4 import BeautifulSoup
 import httpx
 from urllib.parse import quote_plus, urlparse, unquote, parse_qs, quote
+from services.interfaces.search_engine_client_base import SearchEngineClientBase
 
-class DuckDuckGoClient():
+class DuckDuckGoClient(SearchEngineClientBase):
 
 	def __init__(self):
 
@@ -21,7 +22,7 @@ class DuckDuckGoClient():
 			pass
 		return redirect_url
 	
-	async def search_duckduckgo(self, query, num_results=10):
+	async def _search(self, query: str, max_results: int):
 		"""Search DuckDuckGo for PDF results using the optimized query."""
 		search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
 
@@ -65,7 +66,7 @@ class DuckDuckGoClient():
 				if '.pdf' in href.lower():
 					actual_url = self._extract_duckduckgo_url(href)
 					pdf_links.append(actual_url)
-					if len(pdf_links) >= num_results:
+					if len(pdf_links) >= max_results:
 						break
 
 		except Exception as e:

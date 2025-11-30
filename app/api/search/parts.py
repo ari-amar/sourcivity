@@ -1,27 +1,48 @@
-from services import TavilyClient, CloudflareAIClient
-from utils import contains_technical_specifications
-from constants import CLOUDFLARE_LLAMA_3_2
+import sys
+import os
+sys.path.append(os.getcwd())
 
-async def _tavily_part_search(client: TavilyClient, query: str, max_results: int = 10) -> dict:
-	return await client.search(query=query, max_results=max_results)
+from services.interfaces import AiClientBase, SearchEngineClientBase
+from constants import GRAY_MARKET_SITES
 
-async def _cloudflare_ai_analyze_search_results(client: CloudflareAIClient, model: str, query: str, has_query_specs: bool, search_results: list):
-	return await client.analyze_search_results(model=model, query=query, has_query_specs=has_query_specs, search_results=search_results)
+async def search_parts(ai_client: AiClientBase, search_client: SearchEngineClientBase, query: str):
 
-async def search_parts(client: TavilyClient, ai_client: CloudflareAIClient, query: str, location_filter: str = "global suppliers") -> dict:
+	results = []
+	#search_queries = await ai_client.generate_search_prompts(component_description=query)
+	#print(search_queries)
+	gray_market_removal_str = " ".join(f'-{site}' for site in GRAY_MARKET_SITES)
+	search_queries = [f'{query} "datasheet"  OR "specifications" OR "product page" {gray_market_removal_str}']
+
+	for search_query in search_queries:
+
+		sq_results = await search_client.search(query=search_query, max_results=5)
+
+		results.extend(sq_results.get("results"))
+
+	print(results)
+
+
+if __name__ == "__main__":
+
+	import asyncio
+	from dotenv import load_dotenv
+	from services.ai_clients import AnthropicClient
+	from services.search_engine_clients import TavilyClient
+
+	env_file_name = os.path.join(os.getcwd(), "config", "env.config")
+	if not os.path.exists(env_file_name):
+		raise FileNotFoundError("env.config file is missing in the config folder.")
 	
-	has_specs = contains_technical_specifications(query)
-	travily_response = await _tavily_part_search(client=client, query=f"{query} | {location_filter}", max_results=5)
-	
-	ai_analysis = await _cloudflare_ai_analyze_search_results(
-		client=ai_client,
-		model=CLOUDFLARE_LLAMA_3_2,
-		query=query,
-		has_query_specs=has_specs,
-		search_results=travily_response.get("results", [])
-	)
-	return {
-		"part_search_results": travily_response,
-		"ai_analysis": ai_analysis
-	}
+	load_dotenv(env_file_name)
+
+	ai_client = AnthropicClient(os.getenv("ANTHROPIC_API_KEY"))
+	search_client = TavilyClient(os.getenv("TAVILY_API_KEY"))
+	query = "100 sccm mass flow controller"
+
+	asyncio.run(search_parts(ai_client=ai_client, search_client=search_client, query=query))
+
+
+
+
+
 
