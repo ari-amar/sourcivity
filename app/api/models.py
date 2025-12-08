@@ -2,6 +2,10 @@ from typing import Optional, List
 from pydantic import BaseModel
 from enums import AiClientName, SearchEngineClientName
 
+
+class AvailableClientResponse(BaseModel):
+	ai_client_names: List[str]
+	search_engine_client_names: List[str]
 class PartSearchRequest(BaseModel):
 	query: str
 	generate_ai_search_prompt: Optional[bool] = False
