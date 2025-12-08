@@ -12,7 +12,6 @@ export const RFQCart = () => {
 
   const handleProceed = () => {
     setIsRFQModalOpen(true);
-    setIsExpanded(false); // Minimize cart when opening RFQ modal
   };
 
   if (cartCount === 0) {

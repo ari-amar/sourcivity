@@ -1,5 +1,4 @@
 import type { ProductItem } from './types';
-import { getDatasheetLink } from './dummyData';
 
 /**
  * Parses AI-generated markdown table into ProductItem array with dynamic columns
@@ -41,7 +40,7 @@ export function parseTableToProducts(markdownTable: string): ProductItem[] {
         return; // Skip incomplete rows (need at least part name + 1 column)
       }
 
-      // Parse Part Name & Supplier Type: [PartName](url)<br/>🏳️ OEM
+      // Parse Part Name & Supplier Type: [PartName (Type)](url)
       const partCell = cells[0];
       const partMatch = partCell.match(/\[(.*?)\]\((.*?)\)/);
 
@@ -51,48 +50,24 @@ export function parseTableToProducts(markdownTable: string): ProductItem[] {
 
       const [, partNameWithType, partUrl] = partMatch;
 
-      // Extract part name (before any emoji or type info)
-      let partName = partNameWithType.trim();
+      // Extract part name and supplier type from "PartName (Type)" format
+      const typeMatch = partNameWithType.match(/^(.*?)\s*\((.*?)\)\s*$/);
+      let partName = partNameWithType;
+      let supplierType = 'Distributor';
 
-      // Check for content after the link (like <br/>🇺🇸 OEM<br/>✓ 4.8★)
-      const afterLinkMatch = partCell.match(/\]\(.*?\)(.+)/);
-      let supplierType = 'OEM'; // Default to OEM
-      let supplierFlag = '🇺🇸'; // Default flag
-      let isVerified = false;
-      let rating: number | undefined;
+      if (typeMatch) {
+        partName = typeMatch[1].trim();
+        supplierType = typeMatch[2].trim();
+      }
 
-      if (afterLinkMatch) {
-        const afterLinkContent = afterLinkMatch[1];
-
-        // Extract emoji (flag) - match specific flag emojis
-        if (afterLinkContent.includes('🇺🇸')) {
-          supplierFlag = '🇺🇸';
-        } else if (afterLinkContent.includes('🇳🇱')) {
-          supplierFlag = '🇳🇱';
-        } else if (afterLinkContent.includes('🇯🇵')) {
-          supplierFlag = '🇯🇵';
-        } else if (afterLinkContent.includes('🇬🇧')) {
-          supplierFlag = '🇬🇧';
-        } else if (afterLinkContent.includes('🇩🇪')) {
-          supplierFlag = '🇩🇪';
-        } else if (afterLinkContent.includes('🇨🇳')) {
-          supplierFlag = '🇨🇳';
-        }
-
-        // Extract supplier type (OEM, Distributor, etc.)
-        const typeMatch = afterLinkContent.match(/\b(OEM|Distributor|EM|Manufacturer)\b/i);
-        if (typeMatch) {
-          supplierType = typeMatch[1];
-        }
-
-        // Extract verification status (✓ checkmark)
-        isVerified = afterLinkContent.includes('✓');
-
-        // Extract rating (e.g., "4.8★" or "4.8 ★")
-        const ratingMatch = afterLinkContent.match(/([\d.]+)\s*★/);
-        if (ratingMatch) {
-          rating = parseFloat(ratingMatch[1]);
-        }
+      // Determine flag based on supplier type or domain
+      let supplierFlag = '🇺🇸';
+      if (partUrl.includes('.uk') || partUrl.includes('.co.uk')) {
+        supplierFlag = '🇬🇧';
+      } else if (partUrl.includes('.de')) {
+        supplierFlag = '🇩🇪';
+      } else if (partUrl.includes('.cn')) {
+        supplierFlag = '🇨🇳';
       }
 
       // Parse dynamic column data
@@ -105,19 +80,13 @@ export function parseTableToProducts(markdownTable: string): ProductItem[] {
         columnData[columnName] = cellValue;
       });
 
-      // Get datasheet URL for this part
-      const datasheetUrl = getDatasheetLink(partName);
-
       const product: ProductItem = {
         id: `product-${index}-${Date.now()}`,
         partName,
         partUrl,
         supplierType,
         supplierFlag,
-        hasSpecSheet: !!datasheetUrl, // Has spec sheet if we have a datasheet URL
-        datasheetUrl,
-        isVerified,
-        rating,
+        hasSpecSheet: true, // Assume all have spec sheets
         columnData
       };
 

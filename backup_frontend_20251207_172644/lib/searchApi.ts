@@ -2,14 +2,13 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef, useEffect, useState } from 'react';
-import type {
-  SuggestionsResponse,
-  SearchResultsData,
+import type { 
+  SuggestionsResponse, 
+  SearchResultsData, 
   PhotoAnalysisResponse,
   TextSearchParams,
-  PhotoSearchParams
+  PhotoSearchParams 
 } from './types';
-import { DUMMY_SEARCH_DATA } from './dummyData';
 
 // React Query configuration constants
 const REACT_QUERY_CONFIG = {
@@ -27,15 +26,15 @@ const REACT_QUERY_CONFIG = {
 
 // API functions
 async function fetchSearchSuggestions(query: string): Promise<SuggestionsResponse> {
-  // Disable suggestions in demo mode - only "precision linear bearing" is available
-  await new Promise(resolve => setTimeout(resolve, 100));
+  const response = await fetch(`/api/search/suggestions?query=${encodeURIComponent(query)}`, {
+    method: 'GET',
+  });
 
-  return {
-    suggestions: [],
-    isVague: false,
-    vaguenessLevel: undefined,
-    helpText: undefined
-  };
+  if (!response.ok) {
+    throw new Error(`Search suggestions failed: ${response.status}`);
+  }
+
+  return response.json();
 }
 
 async function fetchPartsSearch(params: TextSearchParams & { predeterminedColumns?: string[] }): Promise<SearchResultsData> {
@@ -71,27 +70,39 @@ async function fetchPhotoAnalysis(params: PhotoSearchParams): Promise<PhotoAnaly
 }
 
 async function fetchColumnDeterminationAndSearch(params: TextSearchParams): Promise<SearchResultsData> {
-  // USE DUMMY DATA - No LLM API calls
-  const normalizedQuery = params.query.toLowerCase().trim();
+  // Step 1: Determine optimal columns
+  const columnsResponse = await fetch('/api/search/columns', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query: params.query }),
+  });
 
-  // Check if we have dummy data for this query
-  const dummyResult = DUMMY_SEARCH_DATA[normalizedQuery];
-
-  if (dummyResult) {
-    // Simulate network delay for realistic UX
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    return {
-      response: dummyResult.response,
-      query: params.query,
-      searchMode: params.searchMode || 'open',
-      usSuppliersOnly: params.usSuppliersOnly || false,
-      predeterminedColumns: dummyResult.columns
-    };
+  if (!columnsResponse.ok) {
+    throw new Error(`Column determination failed: ${columnsResponse.status}`);
   }
 
-  // If query doesn't match dummy data, return error message
-  throw new Error('Please search for "precision linear bearing" to see demo results');
+  const columnsData = await columnsResponse.json();
+  const predeterminedColumns = columnsData.columns;
+
+  // Step 2: Search with predetermined columns
+  const searchResponse = await fetch('/api/search/parts', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      ...params,
+      predeterminedColumns
+    }),
+  });
+
+  if (!searchResponse.ok) {
+    throw new Error(`Parts search failed: ${searchResponse.status}`);
+  }
+
+  return searchResponse.json();
 }
 
 async function fetchRfqConversation(params: {
