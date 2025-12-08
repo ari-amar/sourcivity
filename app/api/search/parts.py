@@ -2,25 +2,46 @@ import sys
 import os
 sys.path.append(os.getcwd())
 
-from services.interfaces import AiClientBase, SearchEngineClientBase
-from constants import GRAY_MARKET_SITES
+from typing import List
 
-async def search_parts(ai_client: AiClientBase, search_client: SearchEngineClientBase, query: str):
+from models import PartSearchRequest, PartSearchResponse, PartResponse
+from services.interfaces import AiClientBase, SearchEngineClientBase
+from utils.pdf_scraper import PDFScraper
+
+
+async def search_parts(request: PartSearchRequest, ai_client: AiClientBase, search_engine_client: SearchEngineClientBase):
 
 	results = []
-	#search_queries = await ai_client.generate_search_prompts(component_description=query)
-	#print(search_queries)
-	gray_market_removal_str = " ".join(f'-{site}' for site in GRAY_MARKET_SITES)
-	search_queries = [f'{query} "datasheet"  OR "specifications" OR "product page" {gray_market_removal_str}']
+	search_queries = []
+	
+	if request.generate_ai_search_prompt:
+		# get search prompts from AI client
+		pass
+	else:
+		# use default search prompts for search engine client
+		pass
 
+	pdf_search_results = []
 	for search_query in search_queries:
 
-		sq_results = await search_client.search(query=search_query, max_results=5)
+		prompt_results = await search_client.search(query=search_query, max_results=5)
 
-		results.extend(sq_results.get("results"))
+		results.extend(prompt_results)
 
-	print(results)
+	if pdf_search_results:
+		pdf_scraper = PDFScraper(ai_client=ai_client)
 
+		# get resulting urls
+		urls = []
+		# get result product type
+		product_type = []
+		part_responses: List[PartResponse] = pdf_scraper.scrape_multiple(urls=urls, product_type=product_type)
+	else:
+		raise Exception(f"No results found for the following search queries: {search_queries}")
+	
+	# extract product specs from part responses
+	spec_column_names = []
+	return PartSearchResponse(query=request.query, spec_column_names=spec_column_names, parts=part_responses)
 
 if __name__ == "__main__":
 
