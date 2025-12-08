@@ -1,19 +1,11 @@
-import type { Metadata, Viewport } from 'next'
+import type { Metadata } from 'next'
 import './globals.css'
 import { Providers } from './providers'
 import { ClientHeader } from '../components/ClientHeader'
-import { LayoutContent } from '../components/LayoutContent'
 
 export const metadata: Metadata = {
-  title: 'SourceFlow - Industrial Components Sourcing',
-  description: 'AI-powered industrial components search and sourcing platform',
-}
-
-export const viewport: Viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 5,
-  userScalable: true,
+  title: 'SourceFlow - Industrial Parts Sourcing',
+  description: 'AI-powered industrial parts search and sourcing platform',
 }
 
 export default function RootLayout({
@@ -25,12 +17,12 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <Providers>
-          <LayoutContent>
+          <div className="min-h-screen bg-background">
             <ClientHeader />
             <main>
               {children}
             </main>
-          </LayoutContent>
+          </div>
         </Providers>
       </body>
     </html>
