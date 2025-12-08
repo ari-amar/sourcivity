@@ -1,2 +1,1 @@
-from .cloudflare_ai_prompts import *
-from .anthropic_prompts import *
+from .datasheet_extraction_prompts import *

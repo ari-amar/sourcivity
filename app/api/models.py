@@ -1,18 +1,20 @@
 from typing import Optional, List
 from pydantic import BaseModel
+from enums import AiClientName, SearchEngineClientName
 
-class PartsSearchRequest(BaseModel):
+class PartSearchRequest(BaseModel):
 	query: str
-	location_filter: Optional[str] = "global suppliers"
+	generate_ai_search_prompt: Optional[bool] = False
+	search_engine_client_name: Optional[str] = SearchEngineClientName.EXA
+	ai_client_name: Optional[str] = AiClientName.CLOUDFLARE
 
-class DatasheetSearchRequest(BaseModel):
-	component_description: str
-	max_results: Optional[int] = 5
-	
-class ServicesSearchRequest(BaseModel):
+class PartResponse(BaseModel):
+	url: str
+	md: Optional[str] = None
+	specs: Optional[dict] = None
+	error: Optional[str] = None
+
+class PartSearchResponse(BaseModel):
 	query: str
-	location_filter: Optional[str] = "global providers"
-
-class VendorQualityRequest(BaseModel):
-	vendor_name: str
-	industry: Optional[str] = None
+	spec_column_names: List[str]
+	parts: List[PartResponse]
