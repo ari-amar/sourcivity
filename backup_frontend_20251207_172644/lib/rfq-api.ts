@@ -168,37 +168,13 @@ export const useTriggerFollowUpCron = () => {
           'Authorization': `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || 'test'}`,
         },
       });
-
+      
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to trigger cron job');
       }
-
+      
       return response.json();
-    },
-  });
-};
-
-// Delete RFQ
-export const useDeleteRFQ = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const response = await fetch(`/api/rfq?id=${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete RFQ');
-      }
-
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rfqs'] });
-      queryClient.invalidateQueries({ queryKey: ['rfq-stats'] });
     },
   });
 };
