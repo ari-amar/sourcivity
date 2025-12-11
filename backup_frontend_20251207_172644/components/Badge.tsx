@@ -1,7 +1,7 @@
 import { cn } from '../lib/utils';
 
 interface Props extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'success' | 'warning' | 'purple' | 'orange' | 'gray' | 'darkGreen';
+  variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'success' | 'warning';
 }
 
 const badgeVariants = {
@@ -11,10 +11,6 @@ const badgeVariants = {
   secondary: 'bg-secondary text-secondary-foreground',
   success: 'bg-green-500 text-white',
   warning: 'bg-yellow-500 text-white',
-  purple: 'bg-purple-500 text-white',
-  orange: 'bg-orange-500 text-white',
-  gray: 'bg-gray-500 text-white',
-  darkGreen: 'bg-green-700 text-white',
 };
 
 export const Badge = ({
