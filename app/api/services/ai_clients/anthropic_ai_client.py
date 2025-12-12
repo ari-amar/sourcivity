@@ -12,7 +12,7 @@ from prompts import (
 from constants import ANTHROPIC_API_URL
 from services.interfaces.ai_client_base import AiClientBase
 
-class AnthropicClient(AiClientBase):
+class AnthropicClient():
 
 	def __init__(self, api_key: str):
 		self.api_key=api_key
