@@ -155,7 +155,14 @@ class PDFScraper:
             results = self.scrape_pdf(url=url, product_type=product_type)
 
         for result in results:
-            if not result
+            if not result.get("error"):
+                specs = self.extract_standardized_specs(
+                    pdf_mds=[result["md"]],
+                    urls=[result["url"]],
+                    product_type=product_type
+                )
+                result["specs"] = specs
+
         return results
 
     def extract_standardized_specs(self, pdf_mds: List[Optional[str]], urls: List[str], product_type: Optional[str] = None) -> List[Dict]:
@@ -180,7 +187,7 @@ class PDFScraper:
                 truncated = md[:15000] if len(md) > 15000 else md
                 datasheets_md += f"\n\n=== DATASHEET {i+1} (URL: {urls[i]}) ===\n{truncated}\n"
 
-        prompt = f""""""
+        prompt = MULTPLE_PDF_SPEC_EXTRACTION_PROMPT.format(product_hint, datasheets_md)
 
         try:
             message = self.client.messages.create(

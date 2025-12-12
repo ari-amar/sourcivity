@@ -8,7 +8,7 @@ from services.interfaces import AiClientBase, SearchEngineClientBase
 from services.ai_clients import *
 from services.search_engine_clients import *
 
-from search import search_parts
+from search import search_parts, search_services
 
 app = FastAPI()
 
@@ -36,6 +36,8 @@ SEARCH_ENGINE_CLIENTS: Dict[str, SearchEngineClientBase] = {
 	# TODO: register other search engine clients here
 }
 
+# NOTE: if we want to have different search prompts per AI client, we can add a similar dictionary for that as well
+
 
 @app.get("/api/health")
 async def health_check():
@@ -57,6 +59,21 @@ async def api_search_parts(payload: PartSearchRequest) -> PartSearchResponse:
 	search_engine_client = SEARCH_ENGINE_CLIENTS.get(payload.search_engine_client_name, None)
 
 	search_response =  await search_parts(
+		request=payload,
+		ai_client=ai_client,
+		search_engine_client=search_engine_client
+	)
+	
+	return search_response
+
+
+@app.post('/api/search/services')
+async def api_search_services(payload):
+	
+	ai_client = AI_CLIENTS.get(payload.ai_client_name, None)
+	search_engine_client = SEARCH_ENGINE_CLIENTS.get(payload.search_engine_client_name, None)
+
+	search_response =  await search_services(
 		request=payload,
 		ai_client=ai_client,
 		search_engine_client=search_engine_client
