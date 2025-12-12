@@ -4,79 +4,91 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SourceFlow is an AI-powered industrial parts sourcing platform that combines intelligent search with automated RFQ (Request for Quote) management. Built with Next.js 14 App Router, it uses multiple Groq AI models for different specialized tasks.
+SourceFlow is an AI-powered industrial parts sourcing platform that combines intelligent search using Exa.ai with automated RFQ (Request for Quote) management. Built with Next.js 14 App Router and Python backend.
+
+**Architecture:** Next.js frontend + Python backend (Flask) + Exa.ai API + Claude for spec analysis
 
 ## Development Commands
 
 ```bash
-# Development
+# Python Backend (Terminal 1)
+cd python-backend
+pip install -r requirements.txt  # First time only
+python web_server.py             # Starts on localhost:5001
+
+# Next.js Frontend (Terminal 2)
 npm run dev              # Start development server (localhost:3000)
 npm run build            # Build for production
 npm run start            # Run production build
 npm run lint             # Run ESLint
 npm run type-check       # TypeScript compilation check (no output)
-
-# Deployment
-vercel                   # Deploy to Vercel
 ```
 
 ## Environment Variables
 
-Required:
-- `GROQ_API_KEY` - Groq API key for all AI functionality
+Required in `.env.local`:
+- `PYTHON_SERVER_URL` - Python backend URL (default: http://localhost:5001)
+- `ANTHROPIC_API_KEY` - Claude API key for selecting top 5 specs from PDFs
 
-Optional:
-- `AGENTMAIL_API_KEY` - Email sending via AgentMail (falls back to simulation mode)
-- `AGENTMAIL_WEBHOOK_SECRET` - Webhook signature verification
+Python backend uses `.env` in `python-backend/` directory:
+- `EXA_API_KEY` - Exa.ai API key for searching datasheets
+- `ANTHROPIC_API_KEY` - Claude API key for extracting specs from PDFs
 
 ## Architecture
 
-### Multi-Model AI Pipeline
+### Exa.ai + Claude Search Pipeline
 
-The application uses a specialized multi-model architecture where different Groq models handle specific tasks:
+The application uses a sophisticated multi-step search and analysis pipeline:
 
-1. **Column Determination** (`/api/search/columns`)
-   - Model: `llama-4-maverick-17b-128e-instruct`
-   - Analyzes query and determines 4 most relevant technical specification columns
-   - Returns JSON: `{"columns": ["Col1", "Col2", "Col3", "Col4"]}`
+1. **Exa Search** (`/api/search/parts` → Python backend `/search`)
+   - User enters industrial part query (e.g., "mass flow controller")
+   - Next.js API calls Python Flask backend
+   - Python uses Exa.ai API to find top 10 datasheet PDFs
+   - Filters for actual PDF files
 
-2. **Parts Search** (`/api/search/parts`)
-   - Model: `groq/compound-mini` (web search enabled)
-   - Takes query + predetermined columns from step 1
-   - Returns markdown table with parts, specs, and supplier links
-   - Streams response with 30-second idle timeout
-   - Retry logic: Falls back to dynamic columns if empty response with predetermined columns
+2. **PDF Scraping & Spec Extraction** (Python backend `/compare`)
+   - Downloads up to 5 PDF datasheets
+   - Uses PyPDF to extract text from first 10 pages
+   - Claude (Sonnet 4.5) extracts standardized technical specs
+   - Returns specs with consistent keys across all datasheets
 
-3. **Supplier Extraction** (`/api/ai/extract-suppliers`)
-   - Model: `llama-3.1-8b-instant`
-   - Extracts distributor/supplier names from search results table
-   - Focuses on who to contact for purchasing (not manufacturers)
+3. **Top 5 Spec Selection** (`/api/search/parts` route)
+   - Claude analyzes all extracted specs
+   - Selects 5 most important/comparable specs
+   - Prioritizes: voltage, current, dimensions, performance metrics
+   - Filters out redundant specs like manufacturer/part number
 
-4. **RFQ Generation** (`/api/ai/rfq-conversation`)
-   - Model: `llama-3.3-70b-versatile`
-   - Creates personalized email templates per supplier
-   - Two-step process: extract suppliers, then generate emails
+4. **Markdown Table Generation**
+   - Converts comparison data to markdown table
+   - Columns: Part Name + Top 5 Specs
+   - Each row links to original PDF datasheet
+   - Displayed in frontend with clickable links
 
-5. **Photo Analysis** (`/api/search/photo`)
-   - Model: `llama-3.2-90b-vision-preview`
-   - Analyzes part images for identification
-
-### Two-API Search Flow
-
-The search workflow is orchestrated by `useColumnDeterminationAndSearch` hook (lib/searchApi.ts:72-106):
+### Search Flow
 
 ```
-User Query → Column Determination API → Parts Search API (with columns) → Results
+User Query
+  ↓
+Next.js API (/api/search/parts)
+  ↓
+Python Backend (/search) - Exa.ai API
+  ↓
+Find Top 10 PDF Datasheets
+  ↓
+Python Backend (/compare) - Claude PDF Analysis
+  ↓
+Extract Specs from 5 PDFs (standardized keys)
+  ↓
+Claude Selects Top 5 Most Important Specs
+  ↓
+Markdown Table with Specs
+  ↓
+Frontend Display
 ```
-
-This ensures:
-- Relevant technical specs are shown for each query type
-- Consistent column structure across similar queries
-- Optimized token usage by pre-determining table structure
 
 ### RFQ Management System
 
-RFQs flow through multiple states tracked in `mockRFQDatabase` (production would use real DB):
+RFQs flow through multiple states tracked in `mockRFQDatabase` in-memory array (`lib/rfq-api.ts`):
 
 **Status Flow:**
 ```
@@ -87,44 +99,49 @@ follow_up_1 (3 days) → follow_up_2 (7 days) → final_notice (14 days) → non
 
 **Key Components:**
 - **Dashboard** (`/rfq-dashboard`) - Central monitoring interface
-- **Webhook Handler** (`/api/webhooks/agentmail`) - Processes email events, automatically stops follow-ups when supplier responds
-- **Cron Job** (`/api/cron/follow-ups`) - Checks for overdue RFQs and sends automated follow-ups
-- **Follow-up Templates** (`lib/rfq-types.ts:74-135`) - Three escalating urgency levels
+- **In-Memory Database** (`lib/rfq-api.ts`) - All RFQ operations use mock in-memory storage
+- **Mock Cron Job** - Simulated follow-up processing (no actual emails sent)
+- **Follow-up Templates** (`lib/rfq-types.ts`) - Three escalating urgency levels
 
-**Follow-up Logic:**
-- When webhook receives supplier response → status changes to `responded`/`quote_received` → follow-ups stop
-- Manual trigger via "Test Cron Job" button for testing
-- AgentMail tracks opens, clicks, and replies
+**Mock Follow-up Logic:**
+- All email operations are simulated
+- Status changes update in-memory database only
+- Manual trigger via "Test Cron Job" button demonstrates workflow
 
 ### Component Architecture
 
 **Search Page Flow** (`app/search/page.tsx`):
-1. User enters query or uploads photo
-2. Debounced suggestions appear (>2 chars)
+1. User enters query "precision linear bearing"
+2. Suggestions disabled in demo mode
 3. Submit triggers `useColumnDeterminationAndSearch` hook
 4. `SearchResults` component shows loading/error/data states
 5. `SearchResultsContent` processes markdown tables to HTML with clickable links
-6. AI extracts suppliers automatically after results load
-7. User selects suppliers → generates RFQ → fills details → creates email templates
-8. Email modal validates recipient/sender → sends via AgentMail → creates RFQ tracking record
+6. Suppliers extracted from mock data
+7. User selects suppliers → generates RFQ → fills details → creates mock email templates
+8. Email modal validates recipient/sender → simulates sending → creates RFQ record in-memory
 
 **RFQ Dashboard Flow** (`app/rfq-dashboard/page.tsx`):
-1. Loads RFQs and stats via React Query hooks
-2. User actions: view conversation, send follow-up, update status
-3. `FollowUpApprovalModal` - Review before sending (manual approval mode)
-4. `ConversationModal` - View email thread and reply
-5. All mutations invalidate queries to refresh data
+1. Loads RFQs and stats from in-memory database via React Query hooks
+2. User actions: view conversation, send follow-up, update status (all simulated)
+3. `FollowUpApprovalModal` - Review before "sending" (no actual emails)
+4. `ConversationModal` - View simulated email thread
+5. All mutations update in-memory database and invalidate queries to refresh data
 
 ### State Management
 
-React Query handles all server state:
-- **Queries**: suggestions, parts search, RFQ list, stats (with stale times)
-- **Mutations**: create RFQ, update status, send follow-up, trigger cron
-- **Invalidation**: Mutations auto-invalidate related queries for fresh data
+React Query handles all mock data operations:
+- **Queries**: parts search, RFQ list, stats from in-memory database
+- **Mutations**: create RFQ, update status, send follow-up, trigger mock cron
+- **Invalidation**: Mutations auto-invalidate related queries to refresh data from in-memory storage
 
 Local component state:
-- Search: photo upload, sidebar visibility, retry state with circuit breaker
+- Search: sidebar visibility, retry state with circuit breaker
 - RFQ: modal open/closed, selected RFQ, follow-up type
+
+**In-Memory Database** (`lib/rfq-api.ts`):
+- `mockRFQDatabase` - Array storing all RFQ records during session
+- Data persists only while app is running - refreshing page clears all RFQs
+- No persistence layer or backend storage
 
 ### Markdown to HTML Processing
 
@@ -140,17 +157,17 @@ Critical: First column is "Part Name & Supplier Type" with format `[PartName (Ty
 
 ### Error Handling & Retry Logic
 
-**Search Retry** (app/search/page.tsx:216-244):
+**Search Retry** (app/search/page.tsx):
 - Tracks consecutive failures and retry count
 - Circuit breaker threshold: 3 consecutive failures
 - Max retry attempts: 3 per search
 - Reset on success or new search
 - User can manually retry if available
 
-**API Timeout Handling**:
-- Groq streaming responses have 30s idle timeout
-- AbortController cancels request on timeout
-- Clear error messages distinguish timeout vs rate limit vs network errors
+**Mock Data Handling**:
+- Only "precision linear bearing" query returns results
+- All other queries return helpful error message
+- No actual API calls or timeouts
 
 ### UI Patterns
 
@@ -170,30 +187,41 @@ Critical: First column is "Part Name & Supplier Type" with format `[PartName (Ty
 
 ## Key Files to Modify
 
-**Adding new AI models:**
-- Update model name in respective `/api/` route
-- Adjust `max_tokens` and `temperature` as needed
-- For streaming: handle chunks in async iterator
+**Adding new mock search data:**
+- Add new entries to `DUMMY_SEARCH_DATA` in `lib/dummyData.ts`
+- Include query, response markdown table, and columns
 
 **Changing RFQ workflow:**
 - Modify status types in `lib/rfq-types.ts`
-- Update webhook handler logic in `/api/webhooks/agentmail/route.ts`
-- Adjust follow-up rules and templates in `lib/rfq-types.ts:138-142`
+- Update mock mutation logic in `lib/rfq-api.ts`
+- Adjust follow-up rules and templates in `lib/rfq-types.ts`
 
 **Styling changes:**
 - Global styles: `app/globals.css`
 - Tailwind config: `tailwind.config.js`
 - Component variants: individual component files
 
-**Database migration:**
-- Replace `mockRFQDatabase` arrays with real DB calls in all `/api/rfq/*` routes
-- Keep same interface types from `lib/rfq-types.ts`
-- Update webhook handler to use DB queries
+**Converting to Full-Stack:**
+To add backend functionality back:
+1. Create Next.js API routes in `app/api/` directory
+2. Replace mock functions in `lib/rfq-api.ts` and `lib/searchApi.ts` with real API calls
+3. Add database (PostgreSQL, MongoDB, etc.)
+4. Replace `mockRFQDatabase` in-memory array with database queries
+5. Add authentication and proper security
+6. Restore removed dependencies: `groq-sdk`, `agentmail`
 
-## Notes on Groq Models
+## Key Features
 
-- **Compound models** require `groq/` prefix and support web search
-- **Vision models** accept base64 image data
-- **Rate limits**: Handle 429 errors gracefully with user-facing messages
-- **Streaming**: Always reset idle timer on chunk receipt to prevent premature timeouts
-- **JSON mode**: Use `response_format: { type: "json_object" }` for structured outputs
+- **Real-time Datasheet Search**: Powered by Exa.ai neural search
+- **Automated Spec Extraction**: Claude extracts and standardizes specs from PDFs
+- **Intelligent Comparison**: Claude selects the 5 most relevant specs for comparison
+- **Side-by-Side Analysis**: Compare multiple industrial parts automatically
+- **RFQ Management**: Track quotes and follow-ups (in-memory for demo)
+
+## Limitations
+
+- RFQ data stored in-memory only (no database persistence)
+- Email sending simulated (no actual emails sent)
+- PDF scraping limited to first 10 pages per datasheet
+- Maximum 5 PDFs compared per search
+- Requires both Python backend and Next.js frontend running
