@@ -1,54 +1,88 @@
-import httpx
-import json
-import re
-from prompts import CLOUDFLARE_SEARCH_ANALYSIS_SYSTEM_PROMPT, CLOUDFLARE_SEARCH_ANALYSIS_USER_PROMPT
+import asyncio
+from typing import Dict, Any, Optional
 
-### DO NOT USE THIS CLIENT IN CURRENT STATE
-class CloudflareAIClient:
-	def __init__(self, account_id: str, workers_key: str):
-		self.account_id = account_id
-		self.workers_key = workers_key
+from cloudflare import Cloudflare
+from services.interfaces import AiClientBase
 
-	
-	async def analyze_search_results(self, model: str, query: str, has_query_specs: bool, search_results: dict):
+class CloudflareAiClient(AiClientBase):
+    """
+    Cloudflare Workers AI implementation of AiClientBase
+    """
 
-		system_prefix = CLOUDFLARE_SEARCH_ANALYSIS_SYSTEM_PROMPT.strip() + "\n\n"
-		user_content = system_prefix + CLOUDFLARE_SEARCH_ANALYSIS_USER_PROMPT.format(
-						query=query,
-						has_specs_in_query=has_query_specs,
-						search_results_json=json.dumps(
-    		    {"results": search_results},
-    		    ensure_ascii=False,   # ← stops \u2014, \u2192, etc.
-    		    indent=2              # ← makes it human-readable and model-friendly
-    		)
-			)
-		payload = {
-			"model": model,
-			"messages": [
-				{
-					"role": "user",
-					"content": user_content
-				}
-			],
-            "response_format": { "type" : "json_object" },
-        }
-		headers = {"Authorization": f"Bearer {self.workers_key}"}
-		print("Serialized Payload:", json.dumps(payload, indent=2))
-		print("Payload Size (bytes):", len(json.dumps(payload).encode('utf-8')))
-		async with httpx.AsyncClient(timeout=120) as client:
-			response = await client.post(f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/ai/run/{model}", 
-										headers=headers, json=payload)
-			if response.status_code != 200:
-				print(f"Error Response [{response.status_code}]: {response.text}")
-				response.raise_for_status()
-			raw = response.json()
+    def __init__(
+        self,
+        api_token: str,
+        account_id: str,
+        model: str = "@cf/meta/llama-3-8b-instruct"
+    ):
+        self.client = Cloudflare(api_token=api_token)
+        self.account_id = account_id
+        self.model = model
 
-		text = raw["result"]["response"]
-		match = re.search(r"\{.*\}", text, re.DOTALL)
-		if match:
-			try:
-				return json.loads(match.group(0))
-			except json.JSONDecodeError:
-				return {"error": "json decode error", "raw": text}
-		else:
-			return {"error": "no json found", "raw": text}
+    async def _generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        enforce_json: bool = False,
+        json_schema: Optional[Dict[str, Any]] = None,
+        max_tokens: int = 500,
+    ) -> Any:
+        """
+        Cloudflare Workers AI text generation
+        """
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": self._build_user_prompt(
+                user_prompt,
+                enforce_json,
+                json_schema
+            )}
+        ]
+
+        # Workers AI Python SDK is sync → run in thread
+        response = await asyncio.to_thread(
+            self.client.workers.ai.run,
+            self.model,
+            account_id=self.account_id,
+            messages=messages,
+            max_tokens=max_tokens,
+        )
+
+        return self._extract_text(response)
+
+    def _build_user_prompt(
+        self,
+        user_prompt: str,
+        enforce_json: bool,
+        json_schema: Optional[Dict[str, Any]],
+    ) -> str:
+        """
+        Augment user prompt for JSON enforcement if requested
+        """
+        if not enforce_json:
+            return user_prompt
+
+        schema_text = ""
+        if json_schema:
+            schema_text = (
+                "\n\nReturn JSON that strictly matches this schema:\n"
+                f"{json_schema}"
+            )
+
+        return (
+            user_prompt
+            + "\n\nIMPORTANT: Respond ONLY with valid JSON."
+            + schema_text
+        )
+
+    def _extract_text(self, response: Dict[str, Any]) -> str:
+        """
+        Normalize Workers AI response format
+        """
+        # Typical response shape:
+        # { "result": { "response": "text..." } }
+        try:
+            return response["result"]["response"]
+        except (KeyError, TypeError):
+            raise RuntimeError(f"Unexpected Cloudflare response: {response}")

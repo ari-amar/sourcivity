@@ -4,7 +4,8 @@ from abc import ABC, abstractmethod
 class AiClientBase(ABC):
 
 	async def generate(self,
-					 prompt: str, 
+					 system_prompt:str,
+					 user_prompt: str, 
 					 enforce_json: bool = False, 
 					 json_schema: Dict[str, Any]=None,
 					 max_tokens: int = 500):
@@ -22,14 +23,16 @@ class AiClientBase(ABC):
 		:type max_tokens: int
 		"""
 		# add common functionality for logging, etc here
-		return await self._generate(prompt=prompt, 
+		return await self._generate(system_prompt=system_prompt, 
+							  		user_prompt=user_prompt,
 									enforce_json=enforce_json,
 									json_schema=json_schema,
 									max_tokens=max_tokens)
 
 	@abstractmethod
 	async def _generate(self, 
-						prompt: str, 
+						system_prompt: str,
+						user_prompt: str, 
 						enforce_json: bool = False,
 						json_schema: Dict[str, Any]=None,
 						max_tokens: int = 500):
