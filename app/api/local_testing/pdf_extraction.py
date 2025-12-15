@@ -47,3 +47,4 @@ if __name__ == "__main__":
 	urls = asyncio.run(search_datasheets(anthropic_ai_client, duckduckgo_client, query))
 
 	download_pdf_files(urls)
+	print("hello")
