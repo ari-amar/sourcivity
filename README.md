@@ -1,6 +1,6 @@
 # SourceFlow - Industrial Parts Sourcing Platform
 
-AI-powered industrial parts search and sourcing platform with automated RFQ management. Built with Next.js 14, TypeScript, and Groq AI.
+AI-powered industrial parts and services search and sourcing platform with vendor quality and reliability metrics
 
 ## Features
 

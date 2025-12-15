@@ -1,18 +1,47 @@
 from typing import Optional, List
 from pydantic import BaseModel
+from enums import AiClientName, SearchEngineClientName
 
-class PartsSearchRequest(BaseModel):
+class SearchEngineClientResponse(BaseModel):
+	prompt: str
+	results: List[SearchEngineResult] = []
+class SearchEngineResult(BaseModel):
+	title: str
+	url: str
+	text: Optional[str] = None
+	score: Optional[float] = None
+	published_date: Optional[str] = None
+	author: Optional[str] = None
+
+class AvailableClientResponse(BaseModel):
+	ai_client_names: List[str]
+	search_engine_client_names: List[str]
+
+class PartSearchRequest(BaseModel):
 	query: str
-	location_filter: Optional[str] = "global suppliers"
+	generate_ai_search_prompt: Optional[bool] = False
+	search_engine_client_name: Optional[str] = SearchEngineClientName.EXA
+	ai_client_name: Optional[str] = AiClientName.CLOUDFLARE
 
-class DatasheetSearchRequest(BaseModel):
-	component_description: str
-	max_results: Optional[int] = 5
-	
-class ServicesSearchRequest(BaseModel):
+class PartResponse(BaseModel):
+	url: str
+	md: Optional[str] = None
+	specs: Optional[dict] = None
+	error: Optional[str] = None
+
+class PartSearchResponse(BaseModel):
 	query: str
-	location_filter: Optional[str] = "global providers"
+	spec_column_names: List[str]
+	parts: List[PartResponse]
 
-class VendorQualityRequest(BaseModel):
-	vendor_name: str
-	industry: Optional[str] = None
+class ServiceSearchRequest(BaseModel):
+	query: str
+	generate_ai_search_prompt: Optional[bool] = False
+	search_engine_client_name: Optional[str] = SearchEngineClientName.EXA
+	ai_client_name: Optional[str] = AiClientName.CLOUDFLARE
+
+class ServiceSearchResponse(BaseModel):
+	query: str
+	services: List[dict]
+
+# TODO: define ServiceResponse model if needed

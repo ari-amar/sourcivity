@@ -19,6 +19,7 @@ tsconfig.tsbuildinfo.vercel/
 .vercel/
 tsconfig.tsbuildinfo
 env.config
+keys.config
 __pycache__/
 *.pyc
 *.pyo
