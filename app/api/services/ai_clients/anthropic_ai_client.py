@@ -22,7 +22,7 @@ class AnthropicAiClient(AiClientBase):
         enforce_json: bool = False,
         json_schema: Optional[Dict[str, Any]] = None,
         max_tokens: int = 500,
-    ) -> Any:
+    ) -> str:
         """
         Anthropic text generation implementation
         """

@@ -26,27 +26,19 @@ class CloudflareAiClient(AiClientBase):
         enforce_json: bool = False,
         json_schema: Optional[Dict[str, Any]] = None,
         max_tokens: int = 500,
-    ) -> Any:
+    ) -> str:
         """
         Cloudflare Workers AI text generation
         """
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": self._build_user_prompt(
-                user_prompt,
-                enforce_json,
-                json_schema
-            )}
-        ]
-
         # Workers AI Python SDK is sync → run in thread
-        response = await asyncio.to_thread(
-            self.client.workers.ai.run,
-            self.model,
+        response = self.client.ai.run(
+            model_name=self.model,
             account_id=self.account_id,
-            messages=messages,
-            max_tokens=max_tokens,
+            text=self._build_user_prompt(user_prompt=user_prompt,
+                                         system_prompt=system_prompt,
+                                         enforce_json=enforce_json,
+                                         json_schema=json_schema),
         )
 
         return self._extract_text(response)
@@ -54,14 +46,15 @@ class CloudflareAiClient(AiClientBase):
     def _build_user_prompt(
         self,
         user_prompt: str,
-        enforce_json: bool,
-        json_schema: Optional[Dict[str, Any]],
+        system_prompt: str="",
+        enforce_json: bool=False,
+        json_schema: Optional[Dict[str, Any]]=None,
     ) -> str:
         """
         Augment user prompt for JSON enforcement if requested
         """
         if not enforce_json:
-            return user_prompt
+            return f"{system_prompt}\n{user_prompt}"
 
         schema_text = ""
         if json_schema:
@@ -70,11 +63,7 @@ class CloudflareAiClient(AiClientBase):
                 f"{json_schema}"
             )
 
-        return (
-            user_prompt
-            + "\n\nIMPORTANT: Respond ONLY with valid JSON."
-            + schema_text
-        )
+        return f"{system_prompt}\n{user_prompt}\n\nIMPORTANT: Respond ONLY with valid JSON.{schema_text}"
 
     def _extract_text(self, response: Dict[str, Any]) -> str:
         """

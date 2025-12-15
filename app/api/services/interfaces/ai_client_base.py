@@ -8,7 +8,7 @@ class AiClientBase(ABC):
 					 user_prompt: str, 
 					 enforce_json: bool = False, 
 					 json_schema: Dict[str, Any]=None,
-					 max_tokens: int = 500):
+					 max_tokens: int = 500) -> str:
 		"""
 		Docstring for generate
 		
@@ -35,7 +35,7 @@ class AiClientBase(ABC):
 						user_prompt: str, 
 						enforce_json: bool = False,
 						json_schema: Dict[str, Any]=None,
-						max_tokens: int = 500):
+						max_tokens: int = 500) -> str:
 		"""
 		Implementation of text generation for specific AI client
 		"""
