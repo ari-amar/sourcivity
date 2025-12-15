@@ -3,11 +3,9 @@
 PDF Scraper for extracting specifications from datasheets using PyMuPDF4LLM and Claude for robustness.
 """
 
-import os
 import requests
 import re
 from typing import Dict, List, Optional
-from io import BytesIO
 import fitz  # PyMuPDF
 import pymupdf4llm  # Requires pip install pymupdf4llm
 
