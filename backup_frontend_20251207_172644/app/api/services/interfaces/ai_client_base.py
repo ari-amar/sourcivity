@@ -1,15 +1,41 @@
-from typing import List
+from typing import Dict, Any
 from abc import ABC, abstractmethod
 
 class AiClientBase(ABC):
 
-	async def generate_search_prompts(self, component_description: str) -> List[str]:
-
-		# common search prompt generation logic here if needed
-		return await self._generate_search_prompts(component_description)
+	async def generate(self,
+					 system_prompt:str,
+					 user_prompt: str, 
+					 enforce_json: bool = False, 
+					 json_schema: Dict[str, Any]=None,
+					 max_tokens: int = 500) -> str:
+		"""
+		Docstring for generate
+		
+		:param self: Description
+		:param prompt: Description
+		:type prompt: str
+		:param enforce_json: Description
+		:type enforce_json: bool
+		:param json_schema: Description
+		:type json_schema: Dict[str, Any]
+		:param max_tokens: Description
+		:type max_tokens: int
+		"""
+		# add common functionality for logging, etc here
+		return await self._generate(system_prompt=system_prompt, 
+							  		user_prompt=user_prompt,
+									enforce_json=enforce_json,
+									json_schema=json_schema,
+									max_tokens=max_tokens)
 
 	@abstractmethod
-	async def _generate_search_prompts(self, component_description: str) -> List[str]:
+	async def _generate(self, 
+						system_prompt: str,
+						user_prompt: str, 
+						enforce_json: bool = False,
+						json_schema: Dict[str, Any]=None,
+						max_tokens: int = 500) -> str:
 		"""
-		Code for AI generated search prompt
+		Implementation of text generation for specific AI client
 		"""
