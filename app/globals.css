@@ -39,8 +39,728 @@
   * {
     @apply border-border;
   }
-  
+
   body {
     @apply bg-background text-foreground font-inter;
+  }
+}
+
+@keyframes gradient {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes blob {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+}
+
+@layer utilities {
+  .animate-gradient {
+    animation: gradient 8s ease infinite;
+  }
+
+  .animate-blob {
+    animation: blob 7s ease-in-out infinite;
+  }
+
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+
+  .animation-delay-4000 {
+    animation-delay: 4s;
+  }
+
+  .animation-delay-6000 {
+    animation-delay: 6s;
+  }
+
+  .animate-gradient-slow {
+    background-size: 200% 200%;
+    animation: gradient 15s ease infinite;
+  }
+
+  .bg-grid-pattern {
+    background-image: linear-gradient(to right, #80808012 1px, transparent 1px),
+      linear-gradient(to bottom, #80808012 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Country flag tooltip styles */
+  .country-flag-tooltip {
+    position: relative;
+    cursor: default;
+    display: inline-block;
+  }
+
+  .country-flag-tooltip::after {
+    content: attr(data-country);
+    position: absolute;
+    top: 100%;
+    left: 0;
+    transform: translateY(8px);
+    background-color: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+    z-index: 1000;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+
+  .country-flag-tooltip::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 12px;
+    transform: translateY(2px);
+    border: 5px solid transparent;
+    border-bottom-color: rgba(0, 0, 0, 0.9);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+    z-index: 1000;
+  }
+
+  .country-flag-tooltip:hover::after {
+    opacity: 1;
+    transform: translateY(4px);
+  }
+
+  .country-flag-tooltip:hover::before {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+
+  /* Supplier type tooltip styles - matches country flag tooltip positioning */
+  .supplier-type-tooltip {
+    position: relative;
+    cursor: default;
+    display: inline-block;
+  }
+
+  .supplier-type-tooltip::after {
+    content: attr(data-description);
+    position: absolute;
+    top: 100%;
+    left: 0;
+    transform: translateY(8px);
+    background-color: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+    z-index: 1000;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+
+  .supplier-type-tooltip::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 12px;
+    transform: translateY(2px);
+    border: 5px solid transparent;
+    border-bottom-color: rgba(0, 0, 0, 0.9);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+    z-index: 1000;
+  }
+
+  .supplier-type-tooltip:hover::after {
+    opacity: 1;
+    transform: translateY(4px);
+  }
+
+  .supplier-type-tooltip:hover::before {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+
+
+  /* CSV Download tooltip styles - right-aligned to prevent page extension */
+  .csv-download-tooltip {
+    position: relative;
+    cursor: default;
+    display: inline-block;
+  }
+
+  .csv-download-tooltip::after {
+    content: 'Download as CSV';
+    position: absolute;
+    top: 100%;
+    right: 0;
+    transform: translateY(8px);
+    background-color: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+    z-index: 1000;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+
+  .csv-download-tooltip::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    right: 12px;
+    transform: translateY(2px);
+    border: 5px solid transparent;
+    border-bottom-color: rgba(0, 0, 0, 0.9);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+    z-index: 1000;
+  }
+
+  .csv-download-tooltip:hover::after {
+    opacity: 1;
+    transform: translateY(4px);
+  }
+
+  .csv-download-tooltip:hover::before {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+
+  /* Allow tooltips to overflow table cells */
+  td {
+    overflow: visible !important;
+  }
+
+  tbody {
+    overflow: visible !important;
+  }
+}
+
+/* Radial gradient utilities for ambient glow effect */
+@layer utilities {
+  .bg-gradient-radial {
+    background-image: radial-gradient(circle, var(--tw-gradient-stops));
+  }
+
+  /* Radial fade overlay - creates gradient fade from center to edges */
+  .bg-radial-fade {
+    background: radial-gradient(
+      ellipse at center top,
+      rgba(245, 247, 250, 0) 0%,
+      rgba(245, 247, 250, 0.5) 40%,
+      rgba(245, 247, 250, 0.9) 70%,
+      rgba(245, 247, 250, 1) 100%
+    );
+  }
+}
+
+/* Floating animation keyframes for ambient gradient blobs */
+@keyframes float-slow {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-20px, -30px) scale(1.1);
+  }
+}
+
+@keyframes float-medium {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(25px, -25px) scale(1.05);
+  }
+}
+
+@keyframes float-fast {
+  0%, 100% {
+    transform: translate(-50%, 0) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -40px) scale(1.15);
+  }
+}
+
+@keyframes float-slow-delay {
+  0%, 100% {
+    transform: translateY(-50%) scale(1);
+  }
+  50% {
+    transform: translateY(-50%) translateX(-30px) scale(1.08);
+  }
+}
+
+/* Animation classes */
+.animate-float-slow {
+  animation: float-slow 25s ease-in-out infinite;
+}
+
+.animate-float-medium {
+  animation: float-medium 20s ease-in-out infinite;
+}
+
+.animate-float-fast {
+  animation: float-fast 18s ease-in-out infinite;
+}
+
+.animate-float-slow-delay {
+  animation: float-slow-delay 30s ease-in-out infinite;
+}
+
+/* Drift animations for full-page gradient blobs */
+@keyframes drift {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+  33% {
+    transform: translate(30px, -30px) rotate(120deg) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) rotate(240deg) scale(0.95);
+  }
+}
+
+@keyframes drift-alt {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+  33% {
+    transform: translate(-25px, 35px) rotate(-120deg) scale(1.05);
+  }
+  66% {
+    transform: translate(25px, -25px) rotate(-240deg) scale(1.08);
+  }
+}
+
+/* Drift animation classes with performance optimization */
+.animate-drift-slow {
+  animation: drift 55s ease-in-out infinite;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+.animate-drift-medium {
+  animation: drift 45s ease-in-out infinite;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+.animate-drift-fast {
+  animation: drift 35s ease-in-out infinite;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+.animate-drift-slower {
+  animation: drift 65s ease-in-out infinite;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+.animate-drift-slow-alt {
+  animation: drift-alt 50s ease-in-out infinite;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+.animate-drift-medium-alt {
+  animation: drift-alt 40s ease-in-out infinite;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+.animate-drift-fast-alt {
+  animation: drift-alt 30s ease-in-out infinite;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* Emanate animation - breathing effect from center */
+@keyframes emanate {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.15);
+    opacity: 0.6;
+  }
+}
+
+.animate-emanate {
+  animation: emanate 20s ease-in-out infinite;
+  will-change: transform, opacity;
+  transform: translateZ(0);
+}
+
+.animate-emanate-delay-1 {
+  animation: emanate 25s ease-in-out infinite;
+  animation-delay: 3s;
+  will-change: transform, opacity;
+  transform: translateZ(0);
+}
+
+.animate-emanate-delay-2 {
+  animation: emanate 22s ease-in-out infinite;
+  animation-delay: 6s;
+  will-change: transform, opacity;
+  transform: translateZ(0);
+}
+
+/* Search bar glassmorphism effect */
+.search-bar-glass {
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(255, 255, 255, 0.7) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 10px 40px rgba(99, 102, 241, 0.1),
+    0 2px 10px rgba(0, 0, 0, 0.05),
+    inset 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+/* Header gradient background - simple and clean */
+.header-gradient-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  background: linear-gradient(90deg,
+    rgba(99, 102, 241, 0.08) 0%,
+    rgba(147, 197, 253, 0.06) 25%,
+    rgba(196, 181, 253, 0.06) 50%,
+    rgba(251, 207, 232, 0.06) 75%,
+    rgba(168, 85, 247, 0.08) 100%);
+  background-color: #fafafa;
+}
+
+/* The main gradient background effect */
+.gradient-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  background:
+    /* Top blue-purple glow */
+    radial-gradient(ellipse 120% 50% at 50% -10%,
+      rgba(99, 102, 241, 0.3) 0%,
+      transparent 40%),
+    /* Left purple accent */
+    radial-gradient(ellipse 60% 50% at -10% 20%,
+      rgba(168, 85, 247, 0.25) 0%,
+      transparent 50%),
+    /* Right blue accent */
+    radial-gradient(ellipse 60% 50% at 110% 20%,
+      rgba(59, 130, 246, 0.25) 0%,
+      transparent 50%),
+    /* Center pink glow */
+    radial-gradient(ellipse 80% 40% at 50% 40%,
+      rgba(236, 72, 153, 0.15) 0%,
+      transparent 60%),
+    /* Bottom orange-pink glow */
+    radial-gradient(ellipse 120% 60% at 50% 110%,
+      rgba(251, 146, 60, 0.4) 0%,
+      rgba(254, 178, 178, 0.3) 30%,
+      transparent 60%),
+    /* Base gradient */
+    linear-gradient(180deg,
+      #fafafa 0%,
+      #f3f4f6 30%,
+      #fef3c7 70%,
+      #fed7aa 100%);
+}
+
+/* Soft blur overlay for smoothness */
+.gradient-blur {
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  z-index: -1;
+  background: radial-gradient(circle at 50% 50%,
+    rgba(147, 197, 253, 0.2) 0%,
+    rgba(196, 181, 253, 0.2) 20%,
+    rgba(251, 207, 232, 0.2) 40%,
+    rgba(252, 165, 165, 0.3) 60%,
+    rgba(251, 146, 60, 0.3) 80%,
+    transparent 100%);
+  filter: blur(100px);
+  opacity: 0.6;
+}
+
+/* Product Card Styles - Horizontal Cards Spanning Full Width */
+.product-cards-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.product-card {
+  background: white;
+  padding: 20px 24px;
+  transition: all 0.2s ease;
+  display: flex;
+  width: 100%;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  margin-bottom: 12px;
+}
+
+.product-card:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* Product Row - Single Horizontal Row */
+.product-row {
+  display: grid;
+  grid-template-columns: 220px 1px repeat(5, minmax(85px, 1fr)) auto;
+  column-gap: 10px;
+  align-items: center;
+  width: 100%;
+}
+
+.product-row > .rfq-button-column {
+  margin-left: 0;
+  justify-self: start;
+  transform: translateX(-80px);
+}
+
+.spec-column:last-of-type {
+  margin-right: -70px;
+}
+
+/* Product Info Section - First Column */
+.product-info-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Vertical Divider */
+.product-divider {
+  width: 1px;
+  background: #e5e7eb;
+  height: 40px;
+  align-self: center;
+  margin-right: 32px;
+}
+
+/* Specs Row - Now just contains spec columns */
+.specs-row {
+  display: contents;
+}
+
+/* Spec Columns */
+.spec-column {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding-right: 0px;
+}
+
+.spec-column:first-child {
+  padding-left: 24px;
+}
+
+
+.spec-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+  min-height: 14px;
+}
+
+.spec-value {
+  font-size: 0.875rem;
+  color: #111827;
+  font-weight: 400;
+  line-height: 1.5;
+  min-height: 21px;
+}
+
+/* RFQ Button Column (right) */
+.rfq-button-column {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.rfq-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background-color: #2563EB;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  min-width: 70px;
+}
+
+.rfq-button:hover {
+  background-color: #1D4ED8;
+  box-shadow: 0 4px 8px rgba(37, 99, 235, 0.2);
+}
+
+.rfq-button:active {
+  transform: scale(0.98);
+}
+
+.rfq-button-added {
+  background-color: #10B981;
+  color: white;
+}
+
+.rfq-button-added:hover {
+  background-color: #059669;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+/* Responsive Design for Horizontal Card Layout */
+@media (max-width: 1024px) {
+  .specs-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .spec-column:nth-child(even)::after {
+    display: none;
+  }
+
+  .rfq-button-column {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    padding-top: 8px;
+    border-top: 1px solid #f3f4f6;
+  }
+
+  .rfq-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .product-card {
+    padding: 16px;
+  }
+
+  .specs-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .spec-column::after {
+    display: none;
+  }
+}
+
+/* Mobile-specific optimizations */
+@media (max-width: 768px) {
+  /* Disable hover effects on mobile (use touch instead) */
+  .country-flag-tooltip:hover::after,
+  .country-flag-tooltip:hover::before,
+  .supplier-type-tooltip:hover::after,
+  .supplier-type-tooltip:hover::before,
+  .csv-download-tooltip:hover::after,
+  .csv-download-tooltip:hover::before {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Prevent horizontal scroll */
+  html,
+  body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  /* Ensure main content doesn't overflow */
+  main {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  /* Optimize touch targets - but allow smaller inline buttons */
+  button:not(.p-1):not(.p-1\.5),
+  a:not(.inline),
+  [role="button"] {
+    min-height: 40px;
+    min-width: 40px;
+  }
+
+  /* Ensure small icon buttons are still tappable */
+  button.p-1,
+  button.p-1\.5 {
+    min-height: 32px;
+    min-width: 32px;
+  }
+
+  /* Improve text readability on small screens */
+  body {
+    -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Reduce animations on mobile for better performance */
+  .animate-blob {
+    animation: none;
+  }
+
+  /* Optimize gradient backgrounds for mobile */
+  .gradient-background,
+  .gradient-blur {
+    opacity: 0.7;
   }
 }
