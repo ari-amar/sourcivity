@@ -1,5 +1,7 @@
+from typing import List
 from exa_py import Exa
 from services.interfaces.search_engine_client_base import SearchEngineClientBase
+from models import SearchEngineClientResponse, SearchEngineResult
 
 class ExaClient(SearchEngineClientBase):
 
@@ -23,7 +25,7 @@ class ExaClient(SearchEngineClientBase):
 		self.include_text = include_text
 		self.text_length_limit = text_length_limit
 
-	async def _search(self, query: str, max_results: int = 10):
+	async def _search(self, query: str, max_results: int = 10) -> SearchEngineClientResponse:
 		"""
 		Search using Exa API.
 
@@ -41,7 +43,6 @@ class ExaClient(SearchEngineClientBase):
 				query,
 				type=self.search_type,
 				num_results=max_results,
-				use_autoprompt=True  # Let Exa optimize the query
 			)
 
 			# Get text content if requested
@@ -56,31 +57,32 @@ class ExaClient(SearchEngineClientBase):
 				# Merge text into results
 				formatted_results = []
 				for i, result in enumerate(results.results):
-					formatted_results.append({
-						'title': result.title,
-						'url': result.url,
-						'score': getattr(result, 'score', None),
-						'text': contents.results[i].text if i < len(contents.results) else None,
-						'published_date': getattr(result, 'published_date', None),
-						'author': getattr(result, 'author', None)
-					})
+					formatted_results.append(
+						SearchEngineResult(
+							title=result.title,
+							url=result.url,
+							score=getattr(result, 'score', None),
+							text=contents.results[i].text if i < len(contents.results) else None,
+							published_date=getattr(result, 'published_date', None),
+							author=getattr(result, 'author', None)
+						))
 			else:
 				# Format results without text
 				formatted_results = []
 				for result in results.results:
-					formatted_results.append({
-						'title': result.title,
-						'url': result.url,
-						'score': getattr(result, 'score', None),
-						'published_date': getattr(result, 'published_date', None),
-						'author': getattr(result, 'author', None)
-					})
+					formatted_results.append(SearchEngineResult(
+							title=result.title,
+							url=result.url,
+							score=getattr(result, 'score', None),
+							published_date=getattr(result, 'published_date', None),
+							author=getattr(result, 'author', None)
+						)
+					)
 
-			return {
-				'results': formatted_results,
-				'autoprompt_string': getattr(results, 'autoprompt_string', None)
-			}
-
+			return SearchEngineClientResponse(
+				prompt=query,
+				results=formatted_results
+			)
 		except Exception as e:
 			raise Exception(f"Exa search error: {str(e)}")
 

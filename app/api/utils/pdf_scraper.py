@@ -8,6 +8,7 @@ import requests
 import re
 from typing import Dict, List, Optional
 from io import BytesIO
+import fitz  # PyMuPDF
 import pymupdf4llm  # Requires pip install pymupdf4llm
 
 from prompts import SINGLE_PDF_SPEC_EXTRACTION_PROMPT, MULTPLE_PDF_SPEC_EXTRACTION_PROMPT
@@ -49,14 +50,15 @@ class PDFScraper:
             Extracted markdown from PDF (first 10 pages)
         """
         try:
-            # PyMuPDF4LLM returns a list of markdown strings per page
-            md_pages = pymupdf4llm.to_markdown(BytesIO(pdf_content), pages=range(10))
-            md_text = "\n\n".join(md_pages)
+            with fitz.open(stream=pdf_content) as doc:
+                # PyMuPDF4LLM returns a list of markdown strings per page
+                md_pages = pymupdf4llm.to_markdown(doc, max_pages=10)
+                md_text = "\n\n".join(md_pages)
             return md_text
         except Exception as e:
             raise Exception(f"Failed to extract markdown from PDF: {str(e)}")
 
-    def extract_specs(self, pdf_md: str, product_type: Optional[str] = None) -> Dict:
+    async def extract_specs(self, pdf_md: str, product_type: Optional[str] = None) -> Dict:
         """
         Extract specifications from PDF markdown using Claude.
 
@@ -73,18 +75,25 @@ class PDFScraper:
 
         product_hint = f"This is a datasheet for a {product_type}. " if product_type else ""
 
-        prompt = SINGLE_PDF_SPEC_EXTRACTION_PROMPT.format(product_hint, pdf_md)
+        prompt = SINGLE_PDF_SPEC_EXTRACTION_PROMPT.format(product_hint=product_hint, pdf_md=pdf_md)
 
         try:
-            message = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",  # Updated to a more recent model as of 2025
-                max_tokens=2000,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
+            response_text = self.ai_client.generate(
+                system_prompt="You are an expert at extracting technical specifications from product datasheets.",
+                user_prompt=prompt,
+                enforce_json=True,
+                json_schema={
+                    "type": "object",
+                    "properties": {
+                        "specifications": {
+                            "type": "object",
+                            "additionalProperties": {"type": "string"}
+                        }
+                    },
+                    "required": ["specifications"]
+                },
+                max_tokens=2000
             )
-
-            response_text = message.content[0].text
 
             # Extract JSON from response (in case there's extra text)
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
@@ -97,7 +106,7 @@ class PDFScraper:
         except Exception as e:
             return {"error": f"Failed to extract specs: {str(e)}"}
 
-    def scrape_pdf(self, url: str, product_type: Optional[str] = None, extract_specs: bool=True) -> Dict:
+    async def scrape_pdf(self, url: str, product_type: Optional[str] = None, extract_specs: bool=True) -> Dict:
         """
         Download PDF and extract specifications.
 
@@ -123,12 +132,12 @@ class PDFScraper:
             pdf_md = self.extract_markdown_from_pdf(pdf_content)
 
             if not pdf_md.strip():
-                raise ValueError("fNo markdown could be extracted from pdf at {url}")
+                raise ValueError(f"No markdown could be extracted from pdf at {url}")
 
             result["md"] = pdf_md
 
             if extract_specs:
-                specs = self.extract_specs(pdf_md, product_type)
+                specs = await self.extract_specs(pdf_md, product_type)
                 result["specs"] = specs
 
         except Exception as e:
@@ -136,7 +145,7 @@ class PDFScraper:
 
         return result
 
-    def scrape_multiple(self, urls: List[str], product_type: Optional[str] = None) -> List[Dict]:
+    async def scrape_multiple(self, urls: List[str], product_type: Optional[str] = "") -> List[Dict]:
         """
         Scrape multiple PDFs and return their specs with standardized keys.
 
@@ -150,22 +159,31 @@ class PDFScraper:
         # First pass: Download all PDFs and extract markdown
         
         results = []
+        spec_extractable_results = []
 
         for url in urls:
-            results = self.scrape_pdf(url=url, product_type=product_type)
-
-        for result in results:
+            result = await self.scrape_pdf(url=url, product_type=product_type, extract_specs=False)
             if not result.get("error"):
-                specs = self.extract_standardized_specs(
-                    pdf_mds=[result["md"]],
-                    urls=[result["url"]],
+                spec_extractable_results.append(result)
+            else:
+                results.append(result)
+
+    
+        specs = await self.extract_standardized_specs(
+                    pdf_mds=[res["md"] for res in spec_extractable_results],
+                    urls=[res["url"] for res in spec_extractable_results],
                     product_type=product_type
                 )
-                result["specs"] = specs
+        
+        for i, spec in enumerate(specs):
+            result = spec_extractable_results[i]
+            result["specs"] = spec.get("specifications", {})
+            results.append(result)
+        result["specs"] = specs
 
         return results
 
-    def extract_standardized_specs(self, pdf_mds: List[Optional[str]], urls: List[str], product_type: Optional[str] = None) -> List[Dict]:
+    async def extract_standardized_specs(self, pdf_mds: List[Optional[str]], urls: List[str], product_type: Optional[str] = None) -> List[Dict]:
         """
         Extract specs from multiple datasheets with standardized keys for comparison.
 
@@ -187,18 +205,27 @@ class PDFScraper:
                 truncated = md[:15000] if len(md) > 15000 else md
                 datasheets_md += f"\n\n=== DATASHEET {i+1} (URL: {urls[i]}) ===\n{truncated}\n"
 
-        prompt = MULTPLE_PDF_SPEC_EXTRACTION_PROMPT.format(product_hint, datasheets_md)
+        prompt = MULTPLE_PDF_SPEC_EXTRACTION_PROMPT.format(product_hint=product_hint, datasheets_md=datasheets_md)
 
         try:
-            message = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=4000,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
+            response_text = await self.ai_client.generate(
+                system_prompt="You are an expert at extracting and standardizing technical specifications from product datasheets.",
+                user_prompt=prompt,
+                enforce_json=True,
+                json_schema={
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "specifications": {
+                                "type": "object",
+                                "additionalProperties": {"type": "string"}
+                            }
+                        },
+                        "required": ["specifications"]
+                    }
+                },
             )
-
-            response_text = message.content[0].text
 
             # Extract JSON array from response
             json_match = re.search(r'\[.*\]', response_text, re.DOTALL)

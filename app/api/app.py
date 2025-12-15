@@ -16,7 +16,7 @@ app = FastAPI()
 
 cloudflare_account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID")
 cloudflare_workers_key = os.getenv("CLOUDFLARE_WORKERS_KEY")
-cloudflare_client = CloudflareAIClient(account_id=cloudflare_account_id, workers_key=cloudflare_workers_key)
+cloudflare_client = CloudflareAiClient(account_id=cloudflare_account_id, api_token=cloudflare_workers_key)
 
 # TODO: initialize other AI clients here
 
