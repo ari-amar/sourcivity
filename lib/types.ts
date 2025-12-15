@@ -46,6 +46,9 @@ export interface ProductItem {
   supplierType: string;
   supplierFlag: string;
   hasSpecSheet: boolean;
+  datasheetUrl?: string; // URL to the datasheet PDF
+  isVerified?: boolean; // Verified supplier indicator
+  rating?: number; // Supplier rating (1-5)
   // Dynamic column data - key is column name, value is the cell content
   columnData: Record<string, string>;
 }
