@@ -5,7 +5,7 @@ import { RFQDashboard } from '../../components/RFQDashboard';
 import { FollowUpApprovalModal } from '../../components/FollowUpApprovalModal';
 import { ConversationModal } from '../../components/ConversationModal';
 import { Button } from '../../components/Button';
-import { useRFQs, useRFQStats, useSendFollowUp, useUpdateRFQStatus, useTriggerFollowUpCron } from '../../lib/rfq-api';
+import { useRFQs, useRFQStats, useSendFollowUp, useUpdateRFQStatus, useTriggerFollowUpCron, useDeleteRFQ } from '../../lib/rfq-api';
 import { RFQRecord, DEFAULT_FOLLOW_UP_TEMPLATES } from '../../lib/rfq-types';
 import { RefreshCw, Play, AlertCircle } from 'lucide-react';
 
@@ -21,6 +21,7 @@ export default function RFQDashboardPage() {
   const sendFollowUpMutation = useSendFollowUp();
   const updateRFQMutation = useUpdateRFQStatus();
   const triggerCronMutation = useTriggerFollowUpCron();
+  const deleteRFQMutation = useDeleteRFQ();
 
   // Default stats if not loaded
   const dashboardStats = stats || {
@@ -113,6 +114,19 @@ export default function RFQDashboardPage() {
     }
   };
 
+  const handleDeleteRFQ = async (rfqId: string) => {
+    if (!window.confirm('Are you sure you want to delete this RFQ? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await deleteRFQMutation.mutateAsync(rfqId);
+    } catch (error) {
+      console.error('Failed to delete RFQ:', error);
+      alert('Failed to delete RFQ. Please try again.');
+    }
+  };
+
   if (rfqsLoading || statsLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -125,56 +139,18 @@ export default function RFQDashboardPage() {
   }
 
   return (
-    <div className="bg-background">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <header className="mb-8">
-          <div className="flex items-center justify-between">
+    <div className="bg-background min-h-screen">
+      <div className="max-w-7xl mx-auto px-3 md:px-6 py-3 md:py-8">
+        <header className="mb-3 md:mb-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Messages Dashboard</h1>
-              <p className="text-muted-foreground text-lg">
+              <h1 className="text-xl md:text-3xl font-bold text-foreground">Messages Dashboard</h1>
+              <p className="text-muted-foreground text-xs md:text-base">
                 RFQ conversations, follow-ups and automated reminders
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              <Button
-                variant="outline"
-                onClick={() => refetchRFQs()}
-                disabled={rfqsLoading}
-                className="flex items-center gap-2"
-              >
-                <RefreshCw size={16} />
-                Refresh
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleTriggerCron}
-                disabled={triggerCronMutation.isPending}
-                className="flex items-center gap-2"
-              >
-                <Play size={16} />
-                {triggerCronMutation.isPending ? 'Running...' : 'Test Cron Job'}
-              </Button>
-            </div>
           </div>
         </header>
-
-        {/* Configuration Notice */}
-        {!process.env.AGENTMAIL_API_KEY && (
-          <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-            <div className="flex items-center gap-2">
-              <AlertCircle size={20} className="text-yellow-600" />
-              <div>
-                <h3 className="font-medium text-yellow-800 dark:text-yellow-200">
-                  Email Configuration Required
-                </h3>
-                <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                  Configure email settings to enable automatic follow-up emails.
-                  Currently running in simulation mode.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Main Dashboard */}
         <RFQDashboard
@@ -183,6 +159,7 @@ export default function RFQDashboardPage() {
           onStatusUpdate={handleStatusUpdate}
           onSendFollowUp={handleSendFollowUp}
           onViewDetails={handleViewDetails}
+          onDelete={handleDeleteRFQ}
         />
 
         {/* Follow-up Approval Modal */}

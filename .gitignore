@@ -13,8 +13,16 @@ dist/
 build/
 .next/
 *.log
-.vscode/
 .idea/
 tsconfig.tsbuildinfo.vercel/
 .vercel/
 tsconfig.tsbuildinfo
+env.config
+keys.config
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+*.pdf
