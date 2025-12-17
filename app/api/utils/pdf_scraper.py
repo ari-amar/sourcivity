@@ -49,9 +49,18 @@ class PDFScraper:
         """
         try:
             with fitz.open(stream=pdf_content) as doc:
-                # PyMuPDF4LLM returns a list of markdown strings per page
-                md_pages = pymupdf4llm.to_markdown(doc, max_pages=10)
-                md_text = "\n\n".join(md_pages)
+                # PyMuPDF4LLM returns markdown text
+                # Limit to first 10 pages by slicing the document
+                limited_doc = doc if len(doc) <= 10 else fitz.open()
+                if len(doc) > 10:
+                    for page_num in range(10):
+                        limited_doc.insert_pdf(doc, from_page=page_num, to_page=page_num)
+
+                md_text = pymupdf4llm.to_markdown(limited_doc)
+
+                if limited_doc != doc:
+                    limited_doc.close()
+
             return md_text
         except Exception as e:
             raise Exception(f"Failed to extract markdown from PDF: {str(e)}")
@@ -76,7 +85,7 @@ class PDFScraper:
         prompt = SINGLE_PDF_SPEC_EXTRACTION_PROMPT.format(product_hint=product_hint, pdf_md=pdf_md)
 
         try:
-            response_text = self.ai_client.generate(
+            response_text = await self.ai_client.generate(
                 system_prompt="You are an expert at extracting technical specifications from product datasheets.",
                 user_prompt=prompt,
                 enforce_json=True,
@@ -177,7 +186,6 @@ class PDFScraper:
             result = spec_extractable_results[i]
             result["specs"] = spec.get("specifications", {})
             results.append(result)
-        result["specs"] = specs
 
         return results
 

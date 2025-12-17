@@ -32,7 +32,10 @@ async def search_parts(request: PartSearchRequest, ai_client: AiClientBase, sear
 
 		urls = [res.url for res in pdf_search_results]
 		product_type = request.query  # could be improved by extracting product type more accurately
-		part_responses: List[PartResponse] = await pdf_scraper.scrape_multiple(urls=urls, product_type=product_type)
+		scrape_results = await pdf_scraper.scrape_multiple(urls=urls, product_type=product_type)
+
+		# Convert dict results to PartResponse models
+		part_responses: List[PartResponse] = [PartResponse(**result) for result in scrape_results]
 	else:
 		raise Exception(f"No results found for the following search queries: {search_queries}")
 	
