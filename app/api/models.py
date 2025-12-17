@@ -2,9 +2,6 @@ from typing import Optional, List
 from pydantic import BaseModel
 from enums import AiClientName, SearchEngineClientName
 
-class SearchEngineClientResponse(BaseModel):
-	prompt: str
-	results: List[SearchEngineResult] = []
 class SearchEngineResult(BaseModel):
 	title: str
 	url: str
@@ -12,6 +9,10 @@ class SearchEngineResult(BaseModel):
 	score: Optional[float] = None
 	published_date: Optional[str] = None
 	author: Optional[str] = None
+
+class SearchEngineClientResponse(BaseModel):
+	prompt: str
+	results: List[SearchEngineResult] = []
 
 class AvailableClientResponse(BaseModel):
 	ai_client_names: List[str]

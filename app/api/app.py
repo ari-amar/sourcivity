@@ -18,11 +18,15 @@ cloudflare_account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID")
 cloudflare_workers_key = os.getenv("CLOUDFLARE_WORKERS_KEY")
 cloudflare_client = CloudflareAiClient(account_id=cloudflare_account_id, api_token=cloudflare_workers_key)
 
+# Initialize Anthropic client
+anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+anthropic_client = AnthropicAiClient(api_key=anthropic_api_key)
+
 # TODO: initialize other AI clients here
 
 AI_CLIENTS: Dict[str, AiClientBase] = {
 	AiClientName.CLOUDFLARE: cloudflare_client,
-	# TODO: register other AI clients here
+	AiClientName.ANTHROPIC: anthropic_client,
 }
 
 
