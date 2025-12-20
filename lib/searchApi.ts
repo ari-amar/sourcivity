@@ -11,6 +11,9 @@ import type {
 } from './types';
 import { DUMMY_SEARCH_DATA } from './dummyData';
 
+// Backend URL from environment variable
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+
 // React Query configuration constants
 const REACT_QUERY_CONFIG = {
   timeout: 45000,
@@ -39,7 +42,7 @@ async function fetchSearchSuggestions(query: string): Promise<SuggestionsRespons
 }
 
 async function fetchPartsSearch(params: TextSearchParams & { predeterminedColumns?: string[] }): Promise<SearchResultsData> {
-  const response = await fetch('/api/search/parts', {
+  const response = await fetch(`${BACKEND_URL}/api/search/parts`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -55,7 +58,7 @@ async function fetchPartsSearch(params: TextSearchParams & { predeterminedColumn
 }
 
 async function fetchPhotoAnalysis(params: PhotoSearchParams): Promise<PhotoAnalysisResponse> {
-  const response = await fetch('/api/search/photo', {
+  const response = await fetch(`${BACKEND_URL}/api/search/photo`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -71,27 +74,103 @@ async function fetchPhotoAnalysis(params: PhotoSearchParams): Promise<PhotoAnaly
 }
 
 async function fetchColumnDeterminationAndSearch(params: TextSearchParams): Promise<SearchResultsData> {
-  // USE DUMMY DATA - No LLM API calls
-  const normalizedQuery = params.query.toLowerCase().trim();
-
-  // Check if we have dummy data for this query
-  const dummyResult = DUMMY_SEARCH_DATA[normalizedQuery];
-
-  if (dummyResult) {
-    // Simulate network delay for realistic UX
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    return {
-      response: dummyResult.response,
+  // Call the backend API for search with AI-generated columns
+  const response = await fetch(`${BACKEND_URL}/api/search/parts`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
       query: params.query,
-      searchMode: params.searchMode || 'open',
-      usSuppliersOnly: params.usSuppliersOnly || false,
-      predeterminedColumns: dummyResult.columns
-    };
+      generate_ai_search_prompt: true,
+      search_engine_client_name: 'exa',
+      ai_client_name: 'anthropic',
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Search failed: ${response.status}`);
   }
 
-  // If query doesn't match dummy data, return error message
-  throw new Error('Please search for "precision linear bearing" to see demo results');
+  const data = await response.json();
+
+  // Transform backend response into markdown table format
+  const markdownTable = convertBackendResponseToMarkdown(data);
+
+  return {
+    response: markdownTable,
+    query: params.query,
+    searchMode: params.searchMode || 'open',
+    usSuppliersOnly: params.usSuppliersOnly || false,
+    columns: data.spec_column_names || []
+  };
+}
+
+// Helper function to extract clean product name from URL
+function extractProductName(url: string): string {
+  try {
+    // Remove query parameters
+    const urlWithoutQuery = url.split('?')[0];
+
+    // Get the filename
+    let filename = urlWithoutQuery.split('/').pop() || url;
+
+    // Remove .pdf extension
+    filename = filename.replace(/\.pdf$/i, '');
+
+    // Clean up common URL encoded characters and make readable
+    filename = decodeURIComponent(filename);
+
+    // Replace hyphens and underscores with spaces, capitalize words
+    filename = filename
+      .replace(/[-_]/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+
+    return filename || 'Product Datasheet';
+  } catch (error) {
+    return 'Product Datasheet';
+  }
+}
+
+// Helper function to convert backend response to markdown table format expected by ProductTable
+function convertBackendResponseToMarkdown(data: any): string {
+  if (!data.parts || data.parts.length === 0) {
+    return 'No results found.';
+  }
+
+  const specColumns = data.spec_column_names || [];
+
+  // Create header: "Part Name & Supplier Type" + spec columns
+  const headers = ['Part Name & Supplier Type', ...specColumns];
+  let markdown = '| ' + headers.join(' | ') + ' |\n';
+  markdown += '| ' + headers.map(() => '---').join(' | ') + ' |\n';
+
+  // Create table rows in ProductTable format
+  for (const part of data.parts) {
+    const row: string[] = [];
+
+    // Use manufacturer and product_name from AI extraction (or fallback to URL extraction)
+    const manufacturer = part.manufacturer || 'Unknown';
+    const productName = part.product_name || extractProductName(part.url);
+    const fullName = `${manufacturer} ${productName}`;
+
+    // Format: [Manufacturer ProductName](url)<br/>🇺🇸 OEM
+    // Using US flag and OEM as defaults for PDF datasheets
+    const partCell = `[${fullName}](${part.url})<br/>🇺🇸 OEM`;
+    row.push(partCell);
+
+    // Add spec values
+    for (const specColumn of specColumns) {
+      const value = part.specs?.[specColumn] || 'N/A';
+      row.push(String(value));
+    }
+
+    markdown += '| ' + row.join(' | ') + ' |\n';
+  }
+
+  return markdown;
 }
 
 async function fetchRfqConversation(params: {
@@ -106,7 +185,7 @@ async function fetchRfqConversation(params: {
   };
   selectedSuppliers?: string[];
 }): Promise<{ rfqContent: string; suppliers: string[]; query: string; createdAt: string }> {
-  const response = await fetch('/api/ai/rfq-conversation', {
+  const response = await fetch(`${BACKEND_URL}/api/ai/rfq-conversation`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -3,6 +3,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { RFQRecord, RFQDashboardStats, RFQStatus, DEFAULT_FOLLOW_UP_TEMPLATES } from './rfq-types';
 
+// Backend URL from environment variable
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+
 // Fetch RFQs with optional filters
 export const useRFQs = (status?: RFQStatus | 'all', supplier?: string) => {
   return useQuery({
@@ -11,8 +14,8 @@ export const useRFQs = (status?: RFQStatus | 'all', supplier?: string) => {
       const params = new URLSearchParams();
       if (status && status !== 'all') params.append('status', status);
       if (supplier && supplier !== 'all') params.append('supplier', supplier);
-      
-      const response = await fetch(`/api/rfq?${params.toString()}`);
+
+      const response = await fetch(`${BACKEND_URL}/api/rfq?${params.toString()}`);
       if (!response.ok) {
         throw new Error('Failed to fetch RFQs');
       }
@@ -28,7 +31,7 @@ export const useRFQStats = () => {
   return useQuery({
     queryKey: ['rfq-stats'],
     queryFn: async () => {
-      const response = await fetch('/api/rfq/stats');
+      const response = await fetch(`${BACKEND_URL}/api/rfq/stats`);
       if (!response.ok) {
         throw new Error('Failed to fetch RFQ stats');
       }
@@ -53,7 +56,7 @@ export const useCreateRFQ = () => {
       emailTemplate: string;
       followUpType?: 'auto' | 'manual_approval' | 'disabled';
     }) => {
-      const response = await fetch('/api/rfq', {
+      const response = await fetch(`${BACKEND_URL}/api/rfq`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -88,7 +91,7 @@ export const useUpdateRFQStatus = () => {
       responseReceivedAt?: string;
       quoteReceivedAt?: string;
     }) => {
-      const response = await fetch('/api/rfq', {
+      const response = await fetch(`${BACKEND_URL}/api/rfq`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -120,7 +123,7 @@ export const useSendFollowUp = () => {
       followUpType?: keyof typeof DEFAULT_FOLLOW_UP_TEMPLATES;
       customMessage?: string;
     }) => {
-      const response = await fetch('/api/rfq/follow-up', {
+      const response = await fetch(`${BACKEND_URL}/api/rfq/follow-up`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -147,7 +150,7 @@ export const useFollowUpConfig = () => {
   return useQuery({
     queryKey: ['follow-up-config'],
     queryFn: async () => {
-      const response = await fetch('/api/rfq/follow-up');
+      const response = await fetch(`${BACKEND_URL}/api/rfq/follow-up`);
       if (!response.ok) {
         throw new Error('Failed to fetch follow-up configuration');
       }
@@ -161,7 +164,7 @@ export const useFollowUpConfig = () => {
 export const useTriggerFollowUpCron = () => {
   return useMutation({
     mutationFn: async () => {
-      const response = await fetch('/api/cron/follow-ups', {
+      const response = await fetch(`${BACKEND_URL}/api/cron/follow-ups`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -185,7 +188,7 @@ export const useDeleteRFQ = () => {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/rfq?id=${encodeURIComponent(id)}`, {
+      const response = await fetch(`${BACKEND_URL}/api/rfq?id=${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
 
