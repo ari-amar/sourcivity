@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:backend": "cd app/api && python3 main.py",
+    "dev:all": "bash start-dev.sh",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

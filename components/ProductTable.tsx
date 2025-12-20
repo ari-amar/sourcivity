@@ -172,19 +172,19 @@ export const ProductTable = ({ products, columns = DEFAULT_COLUMNS, usSuppliersO
       </div>
 
       {/* Card Grid Container */}
-      <div className="product-cards-container">
+      <div className="grid grid-cols-1 gap-4">
         {filteredProducts.map((product) => {
           const inCart = isInCart(product.id);
 
           return (
             <div
               key={product.id}
-              className="product-card"
+              className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow"
             >
               {/* Unified Row Layout */}
-              <div className="product-row">
+              <div className="space-y-4">
                 {/* Product Info Column */}
-                <div className="product-info-column">
+                <div className="pb-4 border-b border-gray-200">
                   <a
                     href={product.partUrl}
                     target="_blank"
@@ -206,37 +206,23 @@ export const ProductTable = ({ products, columns = DEFAULT_COLUMNS, usSuppliersO
                       </span>
                     )}
                     <span
-                      className="text-lg leading-none country-flag-tooltip"
-                      data-country={getCountryName(product.supplierFlag)}
+                      className="text-lg leading-none"
+                      title={getCountryName(product.supplierFlag)}
                     >
                       {product.supplierFlag}
                     </span>
-                    {getSupplierTypeDescription(product.supplierType) ? (
-                      <span
-                        className="supplier-type-tooltip"
-                        data-description={getSupplierTypeDescription(product.supplierType)}
-                      >
-                        <Badge
-                          variant="secondary"
-                          className="text-xs font-normal whitespace-nowrap"
-                        >
-                          {product.supplierType}
-                        </Badge>
-                      </span>
-                    ) : (
-                      <Badge
-                        variant="secondary"
-                        className="text-xs font-normal whitespace-nowrap"
-                      >
-                        {product.supplierType}
-                      </Badge>
-                    )}
+                    <Badge
+                      variant="secondary"
+                      className="text-xs font-normal whitespace-nowrap"
+                      title={getSupplierTypeDescription(product.supplierType) || undefined}
+                    >
+                      {product.supplierType}
+                    </Badge>
                     {product.datasheetUrl && (
                       <a
                         href={product.datasheetUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="datasheet-tooltip"
                       >
                         <Badge
                           variant="secondary"
@@ -249,32 +235,33 @@ export const ProductTable = ({ products, columns = DEFAULT_COLUMNS, usSuppliersO
                   </div>
                 </div>
 
-                {/* Divider */}
-                <div className="product-divider"></div>
-
                 {/* Specifications Row - Horizontal Side-by-Side */}
-                <div className="specs-row">
+                <div className="flex items-center gap-4 flex-wrap">
                   {columns.map((column, index) => (
-                    <div key={index} className="spec-column">
-                      <div className="spec-label">{column.toUpperCase()}</div>
-                      <div className="spec-value">
+                    <div key={index} className="flex flex-col min-w-[120px]">
+                      <div className="text-xs font-semibold text-gray-500 uppercase mb-1">
+                        {column}
+                      </div>
+                      <div className="text-sm font-medium text-gray-900">
                         {product.columnData[column] || 'N/A'}
                       </div>
                     </div>
                   ))}
 
                   {/* RFQ Button Column */}
-                  <div className="rfq-button-column">
+                  <div className="ml-auto">
                     <button
                       onClick={() => handleToggleRFQ(product)}
                       className={cn(
-                        "rfq-button",
-                        inCart && "rfq-button-added"
+                        "px-4 py-2 rounded-lg font-medium text-sm transition-all",
+                        inCart
+                          ? "bg-green-100 text-green-700 border border-green-300"
+                          : "bg-blue-600 text-white hover:bg-blue-700"
                       )}
                     >
                       {inCart ? (
                         <>
-                          <CheckCircle2 size={16} />
+                          <CheckCircle2 size={16} className="inline mr-1" />
                           Added
                         </>
                       ) : (
