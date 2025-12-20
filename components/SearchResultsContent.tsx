@@ -219,6 +219,7 @@ export const SearchResultsContent = ({ responseText, originalQuery, usSuppliersO
   }, [responseText]);
 
   // Extract dynamic column names from AI response
+  // The AI backend already selected the top 5 common specs
   const columns = useMemo(() => {
     if (!responseText) return [];
 
