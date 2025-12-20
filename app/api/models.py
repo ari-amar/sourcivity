@@ -28,6 +28,8 @@ class PartResponse(BaseModel):
 	url: str
 	md: Optional[str] = None
 	specs: Optional[dict] = None
+	manufacturer: Optional[str] = None
+	product_name: Optional[str] = None
 	error: Optional[str] = None
 
 class PartSearchResponse(BaseModel):
