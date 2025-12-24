@@ -104,15 +104,34 @@ async def api_search_parts(payload: PartSearchRequest) -> PartSearchResponse:
 
 
 @app.post('/api/search/services')
-async def api_search_services(payload):
-	
+async def api_search_services(payload: ServiceSearchRequest) -> ServiceSearchResponse:
+
 	ai_client = AI_CLIENTS.get(payload.ai_client_name, None)
 	search_engine_client = SEARCH_ENGINE_CLIENTS.get(payload.search_engine_client_name, None)
 
-	search_response =  await search_services(
+	print(f"\n=== SERVICE SEARCH REQUEST ===")
+	print(f"Query: {payload.query}")
+	print(f"Supplier Name: {payload.supplier_name or 'None'}")
+	print(f"AI Client: {payload.ai_client_name}")
+	print(f"Search Engine: {payload.search_engine_client_name}")
+
+	search_response = await search_services(
 		request=payload,
 		ai_client=ai_client,
 		search_engine_client=search_engine_client
 	)
-	
+
+	print(f"\n=== RESPONSE TO FRONTEND ===")
+	print(f"Query: {search_response.query}")
+	print(f"Services Count: {len(search_response.services)}")
+	for i, service in enumerate(search_response.services):
+		print(f"  Service {i+1}: {service['title'][:50]}...")
+		print(f"    URL: {service['url']}")
+		if service.get('extraction_error'):
+			print(f"    ⚠ Extraction Error: {service['extraction_error']}")
+		elif service.get('extracted_services'):
+			extracted = service['extracted_services']
+			if extracted:
+				print(f"    ✓ Extracted {len(extracted)} capabilities")
+
 	return search_response
