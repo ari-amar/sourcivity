@@ -53,7 +53,9 @@ async def search_parts(request: PartSearchRequest, ai_client: AiClientBase, sear
 	pdf_search_results: List[SearchEngineResult] = []
 	for search_query in search_queries:
 
-		prompt_results = await search_engine_client.search(query=search_query, max_results=5)
+		# Request extra results since some may not be valid PDFs after filtering
+		# We want at least 10 valid PDFs, so request 20
+		prompt_results = await search_engine_client.search(query=search_query, max_results=20)
 
 		# Filter to only include URLs that look like PDFs
 		valid_pdf_results = []
@@ -65,24 +67,31 @@ async def search_parts(request: PartSearchRequest, ai_client: AiClientBase, sear
 			else:
 				print(f"Skipping non-PDF URL: {result.url[:100]}")
 
-		print(f"Found {len(prompt_results.results)} results, {len(valid_pdf_results)} are valid PDF URLs")
+		print(f"Exa returned {len(prompt_results.results)} results, {len(valid_pdf_results)} are valid PDF URLs")
 		pdf_search_results.extend(valid_pdf_results)
 
 	if not pdf_search_results:
 		raise Exception(f"No PDF URLs found for search queries: {search_queries}")
 
-	if len(pdf_search_results) < 3:
-		print(f"WARNING: Only found {len(pdf_search_results)} PDF URLs - need at least 3 for meaningful comparison")
+	# Take top 10 PDFs by score (we requested 20 to account for filtering)
+	pdf_search_results.sort(key=lambda x: x.score if x.score else 0.0, reverse=True)
+	pdf_search_results = pdf_search_results[:10]
 
-	pdf_scraper = PDFScraper(ai_client=ai_client)
+	print(f"Selected top {len(pdf_search_results)} PDFs by score")
+
+	if len(pdf_search_results) < 5:
+		print(f"WARNING: Only found {len(pdf_search_results)} valid PDF URLs - need at least 5 for best results")
+
+	pdf_scraper = PDFScraper(ai_client=ai_client, debug=request.debug)
 
 	urls = [res.url for res in pdf_search_results]
+	scores = [res.score if res.score is not None else 0.0 for res in pdf_search_results]
 	print(f"\nFound {len(urls)} valid PDF URLs from search:")
-	for i, url in enumerate(urls):
-		print(f"  {i+1}. {url}")
+	for i, (url, score) in enumerate(zip(urls, scores)):
+		print(f"  {i+1}. [Score: {score:.3f}] {url}")
 
 	product_type = request.query  # could be improved by extracting product type more accurately
-	scrape_results = await pdf_scraper.scrape_multiple(urls=urls, product_type=product_type)
+	scrape_results = await pdf_scraper.scrape_multiple(urls=urls, scores=scores, product_type=product_type)
 
 	print(f"Scrape results: {len(scrape_results)} items")
 	for i, result in enumerate(scrape_results):

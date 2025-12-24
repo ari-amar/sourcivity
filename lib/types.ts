@@ -56,3 +56,26 @@ export interface ProductItem {
 export interface RFQCartItem extends ProductItem {
   addedAt: string;
 }
+
+// Service Search types
+export interface ServiceSearchParams {
+  query: string;
+  supplier_name?: string;
+  ai_client_name?: string;
+  search_engine_client_name?: string;
+  generate_ai_search_prompt?: boolean;
+}
+
+export interface ServiceResult {
+  title: string;
+  url: string;
+  score: number | null;
+  is_likely_service_page?: boolean;
+  extracted_services?: Record<string, any>;
+  extraction_error?: string | null;
+}
+
+export interface ServiceSearchResponse {
+  query: string;
+  services: ServiceResult[];
+}
