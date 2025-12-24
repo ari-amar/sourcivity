@@ -37,6 +37,7 @@ class PartSearchResponse(BaseModel):
 	query: str
 	spec_column_names: List[str]
 	parts: List[PartResponse]
+	timing: Optional[dict] = None
 
 class ServiceSearchRequest(BaseModel):
 	query: str

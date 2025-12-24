@@ -233,6 +233,7 @@ class PDFScraper:
         """
         Scrape multiple PDFs and return their specs with standardized keys.
         Selects top 5 PDFs by score that have valid markdown.
+        Uses parallel processing for faster PDF downloads and extraction.
 
         Args:
             urls: List of PDF URLs
@@ -242,24 +243,51 @@ class PDFScraper:
         Returns:
             List of dictionaries with specs for each PDF (top 5 by score)
         """
-        print(f"\n=== STARTING PDF SCRAPING FOR {len(urls)} URLS ===")
+        import asyncio
+        import time
 
-        # First pass: Download all PDFs and extract markdown
+        print(f"\n=== STARTING PARALLEL PDF SCRAPING FOR {len(urls)} URLS ===")
+        parallel_start = time.time()
+
+        # First pass: Download all PDFs and extract markdown IN PARALLEL
         failed_results = []
         spec_extractable_results = []
 
-        for i, (url, score) in enumerate(zip(urls, scores), 1):
-            print(f"\nProcessing PDF {i}/{len(urls)} [Score: {score:.3f}]: {url[:80]}...")
-            result = await self.scrape_pdf(url=url, product_type=product_type, extract_specs=False)
-            result["score"] = score  # Store score with result
+        # Create parallel tasks for all PDFs
+        tasks = []
+        for url, score in zip(urls, scores):
+            task = self.scrape_pdf(url=url, product_type=product_type, extract_specs=False)
+            tasks.append((task, url, score))
 
-            if not result.get("error"):
-                md_length = len(result.get("md", ""))
-                print(f"  ✓ Successfully extracted {md_length} chars of markdown")
-                spec_extractable_results.append(result)
-            else:
-                print(f"  ✗ Failed: {result['error']}")
+        # Execute all downloads/extractions in parallel
+        print(f"🚀 Processing {len(tasks)} PDFs in parallel...")
+        results = await asyncio.gather(*[task for task, _, _ in tasks], return_exceptions=True)
+
+        # Process results
+        for i, (result, (_, url, score)) in enumerate(zip(results, tasks), 1):
+            # Handle exceptions from gather
+            if isinstance(result, Exception):
+                error_result = {
+                    "url": url,
+                    "score": score,
+                    "md": None,
+                    "specs": {},
+                    "error": str(result)
+                }
+                print(f"  {i}. ✗ Failed [Score: {score:.3f}]: {str(result)[:80]}")
+                failed_results.append(error_result)
+            elif result.get("error"):
+                result["score"] = score
+                print(f"  {i}. ✗ Failed [Score: {score:.3f}]: {result['error'][:80]}")
                 failed_results.append(result)
+            else:
+                result["score"] = score
+                md_length = len(result.get("md", ""))
+                print(f"  {i}. ✓ Success [Score: {score:.3f}]: {md_length} chars")
+                spec_extractable_results.append(result)
+
+        parallel_time = time.time() - parallel_start
+        print(f"\n⚡ Parallel extraction completed in {parallel_time:.2f}s")
 
         print(f"\n=== PDF EXTRACTION SUMMARY ===")
         print(f"Successfully extracted: {len(spec_extractable_results)}/{len(urls)} PDFs")

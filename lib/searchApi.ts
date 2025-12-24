@@ -76,7 +76,10 @@ async function fetchPhotoAnalysis(params: PhotoSearchParams): Promise<PhotoAnaly
 }
 
 async function fetchColumnDeterminationAndSearch(params: TextSearchParams): Promise<SearchResultsData> {
+  const startTime = performance.now();
+
   // Call the backend API for search with AI-generated columns
+  const fetchStartTime = performance.now();
   const response = await fetch(`${BACKEND_URL}/api/search/parts`, {
     method: 'POST',
     headers: {
@@ -89,22 +92,48 @@ async function fetchColumnDeterminationAndSearch(params: TextSearchParams): Prom
       ai_client_name: 'anthropic',
     }),
   });
+  const fetchEndTime = performance.now();
+  const networkTime = fetchEndTime - fetchStartTime;
 
   if (!response.ok) {
     throw new Error(`Search failed: ${response.status}`);
   }
 
+  const parseStartTime = performance.now();
   const data = await response.json();
+  const parseEndTime = performance.now();
+  const parseTime = parseEndTime - parseStartTime;
 
   // Transform backend response into markdown table format
+  const transformStartTime = performance.now();
   const markdownTable = convertBackendResponseToMarkdown(data);
+  const transformEndTime = performance.now();
+  const transformTime = transformEndTime - transformStartTime;
+
+  const totalTime = performance.now() - startTime;
+
+  // Log performance metrics
+  console.log('🔍 Parts Search Performance:', {
+    total: `${totalTime.toFixed(2)}ms`,
+    network: `${networkTime.toFixed(2)}ms`,
+    parse: `${parseTime.toFixed(2)}ms`,
+    transform: `${transformTime.toFixed(2)}ms`,
+    backend: data.timing || 'N/A'
+  });
 
   return {
     response: markdownTable,
     query: params.query,
     searchMode: params.searchMode || 'open',
     usSuppliersOnly: params.usSuppliersOnly || false,
-    columns: data.spec_column_names || []
+    columns: data.spec_column_names || [],
+    timing: {
+      total: totalTime,
+      network: networkTime,
+      parse: parseTime,
+      transform: transformTime,
+      backend: data.timing
+    }
   };
 }
 
@@ -242,6 +271,9 @@ export function useRfqConversation() {
 }
 
 async function fetchServicesSearch(params: ServiceSearchParams): Promise<ServiceSearchResponse> {
+  const startTime = performance.now();
+
+  const fetchStartTime = performance.now();
   const response = await fetch(`${BACKEND_URL}/api/search/services`, {
     method: 'POST',
     headers: {
@@ -255,12 +287,37 @@ async function fetchServicesSearch(params: ServiceSearchParams): Promise<Service
       generate_ai_search_prompt: params.generate_ai_search_prompt || false,
     }),
   });
+  const fetchEndTime = performance.now();
+  const networkTime = fetchEndTime - fetchStartTime;
 
   if (!response.ok) {
     throw new Error(`Service search failed: ${response.status}`);
   }
 
-  return response.json();
+  const parseStartTime = performance.now();
+  const data = await response.json();
+  const parseEndTime = performance.now();
+  const parseTime = parseEndTime - parseStartTime;
+
+  const totalTime = performance.now() - startTime;
+
+  // Log performance metrics
+  console.log('🏭 Services Search Performance:', {
+    total: `${totalTime.toFixed(2)}ms`,
+    network: `${networkTime.toFixed(2)}ms`,
+    parse: `${parseTime.toFixed(2)}ms`,
+    backend: data.timing || 'N/A'
+  });
+
+  return {
+    ...data,
+    timing: {
+      total: totalTime,
+      network: networkTime,
+      parse: parseTime,
+      backend: data.timing
+    }
+  };
 }
 
 export function useServicesSearch() {
