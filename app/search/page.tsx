@@ -5,13 +5,12 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useSearchParams } from 'next/navigation';
-import { Search as SearchIcon, X, PanelLeft, Lightbulb, Info } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { Switch } from '../../components/Switch';
 import { SearchResults } from '../../components/SearchResults';
-import { SearchHistorySidebar } from '../../components/SearchHistorySidebar';
 import { usePartsSearch, useColumnDeterminationAndSearch, useServicesSearch } from '../../lib/searchApi';
 import { useSearchHistory } from '../../lib/searchHistoryContext';
 import { exportSearchResultsToCSV } from '../../lib/csvExport';
@@ -29,7 +28,6 @@ type SearchMode = 'parts' | 'services';
 export default function SearchPage() {
   const searchParams = useSearchParams();
   const [searchMode, setSearchMode] = useState<SearchMode>('parts');
-  const [isSidebarVisible, setSidebarVisible] = useState(false);
   const { addToHistory } = useSearchHistory();
   const hasAutoSearchedRef = useRef(false);
 
@@ -58,7 +56,7 @@ export default function SearchPage() {
   } = useForm<SearchFormValues>({
     resolver: zodResolver(searchFormSchema),
     defaultValues: {
-      query: 'precision linear bearing',
+      query: '',
       supplierName: '',
       usSuppliersOnly: false,
     },
@@ -167,17 +165,6 @@ export default function SearchPage() {
     }
   };
 
-  const handleHistorySearchSelect = useCallback((searchQuery: string, searchMode: 'open' | 'refined', usOnly: boolean) => {
-    // Set form values
-    setValue('query', searchQuery);
-    setValue('usSuppliersOnly', usOnly);
-
-    // Trigger search
-    setTimeout(() => {
-      handleSubmit(onSubmit)();
-    }, 100); // Small delay to ensure form values are updated
-  }, [setValue, handleSubmit]);
-
   const handleClearSearch = () => {
     reset();
     partsSearch.reset();
@@ -254,12 +241,6 @@ export default function SearchPage() {
 
   return (
     <div className="bg-gray-50 min-h-screen">
-      {isSidebarVisible && (
-        <SearchHistorySidebar
-          onClose={() => setSidebarVisible(false)}
-          onSearchSelect={handleHistorySearchSelect}
-        />
-      )}
       <div className="flex-1 w-full px-3 md:px-6 py-3 md:py-8 max-w-7xl mx-auto">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 md:space-y-6">
           {/* Search Mode Toggle */}
@@ -295,17 +276,6 @@ export default function SearchPage() {
           </div>
 
           <div className="flex items-center gap-2 md:gap-4">
-            {!isSidebarVisible && searchMode === 'parts' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSidebarVisible(true)}
-                className="p-2 flex-shrink-0"
-                title="Search History"
-              >
-                <PanelLeft size={16} />
-              </Button>
-            )}
             <div className="search-wrapper relative flex-1 min-w-0">
               <div className="relative search-bar-glass rounded-full">
                 <Controller
@@ -314,7 +284,7 @@ export default function SearchPage() {
                   render={({ field }) => (
                     <Input
                       {...field}
-                      placeholder={searchMode === 'parts' ? 'Search components...' : 'Search for services (e.g., CNC machining)...'}
+                      placeholder={searchMode === 'parts' ? 'Search components (e.g., precision linear bearing)...' : 'Search for services (e.g., CNC machining)...'}
                       className="w-full px-3 md:px-5 py-2 md:py-3 pr-16 md:pr-28 text-xs md:text-base bg-transparent rounded-full focus:outline-none focus:ring-2 focus:ring-blue-400/50 border-0 transition-all placeholder:text-xs md:placeholder:text-base"
                       autoComplete="off"
                     />
@@ -328,7 +298,7 @@ export default function SearchPage() {
                     className="p-1 md:p-2 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 disabled:opacity-50 transition-all min-w-0 h-auto"
                     title={isProcessing ? 'Searching...' : 'Search'}
                   >
-                    <SearchIcon size={14} className="md:w-[18px] md:h-[18px] text-white" />
+                    <Search size={14} className="md:w-[18px] md:h-[18px] text-white" />
                   </Button>
                 </div>
               </div>
@@ -356,6 +326,7 @@ export default function SearchPage() {
             onRetry={canRetry ? handleRetry : undefined}
             retryCount={retryCount}
             isRetrying={isManualRetrying}
+            searchMode="parts"
           />
         ) : (
           <SearchResults
@@ -400,6 +371,7 @@ export default function SearchPage() {
             onRetry={canRetry ? handleRetry : undefined}
             retryCount={retryCount}
             isRetrying={isManualRetrying}
+            searchMode="services"
           />
         )}
       </div>

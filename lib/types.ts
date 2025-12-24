@@ -5,11 +5,20 @@ export interface Suggestion {
   category?: string;
 }
 
+export interface TimingData {
+  total: number;
+  network: number;
+  parse: number;
+  transform?: number;
+  backend?: any;
+}
+
 export interface SearchResultsData {
   response: string;
   query?: string;
   createdAt?: string;
   columns?: string[];
+  timing?: TimingData;
 }
 
 // API Response types
@@ -78,4 +87,5 @@ export interface ServiceResult {
 export interface ServiceSearchResponse {
   query: string;
   services: ServiceResult[];
+  timing?: TimingData;
 }

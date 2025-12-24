@@ -10,11 +10,9 @@ export const ClientHeader = () => {
   const showNavigation = pathname !== '/';
 
   // Determine current page based on pathname
-  let currentPage: 'search' | 'messages' = 'search';
+  let currentPage: 'search' = 'search';
 
-  if (pathname?.includes('/rfq-dashboard') || pathname?.includes('/messages')) {
-    currentPage = 'messages';
-  } else if (pathname?.includes('/search')) {
+  if (pathname?.includes('/search')) {
     currentPage = 'search';
   }
 
