@@ -23,6 +23,7 @@ class PartSearchRequest(BaseModel):
 	generate_ai_search_prompt: Optional[bool] = False
 	search_engine_client_name: Optional[str] = SearchEngineClientName.EXA
 	ai_client_name: Optional[str] = AiClientName.CLOUDFLARE
+	debug: Optional[bool] = False
 
 class PartResponse(BaseModel):
 	url: str
@@ -39,6 +40,7 @@ class PartSearchResponse(BaseModel):
 
 class ServiceSearchRequest(BaseModel):
 	query: str
+	supplier_name: Optional[str] = None
 	generate_ai_search_prompt: Optional[bool] = False
 	search_engine_client_name: Optional[str] = SearchEngineClientName.EXA
 	ai_client_name: Optional[str] = AiClientName.CLOUDFLARE

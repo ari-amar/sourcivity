@@ -7,7 +7,9 @@ import type {
   SearchResultsData,
   PhotoAnalysisResponse,
   TextSearchParams,
-  PhotoSearchParams
+  PhotoSearchParams,
+  ServiceSearchParams,
+  ServiceSearchResponse
 } from './types';
 import { DUMMY_SEARCH_DATA } from './dummyData';
 
@@ -235,6 +237,35 @@ export function useColumnDeterminationAndSearch() {
 export function useRfqConversation() {
   return useMutation({
     mutationFn: fetchRfqConversation,
+    retry: REACT_QUERY_CONFIG.retryAttempts,
+  });
+}
+
+async function fetchServicesSearch(params: ServiceSearchParams): Promise<ServiceSearchResponse> {
+  const response = await fetch(`${BACKEND_URL}/api/search/services`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      query: params.query,
+      supplier_name: params.supplier_name,
+      ai_client_name: params.ai_client_name || 'anthropic',
+      search_engine_client_name: params.search_engine_client_name || 'exa',
+      generate_ai_search_prompt: params.generate_ai_search_prompt || false,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Service search failed: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export function useServicesSearch() {
+  return useMutation({
+    mutationFn: fetchServicesSearch,
     retry: REACT_QUERY_CONFIG.retryAttempts,
   });
 }

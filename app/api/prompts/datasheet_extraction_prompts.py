@@ -98,18 +98,43 @@ SELECTED SPECS TO EXTRACT:
 {selected_specs_info}
 
 YOUR TASK:
-Extract these EXACT 5 specs from each datasheet below. Use the standardized keys provided.
+Extract these 5 specs from each datasheet below. The spec names above tell you WHAT to look for and WHAT KEY to use in your output.
+
+CRITICAL UNDERSTANDING:
+- The "standardized_key" (e.g., "operating_temperature_c") is what you use in the JSON output
+- The "display_name" (e.g., "Operating Temperature (°C)") tells you what spec to find
+- BUT: The actual datasheet may use DIFFERENT WORDING like "Temp Range", "Working Temperature", "Operating Temp", etc.
+- YOU MUST be flexible and find the spec even if it's named differently
 
 DATASHEETS:
 {datasheets_with_specs}
 
+HOW TO EXTRACT EACH SPEC:
+
+1. READ the display_name to understand WHAT spec you're looking for
+   Example: "Operating Temperature (°C)" → Look for temperature-related specs
+
+2. SEARCH the datasheet for that concept using ANY similar wording:
+   - For "Operating Temperature": also check "Temp Range", "Temperature", "Working Temp", "Ambient Temp", etc.
+   - For "Holding Torque": also check "Torque", "Rated Torque", "Max Torque", "Torque Rating", etc.
+   - For "Step Angle": also check "Angle", "Step Resolution", "Steps per Revolution", etc.
+   - For "IP Rating": also check "Ingress Protection", "IP Code", "Environmental Rating", "Protection Class", etc.
+   - For "Frame Size": also check "Size", "Dimensions", "NEMA Size", "Motor Size", "Housing Size", etc.
+
+3. If you find the spec under ANY name, extract it
+
+4. Use the standardized_key in your JSON output (not the name from the datasheet)
+
+5. ONLY use "N/A" if you genuinely cannot find that spec anywhere in the datasheet
+
 CRITICAL RULES:
 1. Extract ONLY the 5 specs listed above - no more, no less
-2. Use the EXACT standardized keys provided (e.g., "operating_temperature_c", "flow_rate_lpm")
+2. Use the EXACT standardized keys in your JSON output
 3. ALL datasheets MUST have the same 5 keys in the same order
 4. Extract manufacturer and product_name for each datasheet
-5. If a spec doesn't appear in a specific datasheet, use "N/A" (should be rare since these were selected as common)
+5. Be FLEXIBLE when searching - specs may have different names in different datasheets
 6. Extract values ONLY from the corresponding datasheet - never copy between datasheets
+7. These specs were selected because they appear in MOST datasheets - if you're getting many N/A values, you're being too strict with naming
 
 OUTPUT FORMAT:
 Return a JSON array with one object per datasheet:

@@ -26,3 +26,4 @@ __pycache__/
 *.sqlite3
 *.db
 *.pdf
+debug_extraction/
