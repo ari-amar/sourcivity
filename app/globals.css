@@ -66,6 +66,53 @@
   }
 }
 
+@keyframes placeholderFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes placeholderFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseSoft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
 @layer utilities {
   .animate-gradient {
     animation: gradient 8s ease infinite;
@@ -96,6 +143,58 @@
     background-image: linear-gradient(to right, #80808012 1px, transparent 1px),
       linear-gradient(to bottom, #80808012 1px, transparent 1px);
     background-size: 24px 24px;
+  }
+
+  /* Placeholder animation classes */
+  .placeholder-fade-in::placeholder {
+    animation: placeholderFadeIn 0.5s ease-in forwards;
+  }
+
+  .placeholder-fade-out::placeholder {
+    animation: placeholderFadeOut 0.5s ease-out forwards;
+  }
+
+  /* Suggestion button animations */
+  .animate-fade-in-up {
+    animation: fadeInUp 0.6s ease-out backwards;
+  }
+
+  .suggestion-button {
+    animation: fadeInUp 0.6s ease-out backwards;
+    flex: 0 0 auto;
+    white-space: nowrap;
+    max-width: fit-content;
+  }
+
+  /* Consistent layout across all screen sizes */
+  @media (max-width: 639px) {
+    .suggestion-button {
+      flex: 0 1 auto;
+      min-width: calc(50% - 0.5rem);
+      max-width: calc(50% - 0.5rem);
+    }
+  }
+
+  @media (min-width: 640px) {
+    .suggestion-button {
+      flex: 0 0 auto;
+      min-width: fit-content;
+    }
+  }
+
+  .animate-pulse-subtle {
+    animation: pulseSoft 3s ease-in-out infinite;
+  }
+
+  .animate-shimmer {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(99, 102, 241, 0.1) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 3s ease-in-out infinite;
   }
 
   /* Country flag tooltip styles */
