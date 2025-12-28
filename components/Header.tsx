@@ -5,9 +5,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { cn } from '../lib/utils';
 import { Menu, X } from 'lucide-react';
+import { SignInButton, SignUpButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
 
 interface HeaderProps {
-  currentPage?: 'search' | 'messages';
+  currentPage?: 'search';
   showNavigation?: boolean;
 }
 
@@ -15,23 +16,10 @@ export const Header = ({ currentPage = 'search', showNavigation = true }: Header
   const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const navigationItems = [
-    {
-      key: 'search',
-      label: 'Search',
-      href: '/search',
-      description: 'Find industrial components'
-    },
-    {
-      key: 'messages',
-      label: 'Messages',
-      href: '/rfq-dashboard',
-      description: 'RFQ tracking & reminders'
-    }
-  ];
+  const navigationItems: any[] = [];
 
   return (
-    <header className="relative border-b border-border/30 bg-white">
+    <header className="relative border-b border-border/30 bg-gray-50">
       {/* Header gradient background - confined to header only */}
       <div className="header-gradient-background"></div>
 
@@ -68,26 +56,52 @@ export const Header = ({ currentPage = 'search', showNavigation = true }: Header
             </nav>
           )}
 
-          {/* Mobile Menu Button */}
-          {showNavigation && (
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden ml-auto p-2 text-foreground hover:bg-muted rounded-lg transition-colors"
-              aria-label="Toggle menu"
-            >
-              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
-          )}
+          {/* Mobile Actions */}
+          <div className="md:hidden ml-auto flex items-center gap-2">
+            <SignedOut>
+              <SignInButton mode="modal">
+                <button className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                  Sign In
+                </button>
+              </SignInButton>
+            </SignedOut>
+            <SignedIn>
+              <UserButton />
+            </SignedIn>
+            {showNavigation && (
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="p-2 text-foreground hover:bg-muted rounded-lg transition-colors"
+                aria-label="Toggle menu"
+              >
+                {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+              </button>
+            )}
+          </div>
 
-          {/* Actions - Right side (placeholder for future features) */}
-          <div className="hidden md:flex items-center space-x-2 ml-auto">
-            {/* Future: User profile, notifications, etc. */}
+          {/* Actions - Right side */}
+          <div className="hidden md:flex items-center gap-4 ml-auto">
+            <SignedOut>
+              <SignInButton mode="modal">
+                <button className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                  Sign In
+                </button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <button className="bg-primary text-primary-foreground rounded-full font-medium text-sm h-10 px-5 hover:bg-primary/90 transition-all">
+                  Sign Up
+                </button>
+              </SignUpButton>
+            </SignedOut>
+            <SignedIn>
+              <UserButton />
+            </SignedIn>
           </div>
         </div>
 
         {/* Mobile Navigation Menu */}
         {showNavigation && isMobileMenuOpen && (
-          <div className="md:hidden border-t border-border/30 bg-white">
+          <div className="md:hidden border-t border-border/30 bg-gray-50">
             <nav className="flex flex-col py-2">
               {navigationItems.map((item) => (
                 <Link
