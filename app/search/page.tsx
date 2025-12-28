@@ -5,13 +5,12 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useSearchParams } from 'next/navigation';
-import { Search as SearchIcon, X, PanelLeft, Lightbulb, Info } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { Switch } from '../../components/Switch';
 import { SearchResults } from '../../components/SearchResults';
-import { SearchHistorySidebar } from '../../components/SearchHistorySidebar';
 import { usePartsSearch, useColumnDeterminationAndSearch, useServicesSearch } from '../../lib/searchApi';
 import { useSearchHistory } from '../../lib/searchHistoryContext';
 import { exportSearchResultsToCSV } from '../../lib/csvExport';
@@ -26,12 +25,124 @@ const searchFormSchema = z.object({
 type SearchFormValues = z.infer<typeof searchFormSchema>;
 type SearchMode = 'parts' | 'services';
 
+// Animated placeholder suggestions - 50 Niche Industrial Components
+const PARTS_SUGGESTIONS = [
+  'Micro ball bearings',
+  'Titanium aerospace fasteners',
+  'High-temperature gaskets',
+  'Precision robotic gears',
+  'Ceramic electrical insulators',
+  'Carbon fiber structural brackets',
+  'Cryogenic seals',
+  'Laser-grade optical lenses',
+  'Custom wire harness assemblies',
+  'Microfluidic chips',
+  'Tungsten carbide cutting inserts',
+  'Precision-ground steel shafts',
+  'Miniature electric motors',
+  'High-voltage capacitors',
+  'Chemical-resistant tubing',
+  'Low-friction polymer bushings',
+  'Aerospace composite panels',
+  'Precision spray nozzles',
+  'High-pressure industrial valves',
+  'Corrosion-resistant pumps',
+  'Ultra-thin metal foil',
+  'Industrial thermocouples',
+  'Heavy-duty industrial bearings',
+  'Medical-grade plastic housings',
+  'Magnetic sensor cores',
+  'Precision cam mechanisms',
+  'Aerospace-grade specialty springs',
+  'High-vacuum flanges',
+  'Custom heat sinks',
+  'Miniature linear actuators',
+  'Precision metal bellows',
+  'EMI shielding components',
+  'Sapphire or quartz windows',
+  'Specialty O-rings (FKM, FFKM)',
+  'Micro screws and fasteners',
+  'High-temperature insulation boards',
+  'Ceramic bearings',
+  'Precision shims and spacers',
+  'Industrial glass tubing',
+  'Battery current collectors',
+  'High-frequency RF connectors',
+  'Precision rollers',
+  'Custom impellers',
+  'Vacuum-compatible lubricants',
+  'Abrasion-resistant liners',
+  'Precision lead screws',
+  'High-strength chain links',
+  'Optical filters',
+  'Micro valves',
+  'Encapsulated electronic modules',
+];
+
+// 50 Niche Industrial Manufacturing Services
+const SERVICES_SUGGESTIONS = [
+  'Micro-machining (sub-millimeter tolerances)',
+  'CNC machining for exotic alloys',
+  'Precision injection molding (medical/aerospace)',
+  'Metal additive manufacturing (industrial 3D printing)',
+  'Vacuum or plasma coating services',
+  'Ceramic component manufacturing',
+  'Cleanroom manufacturing services',
+  'Tool & die fabrication for legacy equipment',
+  'Composite layup and curing services',
+  'Custom gasket and sealing fabrication',
+  'Powder metallurgy services',
+  'Ultra-precision grinding and polishing',
+  'Electron beam or laser welding',
+  'High-vacuum component fabrication',
+  'Cryogenic-rated component manufacturing',
+  'Precision sheet metal fabrication',
+  'Surface hardening and wear-resistant coatings',
+  'Custom heat treatment services',
+  'Industrial glass forming and machining',
+  'Specialty polymer extrusion',
+  'Low-volume, high-mix production runs',
+  'Optical component fabrication',
+  'Electromagnetic component manufacturing',
+  'Chemical-resistant lining and coating',
+  'Aerospace-qualified manufacturing (AS9100)',
+  'Medical device manufacturing (ISO 13485)',
+  'Rapid functional prototyping',
+  'Precision assembly of micro components',
+  'Specialty fastening system manufacturing',
+  'High-temperature furnace processing',
+  'Custom bearing manufacturing',
+  'Precision stamping and fine blanking',
+  'Cleanroom injection molding',
+  'Additive manufacturing with titanium',
+  'Plasma nitriding and carburizing',
+  'Industrial anodizing (hard coat)',
+  'High-speed balancing services',
+  'Precision metrology and inspection',
+  'Custom fixture and jig fabrication',
+  'Specialty spring manufacturing',
+  'Advanced composite machining',
+  'High-pressure testing services',
+  'Hermetic sealing services',
+  'Industrial encapsulation and potting',
+  'Failure analysis and materials testing',
+  'Prototype-to-production scaling',
+  'Vacuum brazing services',
+  'Specialty surface texturing',
+  'EMI/RFI shielding application',
+  'Industrial component refurbishment',
+];
+
 export default function SearchPage() {
   const searchParams = useSearchParams();
   const [searchMode, setSearchMode] = useState<SearchMode>('parts');
-  const [isSidebarVisible, setSidebarVisible] = useState(false);
   const { addToHistory } = useSearchHistory();
   const hasAutoSearchedRef = useRef(false);
+
+  // Animated suggestions state
+  const [visibleSuggestions, setVisibleSuggestions] = useState<string[]>([]);
+  const [suggestionStartIndex, setSuggestionStartIndex] = useState(0);
+  const [animationKey, setAnimationKey] = useState(0);
 
   // Retry state management
   const [retryCount, setRetryCount] = useState(0);
@@ -58,7 +169,7 @@ export default function SearchPage() {
   } = useForm<SearchFormValues>({
     resolver: zodResolver(searchFormSchema),
     defaultValues: {
-      query: 'precision linear bearing',
+      query: '',
       supplierName: '',
       usSuppliersOnly: false,
     },
@@ -130,6 +241,47 @@ export default function SearchPage() {
     }
   }, [partsSearch.isError, columnSearch.isError, servicesSearch.isError]);
 
+  // Rotate through all suggestions every 10 seconds - show 4 unique items
+  useEffect(() => {
+    const suggestions = searchMode === 'parts' ? PARTS_SUGGESTIONS : SERVICES_SUGGESTIONS;
+    const numToShow = 4; // Show 4 suggestions at a time
+
+    // Initialize with first 4 suggestions
+    setVisibleSuggestions(suggestions.slice(0, numToShow));
+    setAnimationKey(prev => prev + 1); // Trigger animation
+
+    const rotateInterval = setInterval(() => {
+      setSuggestionStartIndex((prev) => {
+        // Jump by 4 to show completely new suggestions each time
+        const newIndex = (prev + numToShow) % suggestions.length;
+        const endIndex = newIndex + numToShow;
+
+        // Handle wrapping around
+        if (endIndex > suggestions.length) {
+          const firstPart = suggestions.slice(newIndex);
+          const secondPart = suggestions.slice(0, endIndex - suggestions.length);
+          setVisibleSuggestions([...firstPart, ...secondPart]);
+        } else {
+          setVisibleSuggestions(suggestions.slice(newIndex, endIndex));
+        }
+
+        // Trigger re-animation
+        setAnimationKey(prev => prev + 1);
+        return newIndex;
+      });
+    }, 10000); // Rotate every 10 seconds
+
+    return () => clearInterval(rotateInterval);
+  }, [searchMode]);
+
+  // Reset suggestions when search mode changes
+  useEffect(() => {
+    const suggestions = searchMode === 'parts' ? PARTS_SUGGESTIONS : SERVICES_SUGGESTIONS;
+    setSuggestionStartIndex(0);
+    setVisibleSuggestions(suggestions.slice(0, 4));
+    setAnimationKey(prev => prev + 1); // Re-trigger animations on mode change
+  }, [searchMode]);
+
   const performSearch = useCallback(async (searchData: { query: string; supplierName?: string; searchMode: 'open' | 'refined'; usSuppliersOnly: boolean }) => {
     console.log('Performing search:', searchData, 'mode:', searchMode);
     if (searchMode === 'parts') {
@@ -166,17 +318,6 @@ export default function SearchPage() {
       }
     }
   };
-
-  const handleHistorySearchSelect = useCallback((searchQuery: string, searchMode: 'open' | 'refined', usOnly: boolean) => {
-    // Set form values
-    setValue('query', searchQuery);
-    setValue('usSuppliersOnly', usOnly);
-
-    // Trigger search
-    setTimeout(() => {
-      handleSubmit(onSubmit)();
-    }, 100); // Small delay to ensure form values are updated
-  }, [setValue, handleSubmit]);
 
   const handleClearSearch = () => {
     reset();
@@ -252,14 +393,27 @@ export default function SearchPage() {
                   retryCount < maxRetryAttempts &&
                   consecutiveFailuresRef.current < circuitBreakerThreshold;
 
+  // Handle suggestion click
+  const handleSuggestionClick = useCallback(async (suggestion: string) => {
+    setValue('query', suggestion);
+
+    const searchData = {
+      query: suggestion,
+      supplierName: undefined,
+      searchMode: 'open' as const,
+      usSuppliersOnly
+    };
+    setLastSearchParams(searchData);
+
+    try {
+      await performSearch(searchData);
+    } catch (error) {
+      console.error('Suggestion search failed:', error);
+    }
+  }, [setValue, usSuppliersOnly, performSearch]);
+
   return (
     <div className="bg-gray-50 min-h-screen">
-      {isSidebarVisible && (
-        <SearchHistorySidebar
-          onClose={() => setSidebarVisible(false)}
-          onSearchSelect={handleHistorySearchSelect}
-        />
-      )}
       <div className="flex-1 w-full px-3 md:px-6 py-3 md:py-8 max-w-7xl mx-auto">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 md:space-y-6">
           {/* Search Mode Toggle */}
@@ -295,17 +449,6 @@ export default function SearchPage() {
           </div>
 
           <div className="flex items-center gap-2 md:gap-4">
-            {!isSidebarVisible && searchMode === 'parts' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSidebarVisible(true)}
-                className="p-2 flex-shrink-0"
-                title="Search History"
-              >
-                <PanelLeft size={16} />
-              </Button>
-            )}
             <div className="search-wrapper relative flex-1 min-w-0">
               <div className="relative search-bar-glass rounded-full">
                 <Controller
@@ -314,7 +457,7 @@ export default function SearchPage() {
                   render={({ field }) => (
                     <Input
                       {...field}
-                      placeholder={searchMode === 'parts' ? 'Search components...' : 'Search for services (e.g., CNC machining)...'}
+                      placeholder={searchMode === 'parts' ? 'Search for components...' : 'Search for services...'}
                       className="w-full px-3 md:px-5 py-2 md:py-3 pr-16 md:pr-28 text-xs md:text-base bg-transparent rounded-full focus:outline-none focus:ring-2 focus:ring-blue-400/50 border-0 transition-all placeholder:text-xs md:placeholder:text-base"
                       autoComplete="off"
                     />
@@ -328,7 +471,7 @@ export default function SearchPage() {
                     className="p-1 md:p-2 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 disabled:opacity-50 transition-all min-w-0 h-auto"
                     title={isProcessing ? 'Searching...' : 'Search'}
                   >
-                    <SearchIcon size={14} className="md:w-[18px] md:h-[18px] text-white" />
+                    <Search size={14} className="md:w-[18px] md:h-[18px] text-white" />
                   </Button>
                 </div>
               </div>
@@ -339,9 +482,33 @@ export default function SearchPage() {
           {errors.query && (
             <p className="text-destructive text-sm">{errors.query.message}</p>
           )}
-
-          
         </form>
+
+        {/* Animated Suggestion Buttons */}
+        {!query && visibleSuggestions.length > 0 && (
+          <div className="mt-4 md:mt-6">
+            <p className="text-xs md:text-sm text-muted-foreground mb-3 text-center animate-pulse-subtle">
+              <span className="inline-block">✨</span> Try searching for{' '}
+              <span className="text-primary font-medium">these popular items</span>{' '}
+              <span className="inline-block">👇</span>
+            </p>
+            <div className="flex flex-wrap justify-center items-center gap-2 md:gap-3 max-w-4xl mx-auto min-h-[120px]">
+              {visibleSuggestions.map((suggestion, index) => (
+                <button
+                  key={`${suggestion}-${animationKey}-${index}`}
+                  type="button"
+                  onClick={() => handleSuggestionClick(suggestion)}
+                  disabled={isProcessing}
+                  className="suggestion-button group relative px-3 md:px-4 py-2 md:py-2.5 text-xs md:text-sm font-medium text-foreground bg-white border border-gray-200 rounded-full hover:border-primary hover:text-primary hover:shadow-md transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed animate-fade-in-up"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  <span className="relative z-10">{suggestion}</span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-primary/10 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Results Display - Same location for both modes */}
         {searchMode === 'parts' ? (
@@ -356,6 +523,7 @@ export default function SearchPage() {
             onRetry={canRetry ? handleRetry : undefined}
             retryCount={retryCount}
             isRetrying={isManualRetrying}
+            searchMode="parts"
           />
         ) : (
           <SearchResults
@@ -400,6 +568,7 @@ export default function SearchPage() {
             onRetry={canRetry ? handleRetry : undefined}
             retryCount={retryCount}
             isRetrying={isManualRetrying}
+            searchMode="services"
           />
         )}
       </div>

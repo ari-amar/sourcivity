@@ -4,6 +4,7 @@ sys.path.append(os.getcwd())
 
 import re
 import json
+import time
 from typing import List
 
 from models import PartSearchRequest, PartSearchResponse, PartResponse, SearchEngineResult
@@ -13,11 +14,21 @@ from prompts import SEARCH_QUERY_GENERATION_PROMPT
 
 
 async def search_parts(request: PartSearchRequest, ai_client: AiClientBase, search_engine_client: SearchEngineClientBase):
+	# Track timing for performance monitoring
+	timing = {
+		"total": 0,
+		"search_query_generation": 0,
+		"search_engine": 0,
+		"pdf_processing": 0,
+		"spec_extraction": 0
+	}
+	start_time = time.time()
 
 	search_queries = []
 
 	if request.generate_ai_search_prompt:
 		# Generate optimized search query using AI
+		query_gen_start = time.time()
 		prompt = SEARCH_QUERY_GENERATION_PROMPT.format(user_query=request.query)
 
 		try:
@@ -43,13 +54,16 @@ async def search_parts(request: PartSearchRequest, ai_client: AiClientBase, sear
 			else:
 				# Fallback to default query if AI fails
 				search_queries = [f'{request.query} datasheet filetype:pdf']
+			timing["search_query_generation"] = time.time() - query_gen_start
 		except Exception as e:
 			print(f"Error generating AI search query: {str(e)}")
 			# Fallback to default query
 			search_queries = [f'{request.query} datasheet filetype:pdf']
+			timing["search_query_generation"] = time.time() - query_gen_start
 	else:
 		search_queries = [f'{request.query} datasheet filetype:pdf']
 
+	search_engine_start = time.time()
 	pdf_search_results: List[SearchEngineResult] = []
 	for search_query in search_queries:
 
@@ -76,12 +90,14 @@ async def search_parts(request: PartSearchRequest, ai_client: AiClientBase, sear
 	# Take top 10 PDFs by score (we requested 20 to account for filtering)
 	pdf_search_results.sort(key=lambda x: x.score if x.score else 0.0, reverse=True)
 	pdf_search_results = pdf_search_results[:10]
+	timing["search_engine"] = time.time() - search_engine_start
 
 	print(f"Selected top {len(pdf_search_results)} PDFs by score")
 
 	if len(pdf_search_results) < 5:
 		print(f"WARNING: Only found {len(pdf_search_results)} valid PDF URLs - need at least 5 for best results")
 
+	pdf_processing_start = time.time()
 	pdf_scraper = PDFScraper(ai_client=ai_client, debug=request.debug)
 
 	urls = [res.url for res in pdf_search_results]
@@ -92,6 +108,7 @@ async def search_parts(request: PartSearchRequest, ai_client: AiClientBase, sear
 
 	product_type = request.query  # could be improved by extracting product type more accurately
 	scrape_results = await pdf_scraper.scrape_multiple(urls=urls, scores=scores, product_type=product_type)
+	timing["pdf_processing"] = time.time() - pdf_processing_start
 
 	print(f"Scrape results: {len(scrape_results)} items")
 	for i, result in enumerate(scrape_results):
@@ -113,9 +130,16 @@ async def search_parts(request: PartSearchRequest, ai_client: AiClientBase, sear
 
 	ordered_columns = list(all_spec_keys.keys())
 
+	timing["total"] = time.time() - start_time
+
 	print(f"\nFINAL RESULTS:")
 	print(f"  Total spec columns: {len(ordered_columns)}")
 	print(f"  Columns: {ordered_columns}")
 	print(f"  Total parts: {len(part_responses)}")
+	print(f"\n⏱️  PERFORMANCE TIMING:")
+	print(f"  Total: {timing['total']:.2f}s")
+	print(f"  - Query Generation: {timing['search_query_generation']:.2f}s")
+	print(f"  - Search Engine: {timing['search_engine']:.2f}s")
+	print(f"  - PDF Processing: {timing['pdf_processing']:.2f}s")
 
-	return PartSearchResponse(query=request.query, spec_column_names=ordered_columns, parts=part_responses)
+	return PartSearchResponse(query=request.query, spec_column_names=ordered_columns, parts=part_responses, timing=timing)
