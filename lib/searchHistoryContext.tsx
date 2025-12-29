@@ -32,7 +32,7 @@ interface SearchHistoryProviderProps {
   children: ReactNode;
 }
 
-const STORAGE_KEY = 'sourceflow_search_history';
+const STORAGE_KEY = 'sourcivity_search_history';
 const MAX_HISTORY_ITEMS = 50;
 
 export const SearchHistoryProvider = ({ children }: SearchHistoryProviderProps) => {
