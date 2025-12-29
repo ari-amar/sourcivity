@@ -6,7 +6,7 @@ import { LayoutContent } from '../components/LayoutContent'
 import { ClerkProvider } from '@clerk/nextjs'
 
 export const metadata: Metadata = {
-  title: 'SourceFlow - Industrial Components Sourcing',
+  title: 'Sourcivity - Industrial Components Sourcing',
   description: 'AI-powered industrial components search and sourcing platform',
 }
 

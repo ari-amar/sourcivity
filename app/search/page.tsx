@@ -241,7 +241,7 @@ export default function SearchPage() {
     }
   }, [partsSearch.isError, columnSearch.isError, servicesSearch.isError]);
 
-  // Rotate through all suggestions every 10 seconds - show 4 unique items
+  // Rotate through all suggestions every 5 seconds - show 4 unique items
   useEffect(() => {
     const suggestions = searchMode === 'parts' ? PARTS_SUGGESTIONS : SERVICES_SUGGESTIONS;
     const numToShow = 4; // Show 4 suggestions at a time
@@ -269,7 +269,7 @@ export default function SearchPage() {
         setAnimationKey(prev => prev + 1);
         return newIndex;
       });
-    }, 10000); // Rotate every 10 seconds
+    }, 5000); // Rotate every 5 seconds
 
     return () => clearInterval(rotateInterval);
   }, [searchMode]);
