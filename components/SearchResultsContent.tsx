@@ -8,14 +8,16 @@ import { RFQCart } from './RFQCart';
 import { useRfqConversation } from '../lib/searchApi';
 import { useCreateRFQ } from '../lib/rfq-api';
 import { parseTableToProducts, hasTableStructure, extractColumnNames } from '../lib/tableParser';
+import { getDatasheetLink } from '../lib/dummyData';
 
 interface SearchResultsContentProps {
   responseText: string;
   originalQuery?: string;
   usSuppliersOnly?: boolean;
+  onUsSuppliersOnlyChange?: (value: boolean) => void;
 }
 
-export const SearchResultsContent = ({ responseText, originalQuery, usSuppliersOnly = false }: SearchResultsContentProps) => {
+export const SearchResultsContent = ({ responseText, originalQuery, usSuppliersOnly = false, onUsSuppliersOnlyChange }: SearchResultsContentProps) => {
   const [rfqStep, setRfqStep] = useState<'prompt' | 'recommendations' | 'suppliers' | 'details' | 'templates'>('prompt');
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
   const [rfqDetails, setRfqDetails] = useState({
@@ -94,14 +96,14 @@ export const SearchResultsContent = ({ responseText, originalQuery, usSuppliersO
   
   const processTable = (tableRows: string[]): string => {
     if (tableRows.length === 0) return '';
-    
+
     const [headerRow, ...dataRows] = tableRows;
-    
+
     // Process header and add Datasheets as second column
     const headers = headerRow.split('|').map(h => h.trim()).filter(h => h);
     const enhancedHeaders = [headers[0], 'Datasheets', ...headers.slice(1)];
     const headerHtml = enhancedHeaders.map(h => `<th class="border border-gray-300 px-4 py-2 bg-gray-50 font-semibold text-left">${h}</th>`).join('');
-    
+
     // Process data rows and filter out empty rows
     const rowsHtml = dataRows
       .filter(row => {
@@ -111,30 +113,81 @@ export const SearchResultsContent = ({ responseText, originalQuery, usSuppliersO
       })
       .map(row => {
         const cells = row.split('|').map(c => c.trim()).filter(c => c);
-        
+
         // Process all cells normally first
         const processedCells = cells.map(cell => {
           const urlMatch = cell.match(/\[(.*?)\]\((.*?)\)/);
           if (urlMatch) {
             const [, linkText, url] = urlMatch;
-            return `<td class="border border-gray-300 px-4 py-2"><a href="${url}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">${linkText}</a></td>`;
+            // Check if there's content after the link (like <br/>🇺🇸 OEM)
+            let afterLink = cell.substring(cell.indexOf(')') + 1);
+
+            // Add tooltips to country flag emojis
+            const countryMap: { [key: string]: string } = {
+              '🇺🇸': 'United States',
+              '🇨🇦': 'Canada',
+              '🇬🇧': 'United Kingdom',
+              '🇩🇪': 'Germany',
+              '🇫🇷': 'France',
+              '🇮🇹': 'Italy',
+              '🇪🇸': 'Spain',
+              '🇯🇵': 'Japan',
+              '🇨🇳': 'China',
+              '🇰🇷': 'South Korea',
+              '🇮🇳': 'India',
+              '🇦🇺': 'Australia',
+              '🇧🇷': 'Brazil',
+              '🇲🇽': 'Mexico',
+              '🇳🇱': 'Netherlands',
+              '🇸🇪': 'Sweden',
+              '🇨🇭': 'Switzerland',
+              '🇸🇬': 'Singapore',
+              '🇹🇼': 'Taiwan',
+            };
+
+            // Replace country emojis with tooltip-wrapped versions
+            Object.entries(countryMap).forEach(([emoji, country]) => {
+              const regex = new RegExp(emoji, 'g');
+              afterLink = afterLink.replace(regex, `<span class="country-flag-tooltip" data-country="${country}">${emoji}</span>`);
+            });
+
+            const linkHtml = `<a href="${url}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">${linkText}</a>`;
+            return `<td class="border border-gray-300 px-4 py-2">${linkHtml}${afterLink}</td>`;
           }
           return `<td class="border border-gray-300 px-4 py-2">${cell}</td>`;
         });
-        
-        // Insert datasheet emoji as clickable link
-        const datasheetCell = `<td class="border border-gray-300 px-4 py-2 text-center">
-          <a href="#" onclick="alert('Datasheet search feature coming soon!'); return false;" class="cursor-pointer hover:opacity-70" title="Datasheet (coming soon)">📄</a>
-        </td>`;
+
+        // Extract part name from first cell and get datasheet link
+        const firstCell = cells[0];
+        const partNameMatch = firstCell.match(/\[([^\]]+)\]/);
+        let datasheetLink = '#';
+
+        if (partNameMatch) {
+          const partName = partNameMatch[1].trim();
+          const link = getDatasheetLink(partName);
+          if (link) {
+            datasheetLink = link;
+          }
+        }
+
+        // Insert datasheet emoji as clickable link with consistent sizing
+        const datasheetCell = datasheetLink !== '#'
+          ? `<td class="border border-gray-300 px-4 py-2 text-center align-middle" style="vertical-align: middle;">
+              <a href="${datasheetLink}" target="_blank" rel="noopener noreferrer" class="inline-block cursor-pointer hover:opacity-70" style="font-size: 24px; line-height: 1; text-decoration: none;" title="View Datasheet">📄</a>
+            </td>`
+          : `<td class="border border-gray-300 px-4 py-2 text-center align-middle" style="vertical-align: middle;">
+              <span class="inline-block cursor-not-allowed opacity-50" style="font-size: 24px; line-height: 1;" title="Datasheet not available">📄</span>
+            </td>`;
+
         const enhancedCells = [
           processedCells[0], // First cell (Part Name)
           datasheetCell, // Datasheet emoji
           ...processedCells.slice(1) // Rest of cells
         ];
-        
+
         return `<tr>${enhancedCells.join('')}</tr>`;
       }).join('');
-    
+
     return `<table class="w-full border-collapse border border-gray-300 my-4 min-w-full">
       <thead><tr>${headerHtml}</tr></thead>
       <tbody>${rowsHtml}</tbody>
@@ -166,6 +219,7 @@ export const SearchResultsContent = ({ responseText, originalQuery, usSuppliersO
   }, [responseText]);
 
   // Extract dynamic column names from AI response
+  // The AI backend already selected the top 5 common specs
   const columns = useMemo(() => {
     if (!responseText) return [];
 
@@ -177,40 +231,17 @@ export const SearchResultsContent = ({ responseText, originalQuery, usSuppliersO
 
   const shouldShowProductTable = products.length > 0;
 
-  // Extract suppliers using AI
+  // Extract suppliers using AI - DISABLED IN DEMO MODE
   const [extractedSuppliers, setExtractedSuppliers] = useState<string[]>([]);
   const [isExtractingSuppliers, setIsExtractingSuppliers] = useState(false);
-  
+
   useEffect(() => {
     if (!responseText) return;
-    
-    const extractSuppliers = async () => {
-      setIsExtractingSuppliers(true);
-      // Add delay to ensure search results are fully rendered before extracting suppliers
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      try {
-        const response = await fetch('/api/ai/extract-suppliers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ searchResults: responseText })
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          setExtractedSuppliers(data.suppliers || []);
-        } else {
-          setExtractedSuppliers([]);
-        }
-      } catch (error) {
-        console.error('Failed to extract suppliers with AI:', error);
-        setExtractedSuppliers([]);
-      } finally {
-        setIsExtractingSuppliers(false);
-      }
-    };
-    
-    extractSuppliers();
+
+    // Demo mode: No supplier extraction needed
+    // RFQ functionality is disabled for this demo
+    setExtractedSuppliers([]);
+    setIsExtractingSuppliers(false);
   }, [responseText]);
 
   const availableSuppliers = extractedSuppliers;
@@ -359,7 +390,12 @@ export const SearchResultsContent = ({ responseText, originalQuery, usSuppliersO
       {/* Professional Product Table - Show if we have parsed products */}
       {shouldShowProductTable ? (
         <div className="mb-8">
-          <ProductTable products={products} columns={columns} />
+          <ProductTable
+            products={products}
+            columns={columns}
+            usSuppliersOnly={usSuppliersOnly}
+            onUsSuppliersOnlyChange={onUsSuppliersOnlyChange}
+          />
           <RFQCart />
         </div>
       ) : (

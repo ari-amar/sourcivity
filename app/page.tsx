@@ -1,6 +1,14 @@
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function HomePage() {
-  // Redirect to search page as the main landing
-  redirect('/search')
+  const router = useRouter();
+
+  useEffect(() => {
+    router.push('/search');
+  }, [router]);
+
+  return null;
 }
