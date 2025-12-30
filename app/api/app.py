@@ -103,15 +103,18 @@ def get_search_engine_clients() -> Dict[str, SearchEngineClientBase]:
 
 
 @app.get("/api/health")
+@app.get("/health")  # Also support without /api for flexibility
 async def health_check():
 	return Response(content="OK", media_type="text/plain")
 
 # Add explicit OPTIONS handler for CORS preflight (though CORS middleware should handle this)
 @app.options("/api/{full_path:path}")
+@app.options("/{full_path:path}")
 async def options_handler(full_path: str):
 	return Response(status_code=200)
 
 @app.get("/api/available_client_names")
+@app.get("/available_client_names")
 async def get_available_client_names() -> AvailableClientResponse:
 
 	# NOTE: we could potentially update this to run health checks on the available clients as well, or even get usage/cost metrics
@@ -123,6 +126,7 @@ async def get_available_client_names() -> AvailableClientResponse:
 	)
 
 @app.post('/api/search/parts')
+@app.post('/search/parts')  # Also support without /api prefix
 async def api_search_parts(payload: PartSearchRequest) -> PartSearchResponse:
 
 	ai_clients = get_ai_clients()
@@ -154,6 +158,7 @@ async def api_search_parts(payload: PartSearchRequest) -> PartSearchResponse:
 
 
 @app.post('/api/search/services')
+@app.post('/search/services')  # Also support without /api prefix
 async def api_search_services(payload: ServiceSearchRequest) -> ServiceSearchResponse:
 
 	ai_clients = get_ai_clients()

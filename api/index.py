@@ -23,5 +23,6 @@ from mangum import Mangum
 
 # Create the ASGI handler for AWS Lambda/Vercel
 # Using lifespan="off" because we handle initialization in app.py with lazy loading
+# Note: Mangum should preserve the full path from Vercel
 handler = Mangum(app, lifespan="off")
 
