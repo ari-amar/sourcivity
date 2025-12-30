@@ -7,8 +7,10 @@ import requests
 import re
 import json
 from typing import Dict, List, Optional
+from urllib.parse import urlparse, urljoin
 import fitz  # PyMuPDF
 import pymupdf4llm  # Requires pip install pymupdf4llm
+from bs4 import BeautifulSoup
 
 from prompts import (
     SINGLE_PDF_SPEC_EXTRACTION_PROMPT,
@@ -16,6 +18,91 @@ from prompts import (
     PASS3_EXTRACT_SELECTED_SPECS_PROMPT
 )
 from services.interfaces import AiClientBase
+
+
+def derive_contact_url(datasheet_url: str) -> str:
+    """
+    Derive likely contact page URL from datasheet URL.
+    This is a quick fallback that assumes /contact is available.
+
+    Args:
+        datasheet_url: URL of the PDF datasheet
+
+    Returns:
+        Derived contact URL (base domain + /contact)
+
+    Examples:
+        https://example.com/datasheets/part123.pdf → https://example.com/contact
+        https://example.com/products/widget → https://example.com/contact
+    """
+    try:
+        parsed = urlparse(datasheet_url)
+        base_url = f"{parsed.scheme}://{parsed.netloc}"
+        return f"{base_url}/contact"
+    except Exception as e:
+        print(f"Error deriving contact URL from {datasheet_url}: {e}")
+        return datasheet_url  # Fallback to original URL
+
+
+async def find_contact_url(supplier_domain: str, timeout: int = 10) -> Optional[str]:
+    """
+    Crawl supplier homepage to find actual contact page URL.
+    Looks for common contact link patterns in HTML.
+
+    Args:
+        supplier_domain: Domain name (e.g., "example.com")
+        timeout: Request timeout in seconds
+
+    Returns:
+        Actual contact URL if found, None otherwise
+    """
+    try:
+        # Try to fetch homepage
+        homepage_url = f"https://{supplier_domain}"
+        print(f"    → Fetching homepage: {homepage_url}")
+        response = requests.get(homepage_url, timeout=timeout, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        response.raise_for_status()
+
+        # Parse HTML
+        soup = BeautifulSoup(response.text, 'html.parser')
+        print(f"    → Scanning for contact links in HTML...")
+
+        # Look for links with common contact keywords
+        contact_keywords = ['contact', 'inquiry', 'quote', 'request', 'get-quote', 'reach-us']
+
+        for link in soup.find_all('a', href=True):
+            href = link['href'].lower()
+            text = link.get_text().lower()
+
+            # Check if link or text contains contact keywords
+            if any(keyword in href or keyword in text for keyword in contact_keywords):
+                # Convert relative URLs to absolute
+                full_url = urljoin(homepage_url, link['href'])
+                print(f"    → ✅ Found via HTML scan: {full_url}")
+                return full_url
+
+        # Fallback: try common contact paths directly
+        print(f"    → No links found in HTML, testing common paths...")
+        common_paths = ['/contact', '/contact-us', '/inquiry', '/request-quote', '/get-quote']
+        for path in common_paths:
+            test_url = f"{homepage_url}{path}"
+            try:
+                # Quick HEAD request to check if page exists
+                head_response = requests.head(test_url, timeout=5, allow_redirects=True)
+                if head_response.status_code == 200:
+                    print(f"    → ✅ Found via path test: {test_url}")
+                    return test_url
+            except:
+                continue
+
+        print(f"    → ❌ No contact page found")
+
+    except Exception as e:
+        print(f"    → ❌ Failed to crawl: {str(e)[:60]}")
+
+    return None
 
 
 class PDFScraper:
@@ -317,13 +404,45 @@ class PDFScraper:
                     product_type=product_type
                 )
 
+        print(f"\n{'='*60}")
+        print(f"EXTRACTING CONTACT URLS FOR {len(specs)} SUPPLIERS")
+        print(f"{'='*60}")
+
         successful_results = []
         for i, spec in enumerate(specs):
             result = top_results[i]
             result["specs"] = spec.get("specifications", {})
             result["manufacturer"] = spec.get("manufacturer", "Unknown")
             result["product_name"] = spec.get("product_name", "Unknown Product")
+
+            # Add contact URL (Hybrid approach: derive + verify)
+            print(f"\n[{i+1}/{len(specs)}] Processing: {result['manufacturer']} {result['product_name']}")
+            print(f"  Datasheet URL: {result['url']}")
+
+            # Step 1: Quick fallback - derive from domain
+            derived_url = derive_contact_url(result["url"])
+            result["contact_url"] = derived_url
+            print(f"  ⚡ Derived contact URL: {derived_url}")
+
+            # Step 2: Try to find actual contact page (don't block on failure)
+            try:
+                domain = urlparse(result["url"]).netloc
+                print(f"  🔍 Crawling {domain} homepage for actual contact link...")
+                actual_contact = await find_contact_url(domain, timeout=8)
+                if actual_contact:
+                    result["contact_url"] = actual_contact
+                    print(f"  ✅ Updated to verified contact URL: {actual_contact}")
+                else:
+                    print(f"  ⚠️  No contact link found, using derived URL")
+            except Exception as e:
+                print(f"  ❌ Error crawling homepage: {e}")
+                print(f"  📌 Using derived contact URL as fallback")
+
             successful_results.append(result)
+
+        print(f"\n{'='*60}")
+        print(f"CONTACT URL EXTRACTION COMPLETE")
+        print(f"{'='*60}\n")
 
         # Return only the top 5 successful results
         return successful_results

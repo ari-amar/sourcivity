@@ -7,12 +7,16 @@ import os
 import requests
 import re
 from typing import Dict, List, Optional
+from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 import anthropic
 
 from services.interfaces import AiClientBase
 
 from prompts.service_extraction_prompts import SERVICE_EXTRACTION_PROMPT, STANDARDIZED_SERVICE_PROMPT
+
+# Import contact URL utilities from pdf_scraper
+from utils.pdf_scraper import derive_contact_url, find_contact_url
 
 
 class ServiceScraper:
@@ -196,6 +200,53 @@ class ServiceScraper:
 			for i, result in enumerate(results):
 				if result["error"] is None and i < len(standardized_services):
 					result["services"] = standardized_services[i]
+
+		# Third pass: Verify/find contact URLs (hybrid approach like parts search)
+		print(f"\n{'='*60}")
+		print(f"VERIFYING CONTACT URLS FOR {len(results)} SUPPLIERS")
+		print(f"{'='*60}")
+
+		for i, result in enumerate(results):
+			if result["error"] is not None:
+				continue
+
+			extracted_services = result.get("services", {})
+			company_name = extracted_services.get("company_name", "Unknown")
+			ai_contact_url = extracted_services.get("contact_url", "")
+
+			print(f"\n[{i+1}/{len(results)}] Processing: {company_name}")
+			print(f"  Page URL: {result['url']}")
+
+			# If AI found a contact URL and it looks valid, use it
+			if ai_contact_url and ai_contact_url.startswith("http"):
+				print(f"  ✅ AI extracted contact URL: {ai_contact_url}")
+				continue
+
+			# Otherwise, use hybrid approach: derive + verify
+			print(f"  ⚠️  No contact URL from AI extraction")
+
+			# Step 1: Derive from page URL
+			derived_url = derive_contact_url(result["url"])
+			extracted_services["contact_url"] = derived_url
+			print(f"  ⚡ Derived contact URL: {derived_url}")
+
+			# Step 2: Try to find actual contact page
+			try:
+				domain = urlparse(result["url"]).netloc
+				print(f"  🔍 Crawling {domain} homepage for actual contact link...")
+				actual_contact = await find_contact_url(domain, timeout=8)
+				if actual_contact:
+					extracted_services["contact_url"] = actual_contact
+					print(f"  ✅ Updated to verified contact URL: {actual_contact}")
+				else:
+					print(f"  ⚠️  No contact link found, using derived URL")
+			except Exception as e:
+				print(f"  ❌ Error crawling homepage: {e}")
+				print(f"  📌 Using derived contact URL as fallback")
+
+		print(f"\n{'='*60}")
+		print(f"CONTACT URL VERIFICATION COMPLETE")
+		print(f"{'='*60}\n")
 
 		return results
 

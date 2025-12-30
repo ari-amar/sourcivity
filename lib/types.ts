@@ -52,6 +52,7 @@ export interface ProductItem {
   id: string;
   partName: string;
   partUrl: string;
+  contactUrl?: string; // URL to supplier's contact/inquiry page
   supplierType: string;
   supplierFlag: string;
   hasSpecSheet: boolean;

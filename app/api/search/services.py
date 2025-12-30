@@ -105,11 +105,18 @@ async def search_services(request: ServiceSearchRequest, ai_client: AiClientBase
 
 			print(f"  Result #{i}:")
 			print(f"    - Title: {search_result['title'][:50]}...")
+			print(f"    - URL: {search_result['url']}")
 			if scraped_data.get('error'):
 				print(f"    ⚠ Extraction error: {scraped_data['error'][:60]}...")
 			elif scraped_data.get('services'):
-				services_preview = str(scraped_data['services'])[:100]
-				print(f"    ✓ Extracted services: {services_preview}...")
+				extracted_info = scraped_data.get('services', {})
+				company_name = extracted_info.get('company_name', 'N/A')
+				contact_url = extracted_info.get('contact_url', 'N/A')
+				services_offered = extracted_info.get('services_offered', 'N/A')
+
+				print(f"    ✓ Company: {company_name}")
+				print(f"    ✓ Contact URL: {contact_url}")
+				print(f"    ✓ Services: {services_offered[:80]}...")
 
 		print(f"\n[STEP 7] Preparing final response")
 		print(f"  - Total services to return: {len(filtered_results)}")
