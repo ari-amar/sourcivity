@@ -3,8 +3,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { RFQRecord, RFQDashboardStats, RFQStatus, DEFAULT_FOLLOW_UP_TEMPLATES } from './rfq-types';
 
-// Backend URL from environment variable
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+import { getBackendUrl } from './utils';
+
+// Backend URL - automatically handles Vercel deployment and local development
+const BACKEND_URL = getBackendUrl();
 
 // Fetch RFQs with optional filters
 export const useRFQs = (status?: RFQStatus | 'all', supplier?: string) => {
