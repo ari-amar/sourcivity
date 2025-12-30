@@ -225,24 +225,37 @@ class ServiceScraper:
 			# Otherwise, use hybrid approach: derive + verify
 			print(f"  ⚠️  No contact URL from AI extraction")
 
-			# Step 1: Derive from page URL
-			derived_url = derive_contact_url(result["url"])
-			extracted_services["contact_url"] = derived_url
-			print(f"  ⚡ Derived contact URL: {derived_url}")
+			# Get supplier homepage as ultimate fallback
+			parsed = urlparse(result["url"])
+			homepage_url = f"{parsed.scheme}://{parsed.netloc}"
 
-			# Step 2: Try to find actual contact page
+			# Step 1: Try to find actual contact page by crawling homepage
 			try:
-				domain = urlparse(result["url"]).netloc
-				print(f"  🔍 Crawling {domain} homepage for actual contact link...")
+				domain = parsed.netloc
+				print(f"  🔍 Crawling {domain} homepage for contact link...")
 				actual_contact = await find_contact_url(domain, timeout=8)
 				if actual_contact:
 					extracted_services["contact_url"] = actual_contact
-					print(f"  ✅ Updated to verified contact URL: {actual_contact}")
+					print(f"  ✅ Found verified contact URL: {actual_contact}")
 				else:
-					print(f"  ⚠️  No contact link found, using derived URL")
+					# Step 2: Verify derived URL exists
+					derived_url = derive_contact_url(result["url"])
+					print(f"  ⚡ Testing derived URL: {derived_url}")
+					try:
+						head_response = requests.head(derived_url, timeout=5, allow_redirects=True)
+						if head_response.status_code == 200:
+							extracted_services["contact_url"] = derived_url
+							print(f"  ✅ Derived URL verified: {derived_url}")
+						else:
+							extracted_services["contact_url"] = homepage_url
+							print(f"  ⚠️  Derived URL failed (status {head_response.status_code}), using homepage: {homepage_url}")
+					except:
+						extracted_services["contact_url"] = homepage_url
+						print(f"  ⚠️  Derived URL unreachable, using homepage: {homepage_url}")
 			except Exception as e:
-				print(f"  ❌ Error crawling homepage: {e}")
-				print(f"  📌 Using derived contact URL as fallback")
+				print(f"  ❌ Error during contact URL discovery: {e}")
+				extracted_services["contact_url"] = homepage_url
+				print(f"  📌 Using supplier homepage as fallback: {homepage_url}")
 
 		print(f"\n{'='*60}")
 		print(f"CONTACT URL VERIFICATION COMPLETE")
