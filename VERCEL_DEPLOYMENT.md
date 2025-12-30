@@ -27,7 +27,11 @@ npm i -g vercel
 
 In the Vercel dashboard or via CLI, set the following environment variables:
 
-**Required:**
+**Required for Frontend:**
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` - Your Clerk publishable key (get it from https://dashboard.clerk.com)
+- `CLERK_SECRET_KEY` - Your Clerk secret key (get it from https://dashboard.clerk.com)
+
+**Required for Backend (Python API):**
 - `ANTHROPIC_API_KEY` - Your Anthropic API key
 - `EXA_API_KEY` - Your Exa API key
 
@@ -48,13 +52,25 @@ Or connect your GitHub repository to Vercel for automatic deployments.
 
 1. Go to your project settings in Vercel dashboard
 2. Navigate to "Environment Variables"
-3. Add the following variables:
-   - `ANTHROPIC_API_KEY` (Production, Preview, Development)
-   - `EXA_API_KEY` (Production, Preview, Development)
-   - `CLOUDFLARE_ACCOUNT_ID` (optional, if needed)
-   - `CLOUDFLARE_WORKERS_KEY` (optional, if needed)
+3. Add the following variables (select "Production", "Preview", and "Development" for each):
+   
+   **Frontend (Next.js) - Required:**
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` - Get from https://dashboard.clerk.com → API Keys
+   - `CLERK_SECRET_KEY` - Get from https://dashboard.clerk.com → API Keys
+   
+   **Backend (Python API) - Required:**
+   - `ANTHROPIC_API_KEY` - Your Anthropic API key
+   - `EXA_API_KEY` - Your Exa API key
+   
+   **Optional:**
+   - `CLOUDFLARE_ACCOUNT_ID` - Cloudflare account ID (if using Cloudflare AI)
+   - `CLOUDFLARE_WORKERS_KEY` - Cloudflare Workers API key (if using Cloudflare AI)
+   - `NEXT_PUBLIC_BACKEND_URL` - Leave unset for same-origin requests (recommended)
 
-**Note**: Do NOT commit `app/api/config/env.config` to version control. Use Vercel's environment variables instead.
+**Note**: 
+- Do NOT commit `app/api/config/env.config` to version control. Use Vercel's environment variables instead.
+- Make sure to select all three environments (Production, Preview, Development) when adding variables
+- Variables starting with `NEXT_PUBLIC_` are exposed to the browser and must be set for the build to succeed
 
 ## Frontend Configuration
 
@@ -101,6 +117,25 @@ Local development remains unchanged:
 1. Ensure variables are set in Vercel dashboard
 2. Redeploy after adding new environment variables
 3. Check that variable names match exactly (case-sensitive)
+4. For `NEXT_PUBLIC_*` variables, they must be set before the build runs
+
+### Clerk Authentication Errors
+
+**Error: "Missing publishableKey"**
+- This means `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is not set in Vercel
+- Go to Vercel dashboard → Project Settings → Environment Variables
+- Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` with your Clerk publishable key
+- Add `CLERK_SECRET_KEY` with your Clerk secret key
+- Make sure to select all environments (Production, Preview, Development)
+- Redeploy after adding the variables
+
+**Getting Clerk Keys:**
+1. Go to https://dashboard.clerk.com
+2. Select your application (or create one)
+3. Navigate to "API Keys" in the sidebar
+4. Copy the "Publishable key" (starts with `pk_test_` or `pk_live_`)
+5. Copy the "Secret key" (starts with `sk_test_` or `sk_live_`)
+6. Add both to Vercel environment variables
 
 ### CORS Errors
 
