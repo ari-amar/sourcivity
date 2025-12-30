@@ -27,6 +27,7 @@ class PartSearchRequest(BaseModel):
 
 class PartResponse(BaseModel):
 	url: str
+	contact_url: Optional[str] = None
 	md: Optional[str] = None
 	specs: Optional[dict] = None
 	manufacturer: Optional[str] = None

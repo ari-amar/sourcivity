@@ -3,13 +3,15 @@ SERVICE_EXTRACTION_PROMPT: str = """
 
 Focus on extracting:
 1. **Company Name**: The name of the company/supplier
-2. **Services Offered**: What manufacturing services do they provide? (e.g., CNC machining, injection molding, sheet metal fabrication, etc.)
-3. **Capabilities**: Specific capabilities, processes, or technologies (e.g., 5-axis CNC, precision tolerances, materials worked with)
-4. **Certifications**: Quality certifications (ISO 9001, AS9100, ITAR, etc.)
-5. **Equipment**: Major equipment or machinery mentioned
+2. **Contact URL**: Link to contact/inquiry/quote page (look for /contact, /contact-us, /inquiry, /request-quote, /get-quote paths in the page)
+3. **Services Offered**: What manufacturing services do they provide? (e.g., CNC machining, injection molding, sheet metal fabrication, etc.)
+4. **Capabilities**: Specific capabilities, processes, or technologies (e.g., 5-axis CNC, precision tolerances, materials worked with)
+5. **Certifications**: Quality certifications (ISO 9001, AS9100, ITAR, etc.)
+6. **Equipment**: Major equipment or machinery mentioned
 
 Return the information as a JSON object with these keys ONLY:
 - company_name: string
+- contact_url: string (full URL to contact page if found in the page content, otherwise empty string "")
 - services_offered: string (comma-separated list)
 - capabilities: string (comma-separated list)
 - certifications: string (comma-separated list)
@@ -33,10 +35,11 @@ Extract these pages and return a JSON array where each element corresponds to on
 
 Focus on ONLY these fields:
 1. **Company Name**: The name of the company/supplier
-2. **Services Offered**: Manufacturing services (CNC machining, injection molding, 3D printing, etc.) as comma-separated string
-3. **Capabilities**: Specific processes, technologies, materials, tolerances as comma-separated string
-4. **Certifications**: ISO 9001, AS9100, ITAR, ISO 13485, etc. as comma-separated string
-5. **Equipment**: Major machinery or technology platforms as comma-separated string
+2. **Contact URL**: Link to contact/inquiry/quote page (look for /contact, /contact-us, /inquiry, /request-quote, /get-quote paths mentioned in the page)
+3. **Services Offered**: Manufacturing services (CNC machining, injection molding, 3D printing, etc.) as comma-separated string
+4. **Capabilities**: Specific processes, technologies, materials, tolerances as comma-separated string
+5. **Certifications**: ISO 9001, AS9100, ITAR, ISO 13485, etc. as comma-separated string
+6. **Equipment**: Major machinery or technology platforms as comma-separated string
 
 {pages_text}
 
@@ -45,6 +48,7 @@ Example format:
 [
   {{
 	"company_name": "ABC Manufacturing",
+	"contact_url": "https://example.com/contact",
 	"services_offered": "CNC machining, Sheet metal fabrication, Welding",
 	"capabilities": "5-axis CNC, ±0.001\" tolerance, Aluminum and steel",
 	"certifications": "ISO 9001, AS9100",
@@ -52,6 +56,7 @@ Example format:
   }},
   {{
 	"company_name": "XYZ Services",
+	"contact_url": "https://xyzservices.com/get-quote",
 	"services_offered": "CNC machining, Injection molding",
 	"capabilities": "3-axis CNC, Thermoplastics, ±0.005\" tolerance",
 	"certifications": "ISO 9001",
