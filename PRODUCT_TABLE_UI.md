@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the new professional product table and RFQ cart interface added to SourceFlow. The UI provides an enterprise-grade B2B experience for browsing industrial parts and managing quote requests.
+This document describes the new professional product table and RFQ cart interface added to Sourcivity. The UI provides an enterprise-grade B2B experience for browsing industrial parts and managing quote requests.
 
 ## Components
 

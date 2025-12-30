@@ -1,15 +1,18 @@
 {
-  "name": "sourceflow-floot",
+  "name": "sourcivity",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:backend": "cd app/api && python3 main.py",
+    "dev:all": "bash start-dev.sh",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.36.5",
     "@hookform/resolvers": "^3.3.0",
     "@tanstack/react-query": "^5.8.0",
     "agentmail": "^0.0.58",

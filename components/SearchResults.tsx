@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { AlertCircle, Inbox, Search, Loader2, RefreshCw, Clock, AlertTriangle, Download } from 'lucide-react';
+import { AlertCircle, Inbox, Search, Loader2, RefreshCw, Clock, AlertTriangle, Download, Settings, Factory } from 'lucide-react';
 import type { SearchResultsData } from '../lib/types';
 import { SearchResultsContent } from './SearchResultsContent';
 import { Button } from './Button';
@@ -18,6 +18,7 @@ interface SearchResultsProps {
   onRetry?: () => void;
   retryCount?: number;
   isRetrying?: boolean;
+  searchMode?: 'parts' | 'services';
 }
 
 export const SearchResults = ({
@@ -31,6 +32,7 @@ export const SearchResults = ({
   onRetry,
   retryCount = 0,
   isRetrying = false,
+  searchMode = 'parts',
 }: SearchResultsProps) => {
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -134,11 +136,16 @@ export const SearchResults = ({
       break;
 
     case 'idle':
+      const IdleIcon = searchMode === 'parts' ? Settings : Factory;
+      const idleTitle = searchMode === 'parts' ? 'Find Your Components' : 'Discover Service Providers';
+      const idleDescription = searchMode === 'parts'
+        ? 'Search for industrial parts and components. Get detailed specifications and supplier comparisons.'
+        : 'Search for manufacturing services and capabilities. Compare supplier certifications, equipment, and expertise.';
       content = (
-        <div className="flex flex-col items-center justify-center p-4 md:p-8 text-center space-y-3 md:space-y-4">
-          <Inbox size={40} className="md:w-12 md:h-12 text-muted-foreground" />
-          <h2 className="text-lg md:text-xl font-semibold">Start your search</h2>
-          <p className="text-sm md:text-base text-muted-foreground">Your search results will appear here as a comparison analysis.</p>
+        <div className="flex flex-col items-center justify-center p-4 md:p-8 text-center space-y-3 md:space-y-4 max-w-2xl mx-auto">
+          <IdleIcon size={40} className="md:w-12 md:h-12 text-muted-foreground" />
+          <h2 className="text-lg md:text-xl font-semibold">{idleTitle}</h2>
+          <p className="text-sm md:text-base text-muted-foreground">{idleDescription}</p>
         </div>
       );
       break;
@@ -146,6 +153,17 @@ export const SearchResults = ({
     case 'success':
       content = (
         <div ref={resultsRef} className="w-full">
+          {/* Performance Timing Display */}
+          {data?.timing && (
+            <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <Clock size={14} />
+              <span className="font-medium">Search completed in {(data.timing.total / 1000).toFixed(2)}s</span>
+              <span className="text-xs">
+                (Network: {(data.timing.network / 1000).toFixed(2)}s
+                {data.timing.transform !== undefined && `, Processing: ${(data.timing.transform / 1000).toFixed(3)}s`})
+              </span>
+            </div>
+          )}
           <SearchResultsContent
             responseText={finalContent}
             originalQuery={currentQuery}

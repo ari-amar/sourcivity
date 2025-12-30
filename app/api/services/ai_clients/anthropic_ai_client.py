@@ -10,7 +10,7 @@ class AnthropicAiClient(AiClientBase):
     def __init__(
         self,
         api_key: str,
-        model: str = "claude-3-5-sonnet-20240620",
+        model: str = "claude-3-haiku-20240307",
     ):
         self.client = AsyncAnthropic(api_key=api_key)
         self.model = model

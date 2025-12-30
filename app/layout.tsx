@@ -3,9 +3,10 @@ import './globals.css'
 import { Providers } from './providers'
 import { ClientHeader } from '../components/ClientHeader'
 import { LayoutContent } from '../components/LayoutContent'
+import { ClerkProvider } from '@clerk/nextjs'
 
 export const metadata: Metadata = {
-  title: 'SourceFlow - Industrial Components Sourcing',
+  title: 'Sourcivity - Industrial Components Sourcing',
   description: 'AI-powered industrial components search and sourcing platform',
 }
 
@@ -22,17 +23,22 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body>
-        <Providers>
-          <LayoutContent>
-            <ClientHeader />
-            <main>
-              {children}
-            </main>
-          </LayoutContent>
-        </Providers>
-      </body>
-    </html>
+    <ClerkProvider
+      signInFallbackRedirectUrl="/search"
+      signUpFallbackRedirectUrl="/search"
+    >
+      <html lang="en">
+        <body>
+          <Providers>
+            <LayoutContent>
+              <ClientHeader />
+              <main>
+                {children}
+              </main>
+            </LayoutContent>
+          </Providers>
+        </body>
+      </html>
+    </ClerkProvider>
   )
 }
