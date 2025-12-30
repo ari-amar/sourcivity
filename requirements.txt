@@ -1,4 +1,16 @@
 # Vercel looks for requirements.txt at the root for Python serverless functions
-# This file points to the actual requirements in app/api/requirements.txt
--r app/api/requirements.txt
+# This file contains all Python dependencies needed for the FastAPI serverless function
+fastapi
+uvicorn
+python-dotenv
+httpx
+requests
+pymupdf
+pymupdf4llm
+beautifulsoup4
+exa-py
+anthropic
+cloudflare
+pydantic
+mangum
 
