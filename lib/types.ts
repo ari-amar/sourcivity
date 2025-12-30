@@ -40,7 +40,7 @@ export interface SearchParamsBase {
 
 export interface TextSearchParams extends SearchParamsBase {
   query: string;
-  searchMode: 'open' | 'specific';
+  searchMode: 'open' | 'refined';
 }
 
 export interface PhotoSearchParams extends SearchParamsBase {
