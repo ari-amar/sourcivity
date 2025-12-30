@@ -517,9 +517,9 @@ class PDFScraper:
             else:
                 all_specs_summary += "  (No specs found)\n"
 
-        # Require specs to appear in at least 80% of datasheets
+        # Require specs to appear in at least 60% of datasheets (reduced from 80% to reduce N/A results)
         import math
-        min_coverage = max(3, math.ceil(len(pdf_mds) * 0.8))
+        min_coverage = max(3, math.ceil(len(pdf_mds) * 0.6))
 
         # New prompt that considers search query relevance
         search_query = product_type or "unknown product"
@@ -633,11 +633,11 @@ Return ONLY valid JSON.
         print(f"\n📊 PASS 3: Extracting selected specs from all datasheets with standardized keys...")
 
         # Build datasheets info with original markdown
-        # Use same limit as Pass 1 (20,000 chars) to ensure consistency
+        # Use 35,000 chars to capture more specs that may appear later in datasheets
         datasheets_info = ""
         for i, md in enumerate(pdf_mds):
             if md:
-                truncated = md[:20000] if len(md) > 20000 else md
+                truncated = md[:35000] if len(md) > 35000 else md
                 datasheets_info += f"\n\n=== DATASHEET {i+1} ===\n{truncated}\n=== END DATASHEET {i+1} ===\n"
 
         # Build selected specs info
