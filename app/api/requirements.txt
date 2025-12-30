@@ -10,3 +10,4 @@ exa-py
 anthropic
 cloudflare
 pydantic
+mangum
