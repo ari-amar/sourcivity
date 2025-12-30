@@ -1,0 +1,4 @@
+# Vercel looks for requirements.txt at the root for Python serverless functions
+# This file points to the actual requirements in app/api/requirements.txt
+-r app/api/requirements.txt
+

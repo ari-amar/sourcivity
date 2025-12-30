@@ -13,8 +13,10 @@ import type {
 } from './types';
 import { DUMMY_SEARCH_DATA } from './dummyData';
 
-// Backend URL from environment variable
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+import { getBackendUrl } from './utils';
+
+// Backend URL - automatically handles Vercel deployment and local development
+const BACKEND_URL = getBackendUrl();
 
 // React Query configuration constants
 const REACT_QUERY_CONFIG = {
