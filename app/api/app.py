@@ -1,6 +1,6 @@
 import os
 from typing import Dict, Optional
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from enums import AiClientName, SearchEngineClientName
@@ -192,3 +192,19 @@ async def api_search_services(payload: ServiceSearchRequest) -> ServiceSearchRes
 				print(f"    ✓ Extracted {len(extracted)} capabilities")
 
 	return search_response
+
+
+# Add a catch-all route at the END to debug unmatched requests
+# This will catch any requests that don't match the above routes
+@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
+async def catch_all(path: str, request: Request):
+    """Catch-all route to debug unmatched requests - helps identify 405 errors"""
+    print(f"[DEBUG] Unmatched request: {request.method} {request.url.path}")
+    print(f"[DEBUG] Full URL: {request.url}")
+    print(f"[DEBUG] Query params: {dict(request.query_params)}")
+    print(f"[DEBUG] Headers: {dict(request.headers)}")
+    return Response(
+        content=f"Unmatched route: {request.method} {request.url.path}\nThis route didn't match any defined endpoints.",
+        status_code=404,
+        media_type="text/plain"
+    )

@@ -7,6 +7,12 @@ const isPublicRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth: any, request: NextRequest) => {
+  // Skip authentication for API routes (handled by Python backend)
+  const pathname = request.nextUrl.pathname;
+  if (pathname.startsWith('/api/')) {
+    return;
+  }
+  
   if (!isPublicRoute(request)) {
     await auth.protect();
   }
@@ -16,7 +22,7 @@ export const config = {
   matcher: [
     // Skip Next.js internals and all static files, unless found in search params
     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
-    '/(api|trpc)(.*)',
+    // Exclude /api routes - they're handled by Python serverless function
+    // Only match non-API routes for authentication
   ],
 };
