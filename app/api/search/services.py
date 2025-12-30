@@ -37,13 +37,13 @@ async def search_services(request: ServiceSearchRequest, ai_client: AiClientBase
 	try:
 		print(f"\n[STEP 2] Calling search engine (Exa)")
 		print(f"  - Search engine: {type(search_engine_client).__name__}")
-		print(f"  - Max results: 5")
+		print(f"  - Max results: 10")
 		print(f"  - Initiating web search...")
 
-		# Search for HTML pages about services/capabilities
+		# Search for HTML pages about services/capabilities (increased from 5 to 10 to reduce N/A results)
 		results = await search_engine_client.search(
 			search_query,
-			max_results=5
+			max_results=10
 		)
 
 		print(f"\n[STEP 3] Search results received from Exa")
