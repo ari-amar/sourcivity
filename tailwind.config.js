@@ -69,6 +69,26 @@ module.exports = {
         'spotlight': '1000',
         'critical': '2000',
       },
+      keyframes: {
+        'spin-slow': {
+          '0%': { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
+        },
+        'bounce-gentle': {
+          '0%, 100%': {
+            transform: 'translateY(0)',
+            animationTimingFunction: 'cubic-bezier(0.8, 0, 1, 1)',
+          },
+          '50%': {
+            transform: 'translateY(-10%)',
+            animationTimingFunction: 'cubic-bezier(0, 0, 0.2, 1)',
+          },
+        },
+      },
+      animation: {
+        'spin-slow': 'spin-slow 8s linear infinite',
+        'bounce-gentle': 'bounce-gentle 2s ease-in-out infinite',
+      },
     },
   },
   plugins: [],

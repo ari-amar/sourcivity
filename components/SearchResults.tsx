@@ -141,9 +141,10 @@ export const SearchResults = ({
       const idleDescription = searchMode === 'parts'
         ? 'Search for industrial parts and components. Get detailed specifications and supplier comparisons.'
         : 'Search for manufacturing services and capabilities. Compare supplier certifications, equipment, and expertise.';
+      const iconAnimation = searchMode === 'parts' ? 'animate-spin-slow' : 'animate-bounce-gentle';
       content = (
         <div className="flex flex-col items-center justify-center p-4 md:p-8 text-center space-y-3 md:space-y-4 max-w-2xl mx-auto">
-          <IdleIcon size={40} className="md:w-12 md:h-12 text-muted-foreground" />
+          <IdleIcon size={40} className={`md:w-12 md:h-12 text-muted-foreground ${iconAnimation}`} />
           <h2 className="text-lg md:text-xl font-semibold">{idleTitle}</h2>
           <p className="text-sm md:text-base text-muted-foreground">{idleDescription}</p>
         </div>
