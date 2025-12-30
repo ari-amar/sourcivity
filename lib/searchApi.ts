@@ -126,8 +126,6 @@ async function fetchColumnDeterminationAndSearch(params: TextSearchParams): Prom
   return {
     response: markdownTable,
     query: params.query,
-    searchMode: params.searchMode || 'open',
-    usSuppliersOnly: params.usSuppliersOnly || false,
     columns: data.spec_column_names || [],
     timing: {
       total: totalTime,
