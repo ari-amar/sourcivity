@@ -106,6 +106,11 @@ def get_search_engine_clients() -> Dict[str, SearchEngineClientBase]:
 async def health_check():
 	return Response(content="OK", media_type="text/plain")
 
+# Add explicit OPTIONS handler for CORS preflight (though CORS middleware should handle this)
+@app.options("/api/{full_path:path}")
+async def options_handler(full_path: str):
+	return Response(status_code=200)
+
 @app.get("/api/available_client_names")
 async def get_available_client_names() -> AvailableClientResponse:
 
