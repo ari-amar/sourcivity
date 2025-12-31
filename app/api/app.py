@@ -2,6 +2,10 @@ import os
 from typing import Dict, Optional
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from enums import AiClientName, SearchEngineClientName
 from models import *
