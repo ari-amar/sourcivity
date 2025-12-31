@@ -1,10 +1,9 @@
 'use client'
 
 import React, { useState, useMemo } from 'react';
-import { ExternalLink, CheckCircle2 } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { Badge } from './Badge';
 import { Switch } from './Switch';
-import { useRFQCart } from '../lib/rfqCartContext';
 import type { ProductItem } from '../lib/types';
 import { cn } from '../lib/utils';
 
@@ -59,7 +58,6 @@ const getSupplierTypeDescription = (type: string): string | null => {
 };
 
 export const ProductTable = ({ products, columns = DEFAULT_COLUMNS, usSuppliersOnly = false, onUsSuppliersOnlyChange }: ProductTableProps) => {
-  const { addToCart, removeFromCart, isInCart } = useRFQCart();
   const [sortColumn, setSortColumn] = useState<string | null>('Part Name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
@@ -103,14 +101,6 @@ export const ProductTable = ({ products, columns = DEFAULT_COLUMNS, usSuppliersO
     } else {
       setSortColumn(column);
       setSortDirection('asc');
-    }
-  };
-
-  const handleToggleRFQ = (product: ProductItem) => {
-    if (isInCart(product.id)) {
-      removeFromCart(product.id);
-    } else {
-      addToCart(product);
     }
   };
 
@@ -174,8 +164,6 @@ export const ProductTable = ({ products, columns = DEFAULT_COLUMNS, usSuppliersO
       {/* Card Grid Container */}
       <div className="grid grid-cols-1 gap-4">
         {filteredProducts.map((product) => {
-          const inCart = isInCart(product.id);
-
           return (
             <div
               key={product.id}
@@ -248,26 +236,17 @@ export const ProductTable = ({ products, columns = DEFAULT_COLUMNS, usSuppliersO
                     </div>
                   ))}
 
-                  {/* RFQ Button Column */}
+                  {/* Contact Supplier Link */}
                   <div className="ml-auto">
-                    <button
-                      onClick={() => handleToggleRFQ(product)}
-                      className={cn(
-                        "px-4 py-2 rounded-lg font-medium text-sm transition-all",
-                        inCart
-                          ? "bg-green-100 text-green-700 border border-green-300"
-                          : "bg-blue-600 text-white hover:bg-blue-700"
-                      )}
+                    <a
+                      href={product.contactUrl || product.partUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm bg-blue-600 text-white hover:bg-blue-700 transition-all"
                     >
-                      {inCart ? (
-                        <>
-                          <CheckCircle2 size={16} className="inline mr-1" />
-                          Added
-                        </>
-                      ) : (
-                        'RFQ'
-                      )}
-                    </button>
+                      Contact Supplier
+                      <ExternalLink size={14} />
+                    </a>
                   </div>
                 </div>
               </div>

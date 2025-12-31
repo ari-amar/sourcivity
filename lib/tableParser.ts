@@ -41,7 +41,7 @@ export function parseTableToProducts(markdownTable: string): ProductItem[] {
         return; // Skip incomplete rows (need at least part name + 1 column)
       }
 
-      // Parse Part Name & Supplier Type: [PartName](url)<br/>🏳️ OEM
+      // Parse Part Name & Supplier Type: [PartName](url)<!--contact:contactUrl--><br/>🏳️ OEM
       const partCell = cells[0];
       const partMatch = partCell.match(/\[(.*?)\]\((.*?)\)/);
 
@@ -50,6 +50,10 @@ export function parseTableToProducts(markdownTable: string): ProductItem[] {
       }
 
       const [, partNameWithType, partUrl] = partMatch;
+
+      // Extract contact URL from HTML comment if present
+      const contactMatch = partCell.match(/<!--contact:(.*?)-->/);
+      const contactUrl = contactMatch ? contactMatch[1] : undefined;
 
       // Extract part name (before any emoji or type info)
       let partName = partNameWithType.trim();
@@ -112,6 +116,7 @@ export function parseTableToProducts(markdownTable: string): ProductItem[] {
         id: `product-${index}-${Date.now()}`,
         partName,
         partUrl,
+        contactUrl,
         supplierType,
         supplierFlag,
         hasSpecSheet: !!datasheetUrl, // Has spec sheet if we have a datasheet URL

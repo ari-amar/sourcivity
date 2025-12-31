@@ -550,9 +550,10 @@ export default function SearchPage() {
                 const capabilities = extracted.capabilities || '';
                 const certifications = extracted.certifications || '';
                 const equipment = extracted.equipment || '';
+                const contactUrl = extracted.contact_url || service.url; // Use extracted contact URL or fallback to service page
 
-                // Format company name with link
-                const companyLink = `[${companyName}](${service.url})`;
+                // Format company name with link to contact page
+                const companyLink = `[${companyName}](${contactUrl})`;
 
                 return `| ${companyLink} | ${servicesOffered} | ${capabilities} | ${certifications} | ${equipment} |`;
               });

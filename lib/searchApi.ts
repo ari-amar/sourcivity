@@ -189,9 +189,11 @@ function convertBackendResponseToMarkdown(data: any): string {
     const productName = part.product_name || extractProductName(part.url);
     const fullName = `${manufacturer} ${productName}`;
 
-    // Format: [Manufacturer ProductName](url)<br/>🇺🇸 OEM
+    // Format: [Manufacturer ProductName](url)<!--contact:contactUrl--><br/>🇺🇸 OEM
+    // Embed contact URL as HTML comment so it can be parsed out later
     // Using US flag and OEM as defaults for PDF datasheets
-    const partCell = `[${fullName}](${part.url})<br/>🇺🇸 OEM`;
+    const contactUrl = part.contact_url || part.url;
+    const partCell = `[${fullName}](${part.url})<!--contact:${contactUrl}--><br/>🇺🇸 OEM`;
     row.push(partCell);
 
     // Add spec values
