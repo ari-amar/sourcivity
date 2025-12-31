@@ -20,6 +20,11 @@ from prompts import (
 from services.interfaces import AiClientBase
 
 
+# OPTIMIZATION: Compile regex patterns once at module level (not per extraction)
+COLON_PATTERN = re.compile(r'^[\s\-\*]*([A-Za-z][A-Za-z0-9\s\-/()]+):\s*(.+?)$', re.MULTILINE)
+TABLE_PATTERN = re.compile(r'\|([^|]+)\|([^|]+)\|', re.MULTILINE)
+
+
 def derive_contact_url(datasheet_url: str) -> str:
     """
     Derive likely contact page URL from datasheet URL.
@@ -127,9 +132,8 @@ class PDFScraper:
         """
         potential_specs = []
 
-        # Pattern 1: Lines with colons (Key: Value)
-        colon_pattern = re.compile(r'^[\s\-\*]*([A-Za-z][A-Za-z0-9\s\-/()]+):\s*(.+?)$', re.MULTILINE)
-        for match in colon_pattern.finditer(markdown_content):
+        # Pattern 1: Lines with colons (Key: Value) - use pre-compiled pattern
+        for match in COLON_PATTERN.finditer(markdown_content):
             key = match.group(1).strip()
             value = match.group(2).strip()
             # Filter out noise
@@ -139,9 +143,8 @@ class PDFScraper:
                 if not any(skip in key_lower for skip in ['note', 'figure', 'table', 'revision', 'page', 'col']):
                     potential_specs.append(f"{key}: {value}")
 
-        # Pattern 2: Markdown table rows
-        table_pattern = re.compile(r'\|([^|]+)\|([^|]+)\|', re.MULTILINE)
-        for match in table_pattern.finditer(markdown_content):
+        # Pattern 2: Markdown table rows - use pre-compiled pattern
+        for match in TABLE_PATTERN.finditer(markdown_content):
             col1 = match.group(1).strip()
             col2 = match.group(2).strip()
             # Skip separator lines and headers
@@ -408,6 +411,7 @@ class PDFScraper:
         print(f"EXTRACTING CONTACT URLS FOR {len(specs)} SUPPLIERS")
         print(f"{'='*60}")
 
+        # Prepare results with basic info and derived URLs
         successful_results = []
         for i, spec in enumerate(specs):
             result = top_results[i]
@@ -415,16 +419,21 @@ class PDFScraper:
             result["manufacturer"] = spec.get("manufacturer", "Unknown")
             result["product_name"] = spec.get("product_name", "Unknown Product")
 
-            # Add contact URL (Hybrid approach: derive + verify)
-            print(f"\n[{i+1}/{len(specs)}] Processing: {result['manufacturer']} {result['product_name']}")
+            # Quick fallback - derive from domain
+            result["contact_url"] = derive_contact_url(result["url"])
+            successful_results.append(result)
+
+        # OPTIMIZATION: Extract contact URLs IN PARALLEL (5-10x faster)
+        print(f"\n🚀 Verifying contact URLs in parallel for {len(successful_results)} suppliers...")
+        contact_start = time.time()
+
+        # Create parallel tasks for contact URL verification
+        async def verify_contact_for_result(i, result):
+            print(f"\n[{i+1}/{len(successful_results)}] Processing: {result['manufacturer']} {result['product_name']}")
             print(f"  Datasheet URL: {result['url']}")
+            print(f"  ⚡ Derived contact URL: {result['contact_url']}")
 
-            # Step 1: Quick fallback - derive from domain
-            derived_url = derive_contact_url(result["url"])
-            result["contact_url"] = derived_url
-            print(f"  ⚡ Derived contact URL: {derived_url}")
-
-            # Step 2: Try to find actual contact page (don't block on failure)
+            # Verify by crawling homepage
             try:
                 domain = urlparse(result["url"]).netloc
                 print(f"  🔍 Crawling {domain} homepage for actual contact link...")
@@ -438,7 +447,14 @@ class PDFScraper:
                 print(f"  ❌ Error crawling homepage: {e}")
                 print(f"  📌 Using derived contact URL as fallback")
 
-            successful_results.append(result)
+            return result
+
+        # Execute all contact URL verifications in parallel
+        contact_tasks = [verify_contact_for_result(i, result) for i, result in enumerate(successful_results)]
+        successful_results = await asyncio.gather(*contact_tasks)
+
+        contact_time = time.time() - contact_start
+        print(f"\n⚡ Parallel contact URL extraction completed in {contact_time:.2f}s")
 
         print(f"\n{'='*60}")
         print(f"CONTACT URL EXTRACTION COMPLETE")
@@ -507,15 +523,38 @@ class PDFScraper:
         # ===== PASS 2: AI selects best 5 specs (considers relevance to search query) =====
         print(f"\n🎯 PASS 2: AI selecting best 5 specs (considering search query relevance)...")
 
-        # Format regex-extracted specs for AI analysis
-        all_specs_summary = ""
+        # OPTIMIZATION: Smarter deduplication across all datasheets to reduce tokens
+        # Collect unique spec keys (before colon) with their example values
+        spec_key_examples = {}
         for i, spec_list in enumerate(pass1_results):
-            all_specs_summary += f"\nDATASHEET {i+1}:\n"
-            if spec_list:
-                for spec in spec_list[:100]:  # Limit to first 100 to avoid token limits
-                    all_specs_summary += f"  - {spec}\n"
-            else:
-                all_specs_summary += "  (No specs found)\n"
+            for spec in spec_list[:100]:  # Limit per datasheet
+                if ':' in spec:
+                    key, value = spec.split(':', 1)
+                    key = key.strip().lower()
+                    value = value.strip()
+                    if key not in spec_key_examples:
+                        spec_key_examples[key] = {
+                            'example': spec,
+                            'count': 1,
+                            'datasheets': [i+1]
+                        }
+                    else:
+                        spec_key_examples[key]['count'] += 1
+                        if i+1 not in spec_key_examples[key]['datasheets']:
+                            spec_key_examples[key]['datasheets'].append(i+1)
+
+        # Format as condensed summary (one line per unique spec key)
+        all_specs_summary = "\nUNIQUE SPEC KEYS ACROSS ALL DATASHEETS:\n"
+        all_specs_summary += "(Showing coverage and example value)\n\n"
+
+        # Sort by coverage (most common first) for better AI selection
+        sorted_specs = sorted(spec_key_examples.items(), key=lambda x: x[1]['count'], reverse=True)
+
+        for key, info in sorted_specs[:80]:  # Limit to top 80 most common specs
+            coverage = f"{len(info['datasheets'])}/{len(pdf_mds)}"
+            all_specs_summary += f"  - {info['example']} [Coverage: {coverage}]\n"
+
+        print(f"  → Condensed {sum(len(specs) for specs in pass1_results)} specs → {len(sorted_specs[:80])} unique keys")
 
         # Require specs to appear in at least 80% of datasheets
         import math
@@ -527,23 +566,24 @@ class PDFScraper:
 
 SEARCH QUERY: "{search_query}"
 
-EXTRACTED SPECS FROM ALL DATASHEETS:
 {all_specs_summary}
 
 YOUR TASK:
 Select EXACTLY 5 specifications that are best for comparing these products.
 
 SELECTION CRITERIA (in priority order):
-1. **Relevance to Search Query**: Specs related to "{search_query}" are more important
-2. **Common Across All**: Must appear in at least {min_coverage}/{len(pdf_mds)} datasheets
+1. **Relevance to Search Query**: Specs related to "{search_query}" are MOST important
+2. **High Coverage**: Prioritize specs with coverage ≥ {min_coverage}/{len(pdf_mds)} datasheets
 3. **Functional Relevance**: Directly related to what the product does
-4. **Differentiation**: Values differ across products (helps comparison)
+4. **Differentiation**: Values likely differ across products (helps comparison)
 
 AVOID:
 - Document/revision numbers, dates, catalog numbers
-- Specs that appear in fewer than {min_coverage} datasheets
+- Specs with low coverage (< {min_coverage}/{len(pdf_mds)})
 - Generic company info
 - Specs unrelated to "{search_query}"
+
+NOTE: The coverage ratio is shown in brackets after each spec. Prioritize specs with higher coverage.
 
 OUTPUT FORMAT:
 Return JSON with "selected_specs" array containing EXACTLY 5 items:
