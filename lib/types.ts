@@ -18,6 +18,8 @@ export interface SearchResultsData {
   query?: string;
   createdAt?: string;
   columns?: string[];
+  searchMode?: 'open' | 'refined';
+  usSuppliersOnly?: boolean;
   timing?: TimingData;
 }
 
