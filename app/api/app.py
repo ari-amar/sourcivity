@@ -108,6 +108,8 @@ async def health_check():
 
 @app.get("/api/available_client_names")
 @app.get("/available_client_names")
+@app.get('api/available_client_names')
+@app.get('available_client_names')
 async def get_available_client_names() -> AvailableClientResponse:
 
 	# NOTE: we could potentially update this to run health checks on the available clients as well, or even get usage/cost metrics
@@ -120,6 +122,8 @@ async def get_available_client_names() -> AvailableClientResponse:
 
 @app.post('/api/search/parts')
 @app.post('/search/parts')
+@app.post('api/search/parts')
+@app.post('search/parts')
 async def api_search_parts(payload: PartSearchRequest) -> PartSearchResponse:
 
 	ai_clients = get_ai_clients()
@@ -152,6 +156,8 @@ async def api_search_parts(payload: PartSearchRequest) -> PartSearchResponse:
 
 @app.post('/api/search/services')
 @app.post('/search/services')
+@app.post('api/search/services')
+@app.post('search/services')
 async def api_search_services(payload: ServiceSearchRequest) -> ServiceSearchResponse:
 
 	ai_clients = get_ai_clients()
