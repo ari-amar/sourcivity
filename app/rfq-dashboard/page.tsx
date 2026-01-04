@@ -9,6 +9,9 @@ import { useRFQs, useRFQStats, useSendFollowUp, useUpdateRFQStatus, useTriggerFo
 import { RFQRecord, DEFAULT_FOLLOW_UP_TEMPLATES } from '../../lib/rfq-types';
 import { RefreshCw, Play, AlertCircle } from 'lucide-react';
 
+// Force dynamic rendering to prevent prerendering errors (uses window.confirm, alert)
+export const dynamic = 'force-dynamic';
+
 export default function RFQDashboardPage() {
   const [selectedRFQ, setSelectedRFQ] = useState<RFQRecord | null>(null);
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);

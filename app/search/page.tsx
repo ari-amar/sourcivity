@@ -133,6 +133,9 @@ const SERVICES_SUGGESTIONS = [
   'Industrial component refurbishment',
 ];
 
+// Force dynamic rendering to prevent prerendering errors
+export const dynamic = 'force-dynamic';
+
 export default function SearchPage() {
   const searchParams = useSearchParams();
   const [searchMode, setSearchMode] = useState<SearchMode>('parts');
