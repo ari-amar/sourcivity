@@ -137,13 +137,11 @@ interface ProductItem {
   supplierType: string;
   supplierFlag: string;
   hasSpecSheet: boolean;
-  material: string;
-  threadSize: string;
-  loadRating: { lb: number; n: number };
-  tempRange: {
-    min: { f: number; c: number };
-    max: { f: number; c: number };
-  };
+  datasheetUrl?: string; // URL to the datasheet PDF
+  isVerified?: boolean; // Verified supplier indicator
+  rating?: number; // Supplier rating (1-5)
+  // Dynamic column data - key is column name, value is the cell content
+  columnData: Record<string, string>;
 }
 
 interface RFQCartItem extends ProductItem {
