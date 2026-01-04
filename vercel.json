@@ -1,27 +1,14 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "package.json",
-      "use": "@vercel/next"
+  "functions": {
+    "api/index.py": {
+      "runtime": "@vercel/python@3.1.0"
     }
-  ],
-  "routes": [
+  },
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "$1"
+      "source": "/api/:path*",
+      "destination": "/api/index"
     }
-  ],
-  "env": {
-    "PYTHONPATH": "app/api"
-  }
+  ]
 }
 

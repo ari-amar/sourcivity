@@ -42,12 +42,13 @@ if is_vercel and vercel_url:
         cors_origins.append(f"https://{vercel_url}")
 
 # CORS configuration - allow frontend to communicate with backend
+# In production on Vercel, allow all origins since frontend and backend share the same domain
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=["*"] if is_vercel else cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all HTTP methods
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["*"],
 )
 
 # NOTE: Client initialization is now lazy-loaded for better serverless performance
@@ -103,13 +104,12 @@ def get_search_engine_clients() -> Dict[str, SearchEngineClientBase]:
 
 
 @app.get("/api/health")
+@app.get("/health")
 async def health_check():
 	return Response(content="OK", media_type="text/plain")
 
 @app.get("/api/available_client_names")
 @app.get("/available_client_names")
-@app.get('api/available_client_names')
-@app.get('available_client_names')
 async def get_available_client_names() -> AvailableClientResponse:
 
 	# NOTE: we could potentially update this to run health checks on the available clients as well, or even get usage/cost metrics
@@ -122,8 +122,6 @@ async def get_available_client_names() -> AvailableClientResponse:
 
 @app.post('/api/search/parts')
 @app.post('/search/parts')
-@app.post('api/search/parts')
-@app.post('search/parts')
 async def api_search_parts(payload: PartSearchRequest) -> PartSearchResponse:
 
 	ai_clients = get_ai_clients()
@@ -156,8 +154,6 @@ async def api_search_parts(payload: PartSearchRequest) -> PartSearchResponse:
 
 @app.post('/api/search/services')
 @app.post('/search/services')
-@app.post('api/search/services')
-@app.post('search/services')
 async def api_search_services(payload: ServiceSearchRequest) -> ServiceSearchResponse:
 
 	ai_clients = get_ai_clients()
