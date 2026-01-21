@@ -167,87 +167,69 @@ export const ProductTable = ({ products, columns = DEFAULT_COLUMNS, usSuppliersO
           return (
             <div
               key={product.id}
-              className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow"
+              className="bg-white rounded-xl border border-gray-200 py-5 px-6 shadow-sm hover:shadow-md transition-shadow"
             >
-              {/* Unified Row Layout */}
-              <div className="space-y-4">
-                {/* Product Info Column */}
-                <div className="pb-4 border-b border-gray-200">
-                  <a
-                    href={product.partUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-base font-semibold text-gray-900 hover:text-blue-600 transition-colors flex items-center gap-2 group mb-2"
-                  >
-                    {product.partName}
-                    <ExternalLink
-                      size={14}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-600 shrink-0"
-                    />
-                  </a>
-
-                  {/* Supplier Metadata */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {product.rating && (
-                      <span className="text-sm text-gray-600 flex items-center gap-0.5">
-                        {product.rating}★
+              {/* Single Row Layout: Product Info | Specs */}
+              <div className="flex items-center">
+                {/* Left: Product Info */}
+                <div className="w-[280px] shrink-0 pr-6 border-r border-gray-200">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <a
+                      href={product.partUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-bold text-gray-900 hover:text-blue-600 transition-colors whitespace-nowrap overflow-hidden text-ellipsis"
+                      title={product.partName}
+                    >
+                      {product.partName}
+                    </a>
+                    {product.extractionError && (
+                      <span
+                        className="text-amber-500 cursor-help flex-shrink-0"
+                        title={`Extraction failed: ${product.extractionError}`}
+                      >
+                        ⚠️
                       </span>
                     )}
-                    <span
-                      className="text-lg leading-none"
-                      title={getCountryName(product.supplierFlag)}
-                    >
-                      {product.supplierFlag}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400">
+                      --%
+                    </span>
+                    <span className="text-sm leading-none text-gray-400" title="Country">
+                      🏳️
                     </span>
                     <Badge
                       variant="secondary"
-                      className="text-xs font-normal whitespace-nowrap"
+                      className="text-xs font-normal whitespace-nowrap px-1.5 py-0.5"
                       title={getSupplierTypeDescription(product.supplierType) || undefined}
                     >
                       {product.supplierType}
                     </Badge>
-                    {product.datasheetUrl && (
-                      <a
-                        href={product.datasheetUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <Badge
-                          variant="secondary"
-                          className="text-xs font-normal whitespace-nowrap bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer"
-                        >
-                          Datasheet
-                        </Badge>
-                      </a>
-                    )}
-                  </div>
-                </div>
-
-                {/* Specifications Row - Horizontal Side-by-Side */}
-                <div className="flex items-center gap-4 flex-wrap">
-                  {columns.map((column, index) => (
-                    <div key={index} className="flex flex-col min-w-[120px]">
-                      <div className="text-xs font-semibold text-gray-500 uppercase mb-1">
-                        {column}
-                      </div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {product.columnData[column] || 'N/A'}
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Contact Supplier Link */}
-                  <div className="ml-auto">
                     <a
                       href={product.contactUrl || product.partUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm bg-blue-600 text-white hover:bg-blue-700 transition-all"
+                      className="text-base hover:opacity-70 transition-opacity"
+                      title="Contact Supplier"
                     >
-                      Contact Supplier
-                      <ExternalLink size={14} />
+                      💬
                     </a>
                   </div>
+                </div>
+
+                {/* Right: Specifications - Horizontal Grid */}
+                <div className="flex-1 flex gap-6 px-8 overflow-hidden">
+                  {columns.slice(0, 5).map((column, index) => (
+                    <div key={index} className="flex-1 flex flex-col min-w-0">
+                      <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1 truncate" title={column}>
+                        {column.replace(/_/g, ' ')}
+                      </div>
+                      <div className="text-sm font-medium text-gray-900 line-clamp-2" title={product.columnData[column] || 'N/A'}>
+                        {product.columnData[column] || 'N/A'}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

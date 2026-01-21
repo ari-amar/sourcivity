@@ -51,6 +51,8 @@ export interface PhotoSearchParams extends SearchParamsBase {
 export interface ProductItem {
   id: string;
   partName: string;
+  manufacturer?: string; // Manufacturer/OEM name
+  productName?: string; // Product model/name
   partUrl: string;
   contactUrl?: string; // URL to supplier's contact/inquiry page
   supplierType: string;
@@ -59,6 +61,7 @@ export interface ProductItem {
   datasheetUrl?: string; // URL to the datasheet PDF
   isVerified?: boolean; // Verified supplier indicator
   rating?: number; // Supplier rating (1-5)
+  extractionError?: string; // Error message if AI extraction failed
   // Dynamic column data - key is column name, value is the cell content
   columnData: Record<string, string>;
 }

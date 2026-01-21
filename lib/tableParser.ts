@@ -55,8 +55,18 @@ export function parseTableToProducts(markdownTable: string): ProductItem[] {
       const contactMatch = partCell.match(/<!--contact:(.*?)-->/);
       const contactUrl = contactMatch ? contactMatch[1] : undefined;
 
+      // Extract extraction error from HTML comment if present
+      const errorMatch = partCell.match(/<!--error:(.*?)-->/);
+      const extractionError = errorMatch && errorMatch[1] ? errorMatch[1] : undefined;
+
       // Extract part name (before any emoji or type info)
       let partName = partNameWithType.trim();
+
+      // Try to split into manufacturer and product name
+      // Format is typically "Manufacturer ProductName" or "Manufacturer Product Name Series"
+      const nameParts = partName.split(' ');
+      let manufacturer = nameParts[0] || partName;
+      let productName = nameParts.slice(1).join(' ') || '';
 
       // Check for content after the link (like <br/>🇺🇸 OEM<br/>✓ 4.8★)
       const afterLinkMatch = partCell.match(/\]\(.*?\)(.+)/);
@@ -115,6 +125,8 @@ export function parseTableToProducts(markdownTable: string): ProductItem[] {
       const product: ProductItem = {
         id: `product-${index}-${Date.now()}`,
         partName,
+        manufacturer,
+        productName,
         partUrl,
         contactUrl,
         supplierType,
@@ -123,6 +135,7 @@ export function parseTableToProducts(markdownTable: string): ProductItem[] {
         datasheetUrl,
         isVerified,
         rating,
+        extractionError,
         columnData
       };
 

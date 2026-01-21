@@ -269,7 +269,7 @@ export default function SearchPage() {
         setAnimationKey(prev => prev + 1);
         return newIndex;
       });
-    }, 5000); // Rotate every 5 seconds
+    }, 3000); // Rotate every 3 seconds
 
     return () => clearInterval(rotateInterval);
   }, [searchMode]);

@@ -131,7 +131,10 @@ CRITICAL RULES:
 1. Extract ONLY the 5 specs listed above - no more, no less
 2. Use the EXACT standardized keys in your JSON output
 3. ALL datasheets MUST have the same 5 keys in the same order
-4. Extract manufacturer and product_name for each datasheet
+4. Extract manufacturer and product_name for each datasheet:
+   - "manufacturer": SHORT company name only (e.g., "3M", "NSK", "SKF" - NOT "3M Company" or "NSK Ltd.")
+   - "product_name": Model/part NUMBER only (e.g., "NH15", "AB5000", "6205" - NOT "Miniature Ball Bearing Series")
+   - Combined should be under 30 characters when possible
 5. Be FLEXIBLE when searching - specs may have different names in different datasheets
 6. Extract values ONLY from the corresponding datasheet - never copy between datasheets
 7. These specs were selected because they appear in MOST datasheets - if you're getting many N/A values, you're being too strict with naming
@@ -243,14 +246,18 @@ STEP 4: Extract those 5 specs + manufacturer + product name from each datasheet
    - Do not guess, infer, or hallucinate values
    - Extract ONLY the specs you selected in STEP 4 - no more, no less
 
-   SPECIAL FIELDS - "manufacturer" and "product_name":
-   - In ADDITION to the selected specs, you MUST extract TWO special fields for each datasheet:
-     1. "manufacturer": The OEM/manufacturer name (e.g., "Olympus", "Thermo Fisher", "Bruker")
-     2. "product_name": The product model/name (e.g., "Vanta Element", "Niton XL5", "S1 Titan")
-   - Look for manufacturer in: company logos, headers, branding, contact info
-   - Look for product name in: model numbers, product names, series names in the datasheet title/header
-   - Keep both concise and clean - no extra text or marketing language
-   - These will be combined as "Manufacturer Product Name" in the display
+SPECIAL FIELDS - "manufacturer" and "product_name":
+- In ADDITION to the selected specs, you MUST extract TWO special fields for each datasheet:
+  1. "manufacturer": SHORT company/brand name only
+     - Use abbreviated form: "3M" not "3M Company", "NSK" not "NSK Ltd."
+     - Max 15 characters
+     - Examples: "Olympus", "SKF", "THK", "NSK", "3M", "Parker"
+  2. "product_name": Model/part NUMBER only
+     - Just the identifier: "NH15", "AB5000", "6205-2RS"
+     - NOT descriptive text: "Miniature Ball Bearing" or "EMI Absorber Series"
+     - Max 20 characters
+     - Examples: "Vanta Element", "NH15", "AB5000", "LM12UU"
+- Goal: Combined "Manufacturer Model" should be SHORT and scannable (under 30 chars ideal)
 
 KEY NAMING RULES FOR STANDARDIZATION:
 1. Use IDENTICAL specification keys across ALL datasheets - THIS IS CRITICAL

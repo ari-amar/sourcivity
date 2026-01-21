@@ -414,6 +414,7 @@ class PDFScraper:
             result["specs"] = spec.get("specifications", {})
             result["manufacturer"] = spec.get("manufacturer", "Unknown")
             result["product_name"] = spec.get("product_name", "Unknown Product")
+            result["extraction_error"] = spec.get("extraction_error")
 
             # Add contact URL (Hybrid approach: derive + verify)
             print(f"\n[{i+1}/{len(specs)}] Processing: {result['manufacturer']} {result['product_name']}")
@@ -464,7 +465,7 @@ class PDFScraper:
         """
         if not any(pdf_mds):
             print("ERROR: No markdown content to extract specs from")
-            return [{"manufacturer": "Unknown", "product_name": "Unknown", "specifications": {}} for _ in pdf_mds]
+            return [{"manufacturer": "Unknown", "product_name": "Unknown", "specifications": {}, "extraction_error": "No PDF content could be extracted - the PDF may be image-only or corrupted"} for _ in pdf_mds]
 
         print(f"\n{'='*60}")
         print(f"THREE-PASS SPEC EXTRACTION FOR {len(pdf_mds)} DATASHEETS")
@@ -620,12 +621,14 @@ Return ONLY valid JSON.
 
         if not selected_specs:
             print("\n  ⚠️  Falling back to first product's specs...")
-            # Fallback: use all specs from first successful extraction
-            for result in pass1_results:
-                if result.get("specifications"):
+            # Fallback: use specs from first successful regex extraction
+            # pass1_results is a list of lists of spec strings
+            for spec_list in pass1_results:
+                if spec_list and len(spec_list) > 0:
                     selected_specs = [
-                        {"standardized_key": key, "display_name": key}
-                        for key in list(result["specifications"].keys())[:5]
+                        {"standardized_key": spec.split(':')[0].strip().lower().replace(' ', '_'),
+                         "display_name": spec.split(':')[0].strip()}
+                        for spec in spec_list[:5]
                     ]
                     break
 
@@ -699,7 +702,7 @@ Return ONLY valid JSON.
 
                 # Ensure we return the right number of results
                 while len(specs_array) < len(pdf_mds):
-                    specs_array.append({"manufacturer": "Unknown", "product_name": "Unknown", "specifications": {}})
+                    specs_array.append({"manufacturer": "Unknown", "product_name": "Unknown", "specifications": {}, "extraction_error": "AI returned fewer results than expected - PDF may have been unreadable"})
 
                 print(f"\n{'='*60}")
                 print(f"THREE-PASS EXTRACTION COMPLETE")
@@ -708,10 +711,10 @@ Return ONLY valid JSON.
                 return specs_array[:len(pdf_mds)]
             else:
                 print(f"  ✗ Failed to parse final extraction")
-                return [{"manufacturer": "Unknown", "product_name": "Unknown", "specifications": {}} for _ in pdf_mds]
+                return [{"manufacturer": "Unknown", "product_name": "Unknown", "specifications": {}, "extraction_error": "AI response was not valid JSON - extraction failed"} for _ in pdf_mds]
 
         except Exception as e:
             print(f"  ✗ Error in final extraction: {str(e)}")
             import traceback
             traceback.print_exc()
-            return [{"manufacturer": "Unknown", "product_name": "Unknown", "specifications": {}} for _ in pdf_mds]
+            return [{"manufacturer": "Unknown", "product_name": "Unknown", "specifications": {}, "extraction_error": f"Extraction error: {str(e)}"} for _ in pdf_mds]

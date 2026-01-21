@@ -102,7 +102,7 @@ export const SearchResultsContent = ({ responseText, originalQuery, usSuppliersO
     // Process header and add Datasheets as second column
     const headers = headerRow.split('|').map(h => h.trim()).filter(h => h);
     const enhancedHeaders = [headers[0], 'Datasheets', ...headers.slice(1)];
-    const headerHtml = enhancedHeaders.map(h => `<th class="border border-gray-300 px-4 py-2 bg-gray-50 font-semibold text-left">${h}</th>`).join('');
+    const headerHtml = enhancedHeaders.map(h => `<th class="border border-gray-200 px-8 py-4 bg-gray-50 font-semibold text-left text-xs uppercase tracking-wide text-gray-600">${h}</th>`).join('');
 
     // Process data rows and filter out empty rows
     const rowsHtml = dataRows
@@ -151,10 +151,10 @@ export const SearchResultsContent = ({ responseText, originalQuery, usSuppliersO
               afterLink = afterLink.replace(regex, `<span class="country-flag-tooltip" data-country="${country}">${emoji}</span>`);
             });
 
-            const linkHtml = `<a href="${url}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">${linkText}</a>`;
-            return `<td class="border border-gray-300 px-4 py-2">${linkHtml}${afterLink}</td>`;
+            const linkHtml = `<a href="${url}" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">${linkText}</a>`;
+            return `<td class="border border-gray-200 px-8 py-4 align-top">${linkHtml}${afterLink}</td>`;
           }
-          return `<td class="border border-gray-300 px-4 py-2">${cell}</td>`;
+          return `<td class="border border-gray-200 px-8 py-4 align-top text-sm text-gray-700 leading-relaxed">${cell}</td>`;
         });
 
         // Extract part name from first cell and get datasheet link
@@ -172,10 +172,10 @@ export const SearchResultsContent = ({ responseText, originalQuery, usSuppliersO
 
         // Insert datasheet emoji as clickable link with consistent sizing
         const datasheetCell = datasheetLink !== '#'
-          ? `<td class="border border-gray-300 px-4 py-2 text-center align-middle" style="vertical-align: middle;">
+          ? `<td class="border border-gray-200 px-8 py-4 text-center align-middle" style="vertical-align: middle;">
               <a href="${datasheetLink}" target="_blank" rel="noopener noreferrer" class="inline-block cursor-pointer hover:opacity-70" style="font-size: 24px; line-height: 1; text-decoration: none;" title="View Datasheet">📄</a>
             </td>`
-          : `<td class="border border-gray-300 px-4 py-2 text-center align-middle" style="vertical-align: middle;">
+          : `<td class="border border-gray-200 px-8 py-4 text-center align-middle" style="vertical-align: middle;">
               <span class="inline-block cursor-not-allowed opacity-50" style="font-size: 24px; line-height: 1;" title="Datasheet not available">📄</span>
             </td>`;
 
@@ -188,9 +188,9 @@ export const SearchResultsContent = ({ responseText, originalQuery, usSuppliersO
         return `<tr>${enhancedCells.join('')}</tr>`;
       }).join('');
 
-    return `<table class="w-full border-collapse border border-gray-300 my-4 min-w-full">
+    return `<table class="w-full table-fixed border-collapse border border-gray-200 my-6 rounded-lg overflow-hidden shadow-sm">
       <thead><tr>${headerHtml}</tr></thead>
-      <tbody>${rowsHtml}</tbody>
+      <tbody class="divide-y divide-gray-200">${rowsHtml}</tbody>
     </table>`;
   };
 
