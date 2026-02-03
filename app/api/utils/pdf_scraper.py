@@ -1,39 +1,30 @@
 #!/usr/bin/env python3
 """
-PDF Scraper for extracting specifications from datasheets using PyMuPDF4LLM and Claude for robustness.
+PDF Scraper for extracting specifications from datasheets using MarkItDown and Claude.
 """
 
-import requests
+import asyncio
 import re
 import json
+import time
+import tempfile
+import os
 from typing import Dict, List, Optional
 from urllib.parse import urlparse, urljoin
-import fitz  # PyMuPDF
-import pymupdf4llm  # Requires pip install pymupdf4llm
-from bs4 import BeautifulSoup
 
-from prompts import (
-    SINGLE_PDF_SPEC_EXTRACTION_PROMPT,
-    MULTPLE_PDF_SPEC_EXTRACTION_PROMPT,
-    PASS3_EXTRACT_SELECTED_SPECS_PROMPT
-)
+import requests
+import fitz  # PyMuPDF - used only for page count validation
+from bs4 import BeautifulSoup
+from markitdown import MarkItDown
+
+from prompts import SINGLE_PDF_SPEC_EXTRACTION_PROMPT, NORMALIZE_SPEC_KEYS_PROMPT
 from services.interfaces import AiClientBase
 
 
 def derive_contact_url(datasheet_url: str) -> str:
     """
     Derive likely contact page URL from datasheet URL.
-    This is a quick fallback that assumes /contact is available.
-
-    Args:
-        datasheet_url: URL of the PDF datasheet
-
-    Returns:
-        Derived contact URL (base domain + /contact)
-
-    Examples:
-        https://example.com/datasheets/part123.pdf → https://example.com/contact
-        https://example.com/products/widget → https://example.com/contact
+    Quick fallback that assumes /contact is available.
     """
     try:
         parsed = urlparse(datasheet_url)
@@ -41,23 +32,14 @@ def derive_contact_url(datasheet_url: str) -> str:
         return f"{base_url}/contact"
     except Exception as e:
         print(f"Error deriving contact URL from {datasheet_url}: {e}")
-        return datasheet_url  # Fallback to original URL
+        return datasheet_url
 
 
 async def find_contact_url(supplier_domain: str, timeout: int = 10) -> Optional[str]:
     """
     Crawl supplier homepage to find actual contact page URL.
-    Looks for common contact link patterns in HTML.
-
-    Args:
-        supplier_domain: Domain name (e.g., "example.com")
-        timeout: Request timeout in seconds
-
-    Returns:
-        Actual contact URL if found, None otherwise
     """
     try:
-        # Try to fetch homepage
         homepage_url = f"https://{supplier_domain}"
         print(f"    → Fetching homepage: {homepage_url}")
         response = requests.get(homepage_url, timeout=timeout, headers={
@@ -65,42 +47,36 @@ async def find_contact_url(supplier_domain: str, timeout: int = 10) -> Optional[
         })
         response.raise_for_status()
 
-        # Parse HTML
         soup = BeautifulSoup(response.text, 'html.parser')
         print(f"    → Scanning for contact links in HTML...")
 
-        # Look for links with common contact keywords
         contact_keywords = ['contact', 'inquiry', 'quote', 'request', 'get-quote', 'reach-us']
 
         for link in soup.find_all('a', href=True):
             href = link['href'].lower()
             text = link.get_text().lower()
 
-            # Check if link or text contains contact keywords
             if any(keyword in href or keyword in text for keyword in contact_keywords):
-                # Convert relative URLs to absolute
                 full_url = urljoin(homepage_url, link['href'])
-                print(f"    → ✅ Found via HTML scan: {full_url}")
+                print(f"    → Found via HTML scan: {full_url}")
                 return full_url
 
-        # Fallback: try common contact paths directly
         print(f"    → No links found in HTML, testing common paths...")
         common_paths = ['/contact', '/contact-us', '/inquiry', '/request-quote', '/get-quote']
         for path in common_paths:
             test_url = f"{homepage_url}{path}"
             try:
-                # Quick HEAD request to check if page exists
                 head_response = requests.head(test_url, timeout=5, allow_redirects=True)
                 if head_response.status_code == 200:
-                    print(f"    → ✅ Found via path test: {test_url}")
+                    print(f"    → Found via path test: {test_url}")
                     return test_url
             except:
                 continue
 
-        print(f"    → ❌ No contact page found")
+        print(f"    → No contact page found")
 
     except Exception as e:
-        print(f"    → ❌ Failed to crawl: {str(e)[:60]}")
+        print(f"    → Failed to crawl: {str(e)[:60]}")
 
     return None
 
@@ -110,133 +86,109 @@ class PDFScraper:
     def __init__(self, ai_client: AiClientBase, debug: bool = False):
         self.ai_client = ai_client
         self.debug = debug
+        self.markitdown = MarkItDown()
 
         if self.debug:
-            import os
             self.debug_dir = "debug_extraction"
             os.makedirs(self.debug_dir, exist_ok=True)
             print(f"DEBUG MODE ENABLED - outputs will be saved to {self.debug_dir}/")
 
-    def extract_specs_with_regex(self, markdown_content: str) -> List[str]:
-        """
-        Extract potential specifications using regex patterns (no AI).
-        Fast, free, and good for finding obvious spec lines.
-
-        Returns:
-            List of potential spec strings in "key: value" format
-        """
-        potential_specs = []
-
-        # Pattern 1: Lines with colons (Key: Value)
-        colon_pattern = re.compile(r'^[\s\-\*]*([A-Za-z][A-Za-z0-9\s\-/()]+):\s*(.+?)$', re.MULTILINE)
-        for match in colon_pattern.finditer(markdown_content):
-            key = match.group(1).strip()
-            value = match.group(2).strip()
-            # Filter out noise
-            if len(key) < 50 and len(value) > 0 and len(value) < 200:
-                # Skip common non-spec patterns
-                key_lower = key.lower()
-                if not any(skip in key_lower for skip in ['note', 'figure', 'table', 'revision', 'page', 'col']):
-                    potential_specs.append(f"{key}: {value}")
-
-        # Pattern 2: Markdown table rows
-        table_pattern = re.compile(r'\|([^|]+)\|([^|]+)\|', re.MULTILINE)
-        for match in table_pattern.finditer(markdown_content):
-            col1 = match.group(1).strip()
-            col2 = match.group(2).strip()
-            # Skip separator lines and headers
-            if (col1 and col2 and
-                not col1.startswith('-') and
-                not col2.startswith('-') and
-                len(col1) < 50 and
-                not col1.lower() in ['parameter', 'specification', 'description', 'value', 'unit', 'min', 'max', 'typ']):
-                potential_specs.append(f"{col1}: {col2}")
-
-        return potential_specs
-
     def download_pdf(self, url: str) -> bytes:
         """
-        Download PDF from URL and validate it's actually a PDF.
-
-        Args:
-            url: URL of the PDF
-
-        Returns:
-            PDF content as bytes
+        Download content from URL. If it's a PDF (%PDF header), return it.
+        If it's HTML, scan for up to 3 PDF links and follow them.
         """
         try:
             response = requests.get(url, timeout=30, headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             })
             response.raise_for_status()
-
             content = response.content
 
-            # Validate it's actually a PDF file
-            if not content.startswith(b'%PDF'):
-                raise ValueError(f"URL does not point to a valid PDF file (missing PDF header)")
+            # Check for %PDF magic bytes
+            if content.startswith(b'%PDF'):
+                if len(content) < 1024:
+                    raise ValueError(f"PDF file too small ({len(content)} bytes) - likely corrupted")
+                return content
 
-            # Check minimum size (valid PDFs should be at least a few KB)
-            if len(content) < 1024:
-                raise ValueError(f"PDF file too small ({len(content)} bytes) - likely corrupted")
+            # HTML fallback: scan for PDF links and follow up to 3
+            print(f"    Not a PDF, scanning HTML for PDF links: {url[:80]}")
+            try:
+                html_text = content.decode('utf-8', errors='ignore')
+                soup = BeautifulSoup(html_text, 'html.parser')
+                pdf_links = []
 
-            return content
-        except Exception as e:
-            raise Exception(f"Failed to download PDF from {url}: {str(e)}")
+                for link in soup.find_all('a', href=True):
+                    href = link['href']
+                    if href.lower().endswith('.pdf') or '.pdf?' in href.lower():
+                        full_url = urljoin(url, href)
+                        if full_url not in pdf_links:
+                            pdf_links.append(full_url)
+                        if len(pdf_links) >= 3:
+                            break
+
+                for pdf_url in pdf_links:
+                    try:
+                        print(f"    Following PDF link: {pdf_url[:80]}")
+                        pdf_response = requests.get(pdf_url, timeout=30, headers={
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                        })
+                        pdf_response.raise_for_status()
+                        pdf_content = pdf_response.content
+
+                        if pdf_content.startswith(b'%PDF') and len(pdf_content) >= 1024:
+                            return pdf_content
+                    except Exception as e:
+                        print(f"    Failed to follow PDF link {pdf_url[:60]}: {e}")
+                        continue
+
+            except Exception as e:
+                print(f"    HTML parsing failed: {e}")
+
+            raise ValueError(f"URL does not point to a valid PDF file and no PDF links found in HTML")
+
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Failed to download from {url}: {str(e)}")
+
+    def validate_page_count(self, pdf_content: bytes) -> int:
+        """Check page count using PyMuPDF. Reject PDFs with more than 10 pages."""
+        with fitz.open(stream=pdf_content) as doc:
+            page_count = len(doc)
+            if page_count == 0:
+                raise ValueError("PDF has no pages")
+            if page_count > 10:
+                raise ValueError(f"PDF has {page_count} pages (max 10)")
+            return page_count
 
     def extract_markdown_from_pdf(self, pdf_content: bytes) -> str:
         """
-        Extract structured markdown from PDF content using PyMuPDF4LLM.
-
-        Args:
-            pdf_content: PDF file content as bytes
-
-        Returns:
-            Extracted markdown from PDF (first 10 pages)
+        Convert PDF to markdown using MarkItDown.
         """
+        # Write to temp file since markitdown works with file paths
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
+            tmp.write(pdf_content)
+            tmp_path = tmp.name
+
         try:
-            with fitz.open(stream=pdf_content) as doc:
-                # Check if PDF has pages
-                if len(doc) == 0:
-                    raise ValueError("PDF has no pages")
+            result = self.markitdown.convert(tmp_path)
+            md_text = result.text_content
 
-                # PyMuPDF4LLM returns markdown text
-                # Limit to first 10 pages by slicing the document
-                limited_doc = doc if len(doc) <= 10 else fitz.open()
-                if len(doc) > 10:
-                    for page_num in range(10):
-                        limited_doc.insert_pdf(doc, from_page=page_num, to_page=page_num)
-
-                md_text = pymupdf4llm.to_markdown(limited_doc)
-
-                if limited_doc != doc:
-                    limited_doc.close()
-
-                # Validate we got actual content
-                if not md_text or len(md_text.strip()) < 100:
-                    raise ValueError(f"PDF extraction produced no meaningful content (only {len(md_text)} chars)")
+            if not md_text or len(md_text.strip()) < 100:
+                raise ValueError(f"PDF extraction produced no meaningful content (only {len(md_text or '')} chars)")
 
             return md_text
-        except Exception as e:
-            raise Exception(f"Failed to extract markdown from PDF: {str(e)}")
+        finally:
+            os.unlink(tmp_path)
 
     async def extract_specs(self, pdf_md: str, product_type: Optional[str] = None) -> Dict:
         """
-        Extract specifications from PDF markdown using Claude.
-
-        Args:
-            pdf_md: Markdown extracted from PDF
-            product_type: Optional product type hint to help extraction
-
-        Returns:
-            Dictionary of extracted specifications
+        Extract specifications from PDF markdown using AI.
         """
-        # Limit to avoid token limits (approx 20k chars ~5k tokens, but markdown is denser)
+        # Limit to avoid token limits
         if len(pdf_md) > 20000:
             pdf_md = pdf_md[:20000]
 
         product_hint = f"This is a datasheet for a {product_type}. " if product_type else ""
-
         prompt = SINGLE_PDF_SPEC_EXTRACTION_PROMPT.format(product_hint=product_hint, pdf_md=pdf_md)
 
         try:
@@ -247,17 +199,18 @@ class PDFScraper:
                 json_schema={
                     "type": "object",
                     "properties": {
+                        "manufacturer": {"type": "string"},
+                        "product_name": {"type": "string"},
                         "specifications": {
                             "type": "object",
                             "additionalProperties": {"type": "string"}
                         }
                     },
-                    "required": ["specifications"]
+                    "required": ["manufacturer", "product_name", "specifications"]
                 },
-                max_tokens=2000
+                max_tokens=4096
             )
 
-            # Extract JSON from response (in case there's extra text)
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())
@@ -267,29 +220,28 @@ class PDFScraper:
         except Exception as e:
             return {"error": f"Failed to extract specs: {str(e)}"}
 
-    async def scrape_pdf(self, url: str, product_type: Optional[str] = None, extract_specs: bool=True) -> Dict:
+    async def scrape_pdf(self, url: str, product_type: Optional[str] = None) -> Dict:
         """
-        Download PDF and extract specifications.
-
-        Args:
-            url: URL of the PDF datasheet
-            product_type: Optional product type hint
-
-        Returns:
-            Dictionary containing URL, specs, and any errors
+        Download PDF, validate, convert to markdown, and extract specs.
         """
         result = {
             "url": url,
             "md": None,
             "specs": {},
+            "manufacturer": None,
+            "product_name": None,
             "error": None
         }
 
         try:
-            # Download PDF
+            # Download (with HTML fallback)
             pdf_content = self.download_pdf(url)
 
-            # Extract markdown
+            # Validate page count
+            page_count = self.validate_page_count(pdf_content)
+            print(f"    PDF has {page_count} pages")
+
+            # Convert to markdown via markitdown
             pdf_md = self.extract_markdown_from_pdf(pdf_content)
 
             if not pdf_md.strip():
@@ -307,10 +259,6 @@ class PDFScraper:
                     f.write(pdf_md)
                 print(f"  [DEBUG] Saved markdown to {md_file}")
 
-            if extract_specs:
-                specs = await self.extract_specs(pdf_md, product_type)
-                result["specs"] = specs
-
         except Exception as e:
             result["error"] = str(e)
 
@@ -319,402 +267,310 @@ class PDFScraper:
     async def scrape_multiple(self, urls: List[str], scores: List[float], product_type: Optional[str] = "") -> List[Dict]:
         """
         Scrape multiple PDFs and return their specs with standardized keys.
-        Selects top 5 PDFs by score that have valid markdown.
-        Uses parallel processing for faster PDF downloads and extraction.
-
-        Args:
-            urls: List of PDF URLs
-            scores: List of Exa scores corresponding to URLs
-            product_type: Optional product type hint
-
-        Returns:
-            List of dictionaries with specs for each PDF (top 5 by score)
+        Downloads all 20 URLs in parallel, selects top 5 valid PDFs by score,
+        extracts specs with AI, normalizes keys, and selects top 5 specs by coverage.
         """
-        import asyncio
-        import time
-
         print(f"\n=== STARTING PARALLEL PDF SCRAPING FOR {len(urls)} URLS ===")
         parallel_start = time.time()
 
-        # First pass: Download all PDFs and extract markdown IN PARALLEL
+        # STEP 1: Download all PDFs and extract markdown IN PARALLEL
         failed_results = []
-        spec_extractable_results = []
+        successful_results = []
 
-        # Create parallel tasks for all PDFs
         tasks = []
         for url, score in zip(urls, scores):
-            task = self.scrape_pdf(url=url, product_type=product_type, extract_specs=False)
+            task = self.scrape_pdf(url=url, product_type=product_type)
             tasks.append((task, url, score))
 
-        # Execute all downloads/extractions in parallel
-        print(f"🚀 Processing {len(tasks)} PDFs in parallel...")
+        print(f"Processing {len(tasks)} URLs in parallel...")
         results = await asyncio.gather(*[task for task, _, _ in tasks], return_exceptions=True)
 
-        # Process results
         for i, (result, (_, url, score)) in enumerate(zip(results, tasks), 1):
-            # Handle exceptions from gather
             if isinstance(result, Exception):
                 error_result = {
-                    "url": url,
-                    "score": score,
-                    "md": None,
-                    "specs": {},
-                    "error": str(result)
+                    "url": url, "score": score, "md": None,
+                    "specs": {}, "error": str(result)
                 }
-                print(f"  {i}. ✗ Failed [Score: {score:.3f}]: {str(result)[:80]}")
+                print(f"  {i}. FAIL [Score: {score:.3f}]: {str(result)[:80]}")
                 failed_results.append(error_result)
             elif result.get("error"):
                 result["score"] = score
-                print(f"  {i}. ✗ Failed [Score: {score:.3f}]: {result['error'][:80]}")
+                print(f"  {i}. FAIL [Score: {score:.3f}]: {result['error'][:80]}")
                 failed_results.append(result)
             else:
                 result["score"] = score
                 md_length = len(result.get("md", ""))
-                print(f"  {i}. ✓ Success [Score: {score:.3f}]: {md_length} chars")
-                spec_extractable_results.append(result)
+                print(f"  {i}. OK   [Score: {score:.3f}]: {md_length} chars")
+                successful_results.append(result)
 
         parallel_time = time.time() - parallel_start
-        print(f"\n⚡ Parallel extraction completed in {parallel_time:.2f}s")
-
-        print(f"\n=== PDF EXTRACTION SUMMARY ===")
-        print(f"Successfully extracted: {len(spec_extractable_results)}/{len(urls)} PDFs")
+        print(f"\nParallel download completed in {parallel_time:.2f}s")
+        print(f"Successfully extracted: {len(successful_results)}/{len(urls)} PDFs")
         print(f"Failed: {len(failed_results)}/{len(urls)} PDFs")
 
-        if len(spec_extractable_results) == 0:
+        if len(successful_results) == 0:
             print("ERROR: No valid PDFs could be extracted!")
             return failed_results
 
-        # Sort by score (highest first) and take top 5
-        spec_extractable_results.sort(key=lambda x: x["score"], reverse=True)
-        top_results = spec_extractable_results[:5]
+        # Select top 5 by Exa score
+        successful_results.sort(key=lambda x: x["score"], reverse=True)
+        top_results = successful_results[:5]
 
         print(f"\n=== SELECTING TOP 5 PDFs BY SCORE ===")
         for i, result in enumerate(top_results, 1):
             print(f"  {i}. [Score: {result['score']:.3f}] {result['url'][:80]}...")
 
-        # Need at least 3 valid PDFs to do meaningful comparison
         if len(top_results) < 3:
             print(f"WARNING: Only {len(top_results)} valid PDFs - need at least 3 for comparison")
             print("Returning results without spec extraction")
             return top_results + failed_results
 
-        specs = await self.extract_standardized_specs(
-                    pdf_mds=[res["md"] for res in top_results],
-                    urls=[res["url"] for res in top_results],
-                    product_type=product_type
-                )
+        # STEP 2: AI spec extraction per PDF (semaphore-throttled)
+        print(f"\n=== AI SPEC EXTRACTION (Semaphore(5)) ===")
+        semaphore = asyncio.Semaphore(5)
+        extraction_start = time.time()
 
-        print(f"\n{'='*60}")
-        print(f"EXTRACTING CONTACT URLS FOR {len(specs)} SUPPLIERS")
-        print(f"{'='*60}")
+        async def extract_with_semaphore(result):
+            async with semaphore:
+                md = result.get("md", "")
+                if not md:
+                    return {"error": "No markdown content"}
+                specs = await self.extract_specs(md, product_type)
+                return specs
 
-        successful_results = []
-        for i, spec in enumerate(specs):
-            result = top_results[i]
-            result["specs"] = spec.get("specifications", {})
-            result["manufacturer"] = spec.get("manufacturer", "Unknown")
-            result["product_name"] = spec.get("product_name", "Unknown Product")
-            result["extraction_error"] = spec.get("extraction_error")
+        extraction_tasks = [extract_with_semaphore(r) for r in top_results]
+        extraction_results = await asyncio.gather(*extraction_tasks, return_exceptions=True)
 
-            # Add contact URL (Hybrid approach: derive + verify)
-            print(f"\n[{i+1}/{len(specs)}] Processing: {result['manufacturer']} {result['product_name']}")
-            print(f"  Datasheet URL: {result['url']}")
-
-            # Step 1: Quick fallback - derive from domain
-            derived_url = derive_contact_url(result["url"])
-            result["contact_url"] = derived_url
-            print(f"  ⚡ Derived contact URL: {derived_url}")
-
-            # Step 2: Try to find actual contact page (don't block on failure)
-            try:
-                domain = urlparse(result["url"]).netloc
-                print(f"  🔍 Crawling {domain} homepage for actual contact link...")
-                actual_contact = await find_contact_url(domain, timeout=8)
-                if actual_contact:
-                    result["contact_url"] = actual_contact
-                    print(f"  ✅ Updated to verified contact URL: {actual_contact}")
-                else:
-                    print(f"  ⚠️  No contact link found, using derived URL")
-            except Exception as e:
-                print(f"  ❌ Error crawling homepage: {e}")
-                print(f"  📌 Using derived contact URL as fallback")
-
-            successful_results.append(result)
-
-        print(f"\n{'='*60}")
-        print(f"CONTACT URL EXTRACTION COMPLETE")
-        print(f"{'='*60}\n")
-
-        # Return only the top 5 successful results
-        return successful_results
-
-    async def extract_standardized_specs(self, pdf_mds: List[Optional[str]], urls: List[str], product_type: Optional[str] = None) -> List[Dict]:
-        """
-        THREE-PASS extraction for better spec selection quality:
-        Pass 1: Extract potential specs using REGEX (no AI - fast and free!)
-        Pass 2: AI selects best 5 specs considering search query relevance
-        Pass 3: AI extracts those 5 specs with standardized keys
-
-        Args:
-            pdf_mds: List of extracted PDF markdowns
-            urls: List of PDF URLs for reference
-            product_type: Search query used to find these PDFs (for relevance scoring)
-
-        Returns:
-            List of spec dictionaries with standardized keys
-        """
-        if not any(pdf_mds):
-            print("ERROR: No markdown content to extract specs from")
-            return [{"manufacturer": "Unknown", "product_name": "Unknown", "specifications": {}, "extraction_error": "No PDF content could be extracted - the PDF may be image-only or corrupted"} for _ in pdf_mds]
-
-        print(f"\n{'='*60}")
-        print(f"THREE-PASS SPEC EXTRACTION FOR {len(pdf_mds)} DATASHEETS")
-        print(f"{'='*60}")
-
-        # ===== PASS 1: Extract potential specs with REGEX (no AI) =====
-        print(f"\n📋 PASS 1: Extracting potential specs with regex (no AI)...")
-        pass1_results = []
-
-        for i, md in enumerate(pdf_mds):
-            if not md:
-                pass1_results.append([])
-                continue
-
-            print(f"\n  Processing datasheet {i+1}/{len(pdf_mds)}...")
-            # Use regex to find potential spec lines
-            potential_specs = self.extract_specs_with_regex(md)
-
-            # Remove duplicates while preserving order
-            seen = set()
-            unique_specs = []
-            for spec in potential_specs:
-                if spec not in seen:
-                    seen.add(spec)
-                    unique_specs.append(spec)
-
-            print(f"    ✓ Found {len(unique_specs)} potential spec lines via regex")
-            pass1_results.append(unique_specs)
-
-            # Debug: Save Pass 1 results
-            if self.debug:
-                pass1_file = f"{self.debug_dir}/pass1_regex_datasheet_{i+1}.txt"
-                with open(pass1_file, 'w', encoding='utf-8') as f:
-                    f.write(f"URL: {urls[i] if i < len(urls) else 'Unknown'}\n\n")
-                    f.write(f"Found {len(unique_specs)} potential specs:\n\n")
-                    for spec in unique_specs:
-                        f.write(f"{spec}\n")
-                print(f"      [DEBUG] Saved Pass 1 regex extraction to {pass1_file}")
-
-        # ===== PASS 2: AI selects best 5 specs (considers relevance to search query) =====
-        print(f"\n🎯 PASS 2: AI selecting best 5 specs (considering search query relevance)...")
-
-        # Format regex-extracted specs for AI analysis
-        all_specs_summary = ""
-        for i, spec_list in enumerate(pass1_results):
-            all_specs_summary += f"\nDATASHEET {i+1}:\n"
-            if spec_list:
-                for spec in spec_list[:100]:  # Limit to first 100 to avoid token limits
-                    all_specs_summary += f"  - {spec}\n"
+        for i, (result, extraction) in enumerate(zip(top_results, extraction_results)):
+            if isinstance(extraction, Exception):
+                result["specs"] = {}
+                result["manufacturer"] = "Unknown"
+                result["product_name"] = "Unknown"
+                result["extraction_error"] = str(extraction)
+                print(f"  {i+1}. FAIL: {str(extraction)[:80]}")
+            elif extraction.get("error"):
+                result["specs"] = {}
+                result["manufacturer"] = "Unknown"
+                result["product_name"] = "Unknown"
+                result["extraction_error"] = extraction["error"]
+                print(f"  {i+1}. FAIL: {extraction['error'][:80]}")
             else:
-                all_specs_summary += "  (No specs found)\n"
+                result["specs"] = extraction.get("specifications", {})
+                result["manufacturer"] = extraction.get("manufacturer", "Unknown")
+                result["product_name"] = extraction.get("product_name", "Unknown")
+                specs_count = len(result["specs"])
+                print(f"  {i+1}. OK: {result['manufacturer']} {result['product_name']} ({specs_count} specs)")
 
-        # Require specs to appear in at least 80% of datasheets
-        import math
-        min_coverage = max(3, math.ceil(len(pdf_mds) * 0.8))
+        extraction_time = time.time() - extraction_start
+        print(f"AI extraction completed in {extraction_time:.2f}s")
 
-        # New prompt that considers search query relevance
-        search_query = product_type or "unknown product"
-        prompt = f"""You are analyzing specifications extracted from {len(pdf_mds)} product datasheets.
+        # Filter to results that have specs
+        results_with_specs = [r for r in top_results if r.get("specs") and len(r["specs"]) > 0]
+        if len(results_with_specs) < 3:
+            print(f"WARNING: Only {len(results_with_specs)} PDFs have extracted specs")
+            return top_results
 
-SEARCH QUERY: "{search_query}"
+        # STEP 3: AI normalize synonymous keys
+        print(f"\n=== AI SPEC KEY NORMALIZATION ===")
+        norm_start = time.time()
 
-EXTRACTED SPECS FROM ALL DATASHEETS:
-{all_specs_summary}
+        pdf_keys_text = ""
+        for i, result in enumerate(results_with_specs):
+            keys = list(result["specs"].keys())  # Send ALL keys
+            pdf_keys_text += f"\nPDF {i+1} keys: {', '.join(keys)}\n"
 
-YOUR TASK:
-Select EXACTLY 5 specifications that are best for comparing these products.
-
-SELECTION CRITERIA (in priority order):
-1. **Relevance to Search Query**: Specs related to "{search_query}" are more important
-2. **Common Across All**: Must appear in at least {min_coverage}/{len(pdf_mds)} datasheets
-3. **Functional Relevance**: Directly related to what the product does
-4. **Differentiation**: Values differ across products (helps comparison)
-
-AVOID:
-- Document/revision numbers, dates, catalog numbers
-- Specs that appear in fewer than {min_coverage} datasheets
-- Generic company info
-- Specs unrelated to "{search_query}"
-
-OUTPUT FORMAT:
-Return JSON with "selected_specs" array containing EXACTLY 5 items:
-{{
-  "selected_specs": [
-    {{
-      "standardized_key": "voltage_v",
-      "display_name": "Voltage (V)",
-      "reason": "Core spec for {search_query}, appears in all datasheets",
-      "coverage": "5/5"
-    }},
-    ...
-  ]
-}}
-
-YOU MUST SELECT EXACTLY 5 SPECS - NO MORE, NO LESS.
-Return ONLY valid JSON.
-"""
-
-        try:
-            response_text = await self.ai_client.generate(
-                system_prompt=f"You are a spec selection expert. Analyze specs from {len(pdf_mds)} datasheets and choose the 5 best for comparing products related to '{search_query}'. Prioritize specs relevant to the search query.",
-                user_prompt=prompt,
-                enforce_json=True,
-                json_schema={
-                    "type": "object",
-                    "properties": {
-                        "selected_specs": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "standardized_key": {"type": "string"},
-                                    "display_name": {"type": "string"},
-                                    "reason": {"type": "string"},
-                                    "coverage": {"type": "string"}
-                                },
-                                "required": ["standardized_key", "display_name", "reason", "coverage"]
-                            }
-                        }
-                    },
-                    "required": ["selected_specs"]
-                },
-                max_tokens=1500
-            )
-
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_match:
-                selection = json.loads(json_match.group())
-                selected_specs = selection.get("selected_specs", [])
-
-                print(f"\n  ✓ Selected {len(selected_specs)} specs:")
-                for spec in selected_specs:
-                    print(f"    - {spec['standardized_key']}: {spec['display_name']} [{spec['coverage']}]")
-                    print(f"      Reason: {spec['reason']}")
-
-                # Debug: Save Pass 2 results
-                if self.debug:
-                    pass2_file = f"{self.debug_dir}/pass2_selected_specs.json"
-                    with open(pass2_file, 'w', encoding='utf-8') as f:
-                        json.dump(selection, f, indent=2)
-                    print(f"    [DEBUG] Saved Pass 2 selection to {pass2_file}")
-
-                if len(selected_specs) != 5:
-                    print(f"\n  ⚠️  WARNING: Expected 5 specs, got {len(selected_specs)}")
-
-            else:
-                print(f"  ✗ Failed to parse selection response")
-                selected_specs = []
-
-        except Exception as e:
-            print(f"  ✗ Error in spec selection: {str(e)}")
-            selected_specs = []
-
-        if not selected_specs:
-            print("\n  ⚠️  Falling back to first product's specs...")
-            # Fallback: use specs from first successful regex extraction
-            # pass1_results is a list of lists of spec strings
-            for spec_list in pass1_results:
-                if spec_list and len(spec_list) > 0:
-                    selected_specs = [
-                        {"standardized_key": spec.split(':')[0].strip().lower().replace(' ', '_'),
-                         "display_name": spec.split(':')[0].strip()}
-                        for spec in spec_list[:5]
-                    ]
-                    break
-
-        # ===== PASS 3: Extract selected 5 specs from all datasheets =====
-        print(f"\n📊 PASS 3: Extracting selected specs from all datasheets with standardized keys...")
-
-        # Build datasheets info with original markdown
-        # Use same limit as Pass 1 (20,000 chars) to ensure consistency
-        datasheets_info = ""
-        for i, md in enumerate(pdf_mds):
-            if md:
-                truncated = md[:20000] if len(md) > 20000 else md
-                datasheets_info += f"\n\n=== DATASHEET {i+1} ===\n{truncated}\n=== END DATASHEET {i+1} ===\n"
-
-        # Build selected specs info
-        specs_info = "\n".join([
-            f"{i+1}. {spec['standardized_key']} - {spec.get('display_name', spec['standardized_key'])}"
-            for i, spec in enumerate(selected_specs)
-        ])
-
-        prompt = PASS3_EXTRACT_SELECTED_SPECS_PROMPT.format(
-            selected_specs_info=specs_info,
-            datasheets_with_specs=datasheets_info
+        prompt = NORMALIZE_SPEC_KEYS_PROMPT.format(
+            num_pdfs=len(results_with_specs),
+            pdf_keys=pdf_keys_text
         )
 
         try:
             response_text = await self.ai_client.generate(
-                system_prompt="Extract the specified specs from each datasheet. Be flexible with spec name variations - if looking for 'Operating Temperature', also check 'Temp Range', 'Working Temp', etc. Use the exact standardized keys in your JSON output.",
+                system_prompt="You are an expert at analyzing and comparing product datasheets. You normalize specification names across different datasheets.",
                 user_prompt=prompt,
                 enforce_json=True,
-                json_schema={
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "manufacturer": {"type": "string"},
-                            "product_name": {"type": "string"},
-                            "specifications": {
-                                "type": "object",
-                                "additionalProperties": {"type": "string"}
-                            }
-                        },
-                        "required": ["manufacturer", "product_name", "specifications"]
-                    }
-                },
                 max_tokens=4096
             )
 
-            json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
-                specs_array = json.loads(json_match.group())
-                print(f"\n  ✓ Successfully extracted standardized specs for {len(specs_array)} datasheets")
-
-                for i, spec_obj in enumerate(specs_array):
-                    specs_count = len(spec_obj.get("specifications", {}))
-                    spec_keys = list(spec_obj.get('specifications', {}).keys())
-                    spec_values = spec_obj.get('specifications', {})
-                    print(f"    Datasheet {i+1}: {specs_count} specs - {spec_keys}")
-
-                    # Show which values are N/A
-                    na_specs = [k for k, v in spec_values.items() if v == "N/A"]
-                    if na_specs:
-                        print(f"      ⚠️  N/A values: {na_specs}")
-
-                # Debug: Save Pass 3 results
-                if self.debug:
-                    pass3_file = f"{self.debug_dir}/pass3_final_extraction.json"
-                    with open(pass3_file, 'w', encoding='utf-8') as f:
-                        json.dump(specs_array, f, indent=2)
-                    print(f"\n  [DEBUG] Saved Pass 3 final extraction to {pass3_file}")
-
-                # Ensure we return the right number of results
-                while len(specs_array) < len(pdf_mds):
-                    specs_array.append({"manufacturer": "Unknown", "product_name": "Unknown", "specifications": {}, "extraction_error": "AI returned fewer results than expected - PDF may have been unreadable"})
-
-                print(f"\n{'='*60}")
-                print(f"THREE-PASS EXTRACTION COMPLETE")
-                print(f"{'='*60}\n")
-
-                return specs_array[:len(pdf_mds)]
+                normalization = json.loads(json_match.group())
             else:
-                print(f"  ✗ Failed to parse final extraction")
-                return [{"manufacturer": "Unknown", "product_name": "Unknown", "specifications": {}, "extraction_error": "AI response was not valid JSON - extraction failed"} for _ in pdf_mds]
-
+                print("Failed to parse normalization response")
+                normalization = {}
         except Exception as e:
-            print(f"  ✗ Error in final extraction: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return [{"manufacturer": "Unknown", "product_name": "Unknown", "specifications": {}, "extraction_error": f"Extraction error: {str(e)}"} for _ in pdf_mds]
+            print(f"Error in normalization: {e}")
+            normalization = {}
+
+        norm_time = time.time() - norm_start
+        print(f"Normalization completed in {norm_time:.2f}s")
+        print(f"Found {len(normalization)} standardized spec groups")
+
+        # STEP 3b: Verify AI mappings and build spec sets per PDF
+        print(f"\n=== VERIFYING AI MAPPINGS ===")
+
+        verified_specs = {}
+        for std_key, spec_info in normalization.items():
+            pdf_matches = spec_info.get("pdf_matches", {})
+            display_name = spec_info.get("display_name", std_key)
+            verified_count = 0
+            verified_matches = {}
+
+            for pdf_idx_str, original_key in pdf_matches.items():
+                pdf_idx = int(pdf_idx_str) - 1  # Convert 1-indexed to 0-indexed
+                if pdf_idx < 0 or pdf_idx >= len(results_with_specs):
+                    continue
+
+                pdf_specs = results_with_specs[pdf_idx].get("specs", {})
+
+                # Exact match
+                if original_key in pdf_specs:
+                    verified_count += 1
+                    verified_matches[pdf_idx_str] = original_key
+                else:
+                    # Case-insensitive fallback
+                    lower_key = original_key.lower()
+                    for actual_key in pdf_specs:
+                        if actual_key.lower() == lower_key:
+                            verified_count += 1
+                            verified_matches[pdf_idx_str] = actual_key
+                            break
+
+            if verified_count > 0:
+                verified_specs[std_key] = {
+                    "display_name": display_name,
+                    "pdf_matches": verified_matches,
+                    "coverage": verified_count
+                }
+
+        print(f"Verified {len(verified_specs)} spec groups")
+
+        # Build set of normalized spec keys for each PDF
+        pdf_spec_sets = {}
+        for i, result in enumerate(results_with_specs):
+            pdf_idx_str = str(i + 1)
+            pdf_spec_sets[pdf_idx_str] = set()
+            for std_key, info in verified_specs.items():
+                if pdf_idx_str in info["pdf_matches"]:
+                    pdf_spec_sets[pdf_idx_str].add(std_key)
+
+        for pdf_idx_str, spec_set in pdf_spec_sets.items():
+            print(f"  PDF {pdf_idx_str}: {len(spec_set)} normalized specs")
+
+        # STEP 3c: Filter results by spec commonality with ALL other results
+        print(f"\n=== FILTERING RESULTS BY SPEC COMMONALITY (4+ with ALL others) ===")
+
+        MIN_COMMON_SPECS = 4
+        remaining_indices = list(range(len(results_with_specs)))
+
+        # Iteratively remove results that don't share 4+ specs with ALL other remaining results
+        changed = True
+        while changed:
+            changed = False
+            indices_to_remove = []
+
+            for i in remaining_indices:
+                pdf_idx_str_i = str(i + 1)
+                specs_i = pdf_spec_sets[pdf_idx_str_i]
+
+                # Check commonality with ALL other remaining results
+                meets_threshold = True
+                for j in remaining_indices:
+                    if i == j:
+                        continue
+                    pdf_idx_str_j = str(j + 1)
+                    specs_j = pdf_spec_sets[pdf_idx_str_j]
+                    common_specs = specs_i & specs_j
+                    if len(common_specs) < MIN_COMMON_SPECS:
+                        meets_threshold = False
+                        break
+
+                if not meets_threshold:
+                    indices_to_remove.append(i)
+
+            if indices_to_remove:
+                changed = True
+                for idx in indices_to_remove:
+                    remaining_indices.remove(idx)
+                    print(f"  Removed PDF {idx + 1} (insufficient commonality)")
+
+        print(f"\n  Remaining after filtering: {len(remaining_indices)} results")
+        for idx in remaining_indices:
+            print(f"    - PDF {idx + 1}: {results_with_specs[idx]['url'][:60]}...")
+
+        # Get filtered results
+        filtered_results = [results_with_specs[i] for i in remaining_indices]
+
+        if len(filtered_results) == 0:
+            print("WARNING: All results filtered out! Keeping original results.")
+            filtered_results = results_with_specs
+
+        # STEP 3d: Collect ALL specs that appear across the filtered results
+        print(f"\n=== COLLECTING ALL COMMON SPECS ===")
+
+        # Get spec keys present in at least one filtered result
+        filtered_pdf_indices = [str(i + 1) for i in remaining_indices] if remaining_indices else [str(i + 1) for i in range(len(results_with_specs))]
+
+        selected_specs = []
+        for std_key, info in verified_specs.items():
+            # Check if this spec appears in at least one filtered result
+            has_match = any(pdf_idx in info["pdf_matches"] for pdf_idx in filtered_pdf_indices)
+            if has_match:
+                selected_specs.append((std_key, info))
+
+        print(f"Selected {len(selected_specs)} specs for output")
+
+        # STEP 3e: Build final results with standardized keys
+        print(f"\n=== BUILDING FINAL RESULTS ===")
+
+        final_results = []
+        for result in filtered_results:
+            pdf_specs = result.get("specs", {})
+            standardized_specs = {}
+
+            # Find which PDF index this result was in the original results_with_specs
+            result_idx = results_with_specs.index(result)
+            pdf_idx_str = str(result_idx + 1)  # 1-indexed
+
+            for std_key, info in selected_specs:
+                original_key = info["pdf_matches"].get(pdf_idx_str)
+                if original_key and original_key in pdf_specs:
+                    standardized_specs[info["display_name"]] = pdf_specs[original_key]
+                else:
+                    # Try case-insensitive match
+                    found = False
+                    if original_key:
+                        lower_key = original_key.lower()
+                        for actual_key in pdf_specs:
+                            if actual_key.lower() == lower_key:
+                                standardized_specs[info["display_name"]] = pdf_specs[actual_key]
+                                found = True
+                                break
+                    if not found:
+                        standardized_specs[info["display_name"]] = "N/A"
+
+            result["specs"] = standardized_specs
+            # Remove markdown from response to save bandwidth
+            result.pop("md", None)
+            result.pop("score", None)
+            final_results.append(result)
+
+        # STEP 4: Contact URL extraction (parallel)
+        print(f"\n=== EXTRACTING CONTACT URLS ===")
+
+        async def get_contact_url(result):
+            derived_url = derive_contact_url(result["url"])
+            result["contact_url"] = derived_url
+            try:
+                domain = urlparse(result["url"]).netloc
+                actual_contact = await find_contact_url(domain, timeout=8)
+                if actual_contact:
+                    result["contact_url"] = actual_contact
+            except:
+                pass
+
+        contact_tasks = [get_contact_url(r) for r in final_results]
+        await asyncio.gather(*contact_tasks, return_exceptions=True)
+
+        print(f"\n=== PIPELINE COMPLETE: {len(final_results)} results ===")
+        return final_results
