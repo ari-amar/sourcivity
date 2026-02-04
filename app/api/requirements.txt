@@ -4,7 +4,7 @@ python-dotenv
 httpx
 requests
 pymupdf
-pymupdf4llm
+markitdown[all]
 beautifulsoup4
 exa-py
 anthropic

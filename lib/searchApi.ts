@@ -89,7 +89,6 @@ async function fetchColumnDeterminationAndSearch(params: TextSearchParams): Prom
     },
     body: JSON.stringify({
       query: params.query,
-      generate_ai_search_prompt: true,
       search_engine_client_name: 'exa',
       ai_client_name: 'anthropic',
     }),

@@ -111,3 +111,52 @@ Return a JSON object:
 
 Return ONLY valid JSON, no other text.
 """
+
+# Generate category-defining phrase for search filtering
+# NOTE: Exa only supports ONE phrase of up to 5 words for include_text
+CATEGORY_TERMS_PROMPT = """
+You are an industrial product expert. For the product type "{product_query}", create a SHORT technical phrase (2-5 words) that would ONLY appear in datasheets for this EXACT product category.
+
+This phrase will be used to filter search results, so it must be:
+1. SPECIFIC to this product type (not general terms)
+2. A technical term or phrase from specification tables
+3. Maximum 5 words (Exa API limit)
+
+## Examples
+
+Product: "mass flow controller"
+Phrase: "flow rate sccm"
+Reasoning: sccm (standard cubic centimeters per minute) is specific to gas flow devices
+
+Product: "linear ball bearing"
+Phrase: "dynamic load rating"
+Reasoning: Load ratings are specific to bearings, not shafts or guides
+
+Product: "servo motor"
+Phrase: "torque constant"
+Reasoning: Torque constant (Kt) is a servo-specific specification
+
+Product: "pressure transmitter"
+Phrase: "pressure range bar"
+Reasoning: Specific to pressure measurement devices
+
+Product: "pneumatic valve"
+Phrase: "flow coefficient Cv"
+Reasoning: Cv rating is specific to valves
+
+Product: "stepper motor"
+Phrase: "holding torque"
+Reasoning: Holding torque is stepper-specific, not found in servo specs
+
+## Your Task
+
+Product: "{product_query}"
+
+Return JSON with ONE phrase (2-5 words max):
+{{
+  "phrase": "your technical phrase here",
+  "reasoning": "Brief explanation"
+}}
+
+Return ONLY valid JSON, no other text.
+"""

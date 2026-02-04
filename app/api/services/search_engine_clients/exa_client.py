@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from exa_py import Exa
 from services.interfaces.search_engine_client_base import SearchEngineClientBase
 from models import SearchEngineClientResponse, SearchEngineResult
@@ -25,29 +25,34 @@ class ExaClient(SearchEngineClientBase):
 		self.exa = Exa(api_key=api_key)
 		self.search_type = search_type
 
-	async def _search(self, query: str, max_results: int = 10) -> SearchEngineClientResponse:
+	async def _search(self, query: str, max_results: int = 10, include_text: Optional[List[str]] = None) -> SearchEngineClientResponse:
 		"""
 		Search using Exa API.
 
 		Args:
 			query: Search query
 			max_results: Maximum number of results to return
+			include_text: Optional list of terms that MUST appear in results (filters by product category)
 
 		Returns:
 			dict: Search results with 'results' list containing title, url, score, and optional text
 		"""
 		try:
+			# Build search parameters
+			search_params = {
+				"query": query,
+				"type": self.search_type,
+				"num_results": max_results,
+				"contents": False  # Don't fetch page contents - we extract PDFs directly
+			}
+
+			# Add include_text filter if provided (forces category consistency)
+			if include_text and len(include_text) > 0:
+				search_params["include_text"] = include_text
+				print(f"[Exa] Using include_text filter: {include_text}")
+
 			# Exa search is synchronous, but we're in async context
-			# Note: If Exa adds async support, we can use that instead
-			# IMPORTANT: contents=False to avoid fetching page text (saves tokens and is unnecessary)
-			# We download the PDFs directly and extract markdown ourselves
-			results = self.exa.search(
-				query,
-				type=self.search_type,
-				num_results=max_results,
-				category="pdf",
-				contents=False  # Don't fetch page contents - we extract PDFs directly
-			)
+			results = self.exa.search(**search_params)
 
 			# Log score summary for verification
 			if results.results:

@@ -25,8 +25,10 @@ is_vercel = os.getenv("VERCEL") == "1"
 cors_origins = [
     "http://localhost:3000",  # Next.js default development server
     "http://localhost:3001",  # Alternative Next.js port
+    "http://localhost:3002",  # Alternative Next.js port
     "http://127.0.0.1:3000",
     "http://127.0.0.1:3001",
+    "http://127.0.0.1:3002",
 ]
 
 # Add Vercel deployment URLs if available
@@ -133,7 +135,7 @@ async def api_search_parts(payload: PartSearchRequest) -> PartSearchResponse:
 	print(f"Query: {payload.query}")
 	print(f"AI Client: {payload.ai_client_name}")
 	print(f"Search Engine: {payload.search_engine_client_name}")
-	print(f"Generate AI Prompt: {payload.generate_ai_search_prompt}")
+
 
 	search_response =  await search_parts(
 		request=payload,
