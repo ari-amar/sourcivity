@@ -44,9 +44,8 @@ pip3 install -r requirements.txt 2>/dev/null || echo "⚠️  No requirements.tx
 echo ""
 echo "✅ Starting backend server on http://localhost:8000..."
 cd "$SCRIPT_DIR/app/api"
-python3 -u main.py 2>&1 | while IFS= read -r line; do
-    echo -e "\033[0;36m[BACKEND]\033[0m $line"
-done &
+# -u flag ensures unbuffered Python output, sed adds colored prefix
+PYTHONUNBUFFERED=1 python3 -u main.py 2>&1 | sed -l 's/^/[BACKEND] /' &
 BACKEND_PID=$!
 
 # Wait for backend to start
@@ -54,9 +53,7 @@ sleep 3
 
 echo "✅ Starting frontend server on http://localhost:3000..."
 cd "$SCRIPT_DIR"
-npm run dev 2>&1 | while IFS= read -r line; do
-    echo -e "\033[0;33m[FRONTEND]\033[0m $line"
-done &
+npm run dev 2>&1 | sed -l 's/^/[FRONTEND] /' &
 FRONTEND_PID=$!
 
 echo ""
