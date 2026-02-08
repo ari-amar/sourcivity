@@ -74,8 +74,8 @@ async def search_parts(request: PartSearchRequest, ai_client: AiClientBase, sear
 	print(f"Scrape results: {len(scrape_results)} items")
 	for i, result in enumerate(scrape_results):
 		specs_count = len(result.get('specs', {})) if result.get('specs') else 0
-		has_error = 'error' in result
-		print(f"  {i+1}. URL: {result.get('url', 'N/A')[:50]}... Specs: {specs_count}, Error: {has_error}")
+		error_msg = result.get('error')
+		print(f"  {i+1}. URL: {result.get('url', 'N/A')[:50]}... Specs: {specs_count}, Error: {error_msg or 'None'}")
 
 	# Convert dict results to PartResponse models
 	part_responses: List[PartResponse] = [PartResponse(**result) for result in scrape_results]
