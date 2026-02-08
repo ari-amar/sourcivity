@@ -80,6 +80,12 @@ async function fetchPhotoAnalysis(params: PhotoSearchParams): Promise<PhotoAnaly
 async function fetchColumnDeterminationAndSearch(params: TextSearchParams): Promise<SearchResultsData> {
   const startTime = performance.now();
 
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🔍 PARTS SEARCH REQUEST');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`   Query: "${params.query}"`);
+  console.log(`   Backend URL: ${BACKEND_URL}/api/search/parts`);
+
   // Call the backend API for search with AI-generated columns
   const fetchStartTime = performance.now();
   const response = await fetch(`${BACKEND_URL}/api/search/parts`, {
@@ -96,7 +102,10 @@ async function fetchColumnDeterminationAndSearch(params: TextSearchParams): Prom
   const fetchEndTime = performance.now();
   const networkTime = fetchEndTime - fetchStartTime;
 
+  console.log(`   Response Status: ${response.status} ${response.statusText}`);
+
   if (!response.ok) {
+    console.error(`   ❌ Search failed: ${response.status}`);
     throw new Error(`Search failed: ${response.status}`);
   }
 
@@ -113,14 +122,43 @@ async function fetchColumnDeterminationAndSearch(params: TextSearchParams): Prom
 
   const totalTime = performance.now() - startTime;
 
-  // Log performance metrics
-  console.log('🔍 Parts Search Performance:', {
-    total: `${totalTime.toFixed(2)}ms`,
-    network: `${networkTime.toFixed(2)}ms`,
-    parse: `${parseTime.toFixed(2)}ms`,
-    transform: `${transformTime.toFixed(2)}ms`,
-    backend: data.timing || 'N/A'
+  // Log detailed response data
+  console.log('');
+  console.log('📦 BACKEND RESPONSE:');
+  console.log(`   Parts Count: ${data.parts?.length || 0}`);
+  console.log(`   Spec Columns: ${data.spec_column_names?.length || 0}`);
+  if (data.spec_column_names?.length > 0) {
+    console.log(`   Columns: [${data.spec_column_names.slice(0, 5).join(', ')}${data.spec_column_names.length > 5 ? '...' : ''}]`);
+  }
+
+  // Log each part with specs
+  console.log('');
+  console.log('📋 PRODUCTS WITH SPECS:');
+  data.parts?.forEach((part: any, i: number) => {
+    const specsCount = Object.keys(part.specs || {}).length;
+    const filledSpecs = Object.values(part.specs || {}).filter((v: any) => v && v !== 'N/A').length;
+    console.log(`   ${i + 1}. ${part.manufacturer || 'Unknown'} - ${part.product_name || 'Unknown'}`);
+    console.log(`      URL: ${part.url?.substring(0, 60)}...`);
+    console.log(`      Specs: ${filledSpecs}/${specsCount} filled`);
+    if (part.error) {
+      console.log(`      ⚠️ Error: ${part.error}`);
+    }
   });
+
+  // Log performance metrics
+  console.log('');
+  console.log('⏱️ PERFORMANCE:');
+  console.log(`   Total: ${totalTime.toFixed(0)}ms`);
+  console.log(`   Network: ${networkTime.toFixed(0)}ms`);
+  console.log(`   Parse: ${parseTime.toFixed(0)}ms`);
+  console.log(`   Transform: ${transformTime.toFixed(0)}ms`);
+  if (data.timing) {
+    console.log(`   Backend Total: ${(data.timing.total * 1000).toFixed(0)}ms`);
+    console.log(`   Backend Search: ${(data.timing.search_engine * 1000).toFixed(0)}ms`);
+    console.log(`   Backend PDF: ${(data.timing.pdf_processing * 1000).toFixed(0)}ms`);
+  }
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('');
 
   return {
     response: markdownTable,

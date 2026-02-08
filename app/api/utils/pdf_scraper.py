@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PDF Scraper for extracting specifications from datasheets using MarkItDown and Claude.
+PDF Scraper for extracting specifications from datasheets using Docling and Claude.
 """
 
 import asyncio
@@ -15,10 +15,68 @@ from urllib.parse import urlparse, urljoin
 import requests
 import fitz  # PyMuPDF - used only for page count validation
 from bs4 import BeautifulSoup
-from markitdown import MarkItDown
+from pdf2markdown4llm import PDF2Markdown4LLM
 
-from prompts import SINGLE_PDF_SPEC_EXTRACTION_PROMPT, NORMALIZE_SPEC_KEYS_PROMPT
+from prompts import SINGLE_PDF_SPEC_EXTRACTION_PROMPT, BATCHED_SPEC_EXTRACTION_PROMPT
 from services.interfaces import AiClientBase
+
+
+def repair_json(text: str) -> str:
+    """Attempt to fix common JSON formatting issues from LLM output."""
+    # Remove any text before first { and after last }
+    start = text.find('{')
+    end = text.rfind('}')
+    if start == -1 or end == -1:
+        return text
+    text = text[start:end + 1]
+
+    # Fix trailing commas before } or ]
+    text = re.sub(r',(\s*[}\]])', r'\1', text)
+
+    # Fix missing commas between objects/arrays
+    text = re.sub(r'}\s*{', '},{', text)
+    text = re.sub(r']\s*\[', '],[', text)
+
+    # Fix unescaped newlines in strings (common LLM issue)
+    # This is tricky - try to handle simple cases
+    lines = text.split('\n')
+    result_lines = []
+    for line in lines:
+        result_lines.append(line)
+    text = '\n'.join(result_lines)
+
+    return text
+
+
+def safe_parse_json(text: str) -> Optional[dict]:
+    """Try to parse JSON with repair attempts."""
+    # First try direct parse
+    try:
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+    except json.JSONDecodeError:
+        pass
+
+    # Try with repair
+    try:
+        repaired = repair_json(text)
+        return json.loads(repaired)
+    except json.JSONDecodeError:
+        pass
+
+    # Try to extract just the products array if full parse fails
+    try:
+        # Look for products array
+        products_match = re.search(r'"products"\s*:\s*\[(.*?)\]', text, re.DOTALL)
+        if products_match:
+            products_str = '[' + products_match.group(1) + ']'
+            products_str = repair_json('{"products":' + products_str + '}')
+            return json.loads(products_str)
+    except json.JSONDecodeError:
+        pass
+
+    return None
 
 
 def derive_contact_url(datasheet_url: str) -> str:
@@ -86,18 +144,15 @@ class PDFScraper:
     def __init__(self, ai_client: AiClientBase, debug: bool = False):
         self.ai_client = ai_client
         self.debug = debug
-        self.markitdown = MarkItDown()
+        self.converter = PDF2Markdown4LLM(skip_empty_tables=True)
 
         if self.debug:
             self.debug_dir = "debug_extraction"
             os.makedirs(self.debug_dir, exist_ok=True)
             print(f"DEBUG MODE ENABLED - outputs will be saved to {self.debug_dir}/")
 
-    def download_pdf(self, url: str) -> bytes:
-        """
-        Download content from URL. If it's a PDF (%PDF header), return it.
-        If it's HTML, scan for up to 3 PDF links and follow them.
-        """
+    def _sync_download_pdf(self, url: str) -> bytes:
+        """Synchronous PDF download (runs in thread pool)."""
         try:
             response = requests.get(url, timeout=30, headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -150,35 +205,39 @@ class PDFScraper:
         except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to download from {url}: {str(e)}")
 
+    async def download_pdf(self, url: str) -> bytes:
+        """Download PDF from URL (runs in thread pool for parallelism)."""
+        return await asyncio.to_thread(self._sync_download_pdf, url)
+
     def validate_page_count(self, pdf_content: bytes) -> int:
-        """Check page count using PyMuPDF. Reject PDFs with more than 10 pages."""
+        """Check page count using PyMuPDF. Reject PDFs with more than 20 pages."""
         with fitz.open(stream=pdf_content) as doc:
             page_count = len(doc)
             if page_count == 0:
                 raise ValueError("PDF has no pages")
-            if page_count > 10:
-                raise ValueError(f"PDF has {page_count} pages (max 10)")
+            if page_count > 20:
+                raise ValueError(f"PDF has {page_count} pages (max 20)")
             return page_count
 
-    def extract_markdown_from_pdf(self, pdf_content: bytes) -> str:
-        """
-        Convert PDF to markdown using MarkItDown.
-        """
-        # Write to temp file since markitdown works with file paths
+    def _sync_extract_markdown(self, pdf_content: bytes) -> str:
+        """Synchronous PDF to markdown conversion (runs in thread pool)."""
         with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
             tmp.write(pdf_content)
             tmp_path = tmp.name
 
         try:
-            result = self.markitdown.convert(tmp_path)
-            md_text = result.text_content
-
+            md_text = self.converter.convert(tmp_path)
             if not md_text or len(md_text.strip()) < 100:
                 raise ValueError(f"PDF extraction produced no meaningful content (only {len(md_text or '')} chars)")
-
             return md_text
         finally:
             os.unlink(tmp_path)
+
+    async def extract_markdown_from_pdf(self, pdf_content: bytes) -> str:
+        """
+        Convert PDF to markdown using Docling (runs in thread pool for parallelism).
+        """
+        return await asyncio.to_thread(self._sync_extract_markdown, pdf_content)
 
     async def extract_specs(self, pdf_md: str, product_type: Optional[str] = None) -> Dict:
         """
@@ -234,15 +293,15 @@ class PDFScraper:
         }
 
         try:
-            # Download (with HTML fallback)
-            pdf_content = self.download_pdf(url)
+            # Download (with HTML fallback) - async for parallelism
+            pdf_content = await self.download_pdf(url)
 
             # Validate page count
             page_count = self.validate_page_count(pdf_content)
             print(f"    PDF has {page_count} pages")
 
-            # Convert to markdown via markitdown
-            pdf_md = self.extract_markdown_from_pdf(pdf_content)
+            # Convert to markdown via docling (async for parallelism)
+            pdf_md = await self.extract_markdown_from_pdf(pdf_content)
 
             if not pdf_md.strip():
                 raise ValueError(f"No markdown could be extracted from pdf at {url}")
@@ -267,8 +326,8 @@ class PDFScraper:
     async def scrape_multiple(self, urls: List[str], scores: List[float], product_type: Optional[str] = "") -> List[Dict]:
         """
         Scrape multiple PDFs and return their specs with standardized keys.
-        Downloads all 20 URLs in parallel, selects top 5 valid PDFs by score,
-        extracts specs with AI, normalizes keys, and selects top 5 specs by coverage.
+        Downloads all URLs in parallel, extracts specs with AI from all valid PDFs,
+        normalizes keys, and finds common specs across all products.
         """
         print(f"\n=== STARTING PARALLEL PDF SCRAPING FOR {len(urls)} URLS ===")
         parallel_start = time.time()
@@ -312,215 +371,148 @@ class PDFScraper:
             print("ERROR: No valid PDFs could be extracted!")
             return failed_results
 
-        # Select top 5 by Exa score
-        successful_results.sort(key=lambda x: x["score"], reverse=True)
-        top_results = successful_results[:5]
-
-        print(f"\n=== SELECTING TOP 5 PDFs BY SCORE ===")
-        for i, result in enumerate(top_results, 1):
-            print(f"  {i}. [Score: {result['score']:.3f}] {result['url'][:80]}...")
-
-        if len(top_results) < 3:
-            print(f"WARNING: Only {len(top_results)} valid PDFs - need at least 3 for comparison")
+        if len(successful_results) < 3:
+            print(f"WARNING: Only {len(successful_results)} valid PDFs - need at least 3 for comparison")
             print("Returning results without spec extraction")
-            return top_results + failed_results
+            return successful_results + failed_results
 
-        # STEP 2: AI spec extraction per PDF (semaphore-throttled)
-        print(f"\n=== AI SPEC EXTRACTION (Semaphore(5)) ===")
-        semaphore = asyncio.Semaphore(5)
+        # STEP 2: Batched AI call for extraction + normalization
+        # Try full batch first, fall back to smaller batches if JSON parsing fails
+        print(f"\n=== BATCHED AI EXTRACTION FOR {len(successful_results)} PDFs ===")
         extraction_start = time.time()
 
-        async def extract_with_semaphore(result):
-            async with semaphore:
-                md = result.get("md", "")
-                if not md:
-                    return {"error": "No markdown content"}
-                specs = await self.extract_specs(md, product_type)
-                return specs
+        async def extract_batch(batch_results: List[Dict], batch_offset: int = 0) -> bool:
+            """Extract specs from a batch of PDFs. Returns True if successful."""
+            # Calculate chars per PDF to stay under 100K total context
+            MAX_TOTAL_CHARS = 100000
+            chars_per_pdf = min(8000, MAX_TOTAL_CHARS // len(batch_results))
+            print(f"  Processing batch of {len(batch_results)} PDFs ({chars_per_pdf} chars each)")
 
-        extraction_tasks = [extract_with_semaphore(r) for r in top_results]
-        extraction_results = await asyncio.gather(*extraction_tasks, return_exceptions=True)
+            # Build combined prompt
+            pdf_contents = ""
+            for i, result in enumerate(batch_results, 1):
+                md = result.get("md", "")[:chars_per_pdf]
+                pdf_contents += f"\n--- PDF {i} ---\n{md}\n"
 
-        for i, (result, extraction) in enumerate(zip(top_results, extraction_results)):
-            if isinstance(extraction, Exception):
-                result["specs"] = {}
-                result["manufacturer"] = "Unknown"
-                result["product_name"] = "Unknown"
-                result["extraction_error"] = str(extraction)
-                print(f"  {i+1}. FAIL: {str(extraction)[:80]}")
-            elif extraction.get("error"):
-                result["specs"] = {}
-                result["manufacturer"] = "Unknown"
-                result["product_name"] = "Unknown"
-                result["extraction_error"] = extraction["error"]
-                print(f"  {i+1}. FAIL: {extraction['error'][:80]}")
-            else:
-                result["specs"] = extraction.get("specifications", {})
-                result["manufacturer"] = extraction.get("manufacturer", "Unknown")
-                result["product_name"] = extraction.get("product_name", "Unknown")
-                specs_count = len(result["specs"])
-                print(f"  {i+1}. OK: {result['manufacturer']} {result['product_name']} ({specs_count} specs)")
-
-        extraction_time = time.time() - extraction_start
-        print(f"AI extraction completed in {extraction_time:.2f}s")
-
-        # Filter to results that have specs
-        results_with_specs = [r for r in top_results if r.get("specs") and len(r["specs"]) > 0]
-        if len(results_with_specs) < 3:
-            print(f"WARNING: Only {len(results_with_specs)} PDFs have extracted specs")
-            return top_results
-
-        # STEP 3: AI normalize synonymous keys
-        print(f"\n=== AI SPEC KEY NORMALIZATION ===")
-        norm_start = time.time()
-
-        pdf_keys_text = ""
-        for i, result in enumerate(results_with_specs):
-            keys = list(result["specs"].keys())  # Send ALL keys
-            pdf_keys_text += f"\nPDF {i+1} keys: {', '.join(keys)}\n"
-
-        prompt = NORMALIZE_SPEC_KEYS_PROMPT.format(
-            num_pdfs=len(results_with_specs),
-            pdf_keys=pdf_keys_text
-        )
-
-        try:
-            response_text = await self.ai_client.generate(
-                system_prompt="You are an expert at analyzing and comparing product datasheets. You normalize specification names across different datasheets.",
-                user_prompt=prompt,
-                enforce_json=True,
-                max_tokens=4096
+            product_hint = f"These are datasheets for {product_type}." if product_type else ""
+            prompt = BATCHED_SPEC_EXTRACTION_PROMPT.format(
+                product_hint=product_hint,
+                num_pdfs=len(batch_results),
+                pdf_contents=pdf_contents
             )
 
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_match:
-                normalization = json.loads(json_match.group())
-            else:
-                print("Failed to parse normalization response")
-                normalization = {}
-        except Exception as e:
-            print(f"Error in normalization: {e}")
-            normalization = {}
+            try:
+                response_text = await self.ai_client.generate(
+                    system_prompt="You extract and normalize specs from multiple datasheets.",
+                    user_prompt=prompt,
+                    enforce_json=True,
+                    max_tokens=4096
+                )
 
-        norm_time = time.time() - norm_start
-        print(f"Normalization completed in {norm_time:.2f}s")
-        print(f"Found {len(normalization)} standardized spec groups")
-
-        # STEP 3b: Verify AI mappings and build spec sets per PDF
-        print(f"\n=== VERIFYING AI MAPPINGS ===")
-
-        verified_specs = {}
-        for std_key, spec_info in normalization.items():
-            pdf_matches = spec_info.get("pdf_matches", {})
-            display_name = spec_info.get("display_name", std_key)
-            verified_count = 0
-            verified_matches = {}
-
-            for pdf_idx_str, original_key in pdf_matches.items():
-                pdf_idx = int(pdf_idx_str) - 1  # Convert 1-indexed to 0-indexed
-                if pdf_idx < 0 or pdf_idx >= len(results_with_specs):
-                    continue
-
-                pdf_specs = results_with_specs[pdf_idx].get("specs", {})
-
-                # Exact match
-                if original_key in pdf_specs:
-                    verified_count += 1
-                    verified_matches[pdf_idx_str] = original_key
+                # Parse response with repair attempts
+                parsed = safe_parse_json(response_text)
+                if parsed:
+                    for product in parsed.get("products", []):
+                        idx = product.get("pdf_index", 0) - 1
+                        if 0 <= idx < len(batch_results):
+                            batch_results[idx]["manufacturer"] = product.get("manufacturer", "Unknown")
+                            batch_results[idx]["product_name"] = product.get("product_name", "Unknown")
+                            batch_results[idx]["specs"] = product.get("specs", {})
+                            specs_count = len(batch_results[idx]["specs"])
+                            global_idx = batch_offset + idx + 1
+                            print(f"  {global_idx}. OK: {batch_results[idx]['manufacturer']} {batch_results[idx]['product_name']} ({specs_count} specs)")
+                    return True
                 else:
-                    # Case-insensitive fallback
-                    lower_key = original_key.lower()
-                    for actual_key in pdf_specs:
-                        if actual_key.lower() == lower_key:
-                            verified_count += 1
-                            verified_matches[pdf_idx_str] = actual_key
-                            break
+                    print(f"  ERROR: Failed to parse JSON response")
+                    return False
 
-            if verified_count > 0:
-                verified_specs[std_key] = {
-                    "display_name": display_name,
-                    "pdf_matches": verified_matches,
-                    "coverage": verified_count
-                }
+            except Exception as e:
+                print(f"  ERROR: Batch extraction failed: {e}")
+                return False
 
-        print(f"Verified {len(verified_specs)} spec groups")
+        # Try full batch first
+        success = await extract_batch(successful_results)
 
-        # Build set of normalized spec keys for each PDF
-        pdf_spec_sets = {}
-        for i, result in enumerate(results_with_specs):
-            pdf_idx_str = str(i + 1)
-            pdf_spec_sets[pdf_idx_str] = set()
-            for std_key, info in verified_specs.items():
-                if pdf_idx_str in info["pdf_matches"]:
-                    pdf_spec_sets[pdf_idx_str].add(std_key)
+        # If full batch failed, try smaller batches
+        if not success and len(successful_results) > 3:
+            print(f"\n  Retrying with smaller batches...")
+            BATCH_SIZE = 5
+            all_success = True
+            for i in range(0, len(successful_results), BATCH_SIZE):
+                batch = successful_results[i:i + BATCH_SIZE]
+                batch_success = await extract_batch(batch, batch_offset=i)
+                if not batch_success:
+                    all_success = False
+                    # Mark failed batch items
+                    for result in batch:
+                        if not result.get("specs"):
+                            result["specs"] = {}
+                            result["manufacturer"] = "Unknown"
+                            result["product_name"] = "Unknown"
 
-        for pdf_idx_str, spec_set in pdf_spec_sets.items():
-            print(f"  PDF {pdf_idx_str}: {len(spec_set)} normalized specs")
+        # Mark any remaining items without specs
+        for result in successful_results:
+            if "specs" not in result:
+                result["specs"] = {}
+                result["manufacturer"] = "Unknown"
+                result["product_name"] = "Unknown"
 
-        # STEP 3c: Filter results by spec commonality with ALL other results
-        print(f"\n=== FILTERING RESULTS BY SPEC COMMONALITY (4+ with ALL others) ===")
+        extraction_time = time.time() - extraction_start
+        print(f"Batched extraction completed in {extraction_time:.2f}s")
 
-        MIN_COMMON_SPECS = 4
-        remaining_indices = list(range(len(results_with_specs)))
+        # Filter to results that have specs
+        results_with_specs = [r for r in successful_results if r.get("specs") and len(r["specs"]) > 0]
+        if len(results_with_specs) < 3:
+            print(f"WARNING: Only {len(results_with_specs)} PDFs have extracted specs")
+            return successful_results
 
-        # Iteratively remove results that don't share 4+ specs with ALL other remaining results
-        changed = True
-        while changed:
-            changed = False
-            indices_to_remove = []
+        # STEP 3: Find common specs across all PDFs
+        # Goal: Keep all PDFs, find specs that appear in most/all of them
+        print(f"\n=== FINDING COMMON SPECS ===")
 
-            for i in remaining_indices:
-                pdf_idx_str_i = str(i + 1)
-                specs_i = pdf_spec_sets[pdf_idx_str_i]
+        TARGET_SPECS = 5  # Number of spec columns to target
+        num_pdfs = len(results_with_specs)
 
-                # Check commonality with ALL other remaining results
-                meets_threshold = True
-                for j in remaining_indices:
-                    if i == j:
-                        continue
-                    pdf_idx_str_j = str(j + 1)
-                    specs_j = pdf_spec_sets[pdf_idx_str_j]
-                    common_specs = specs_i & specs_j
-                    if len(common_specs) < MIN_COMMON_SPECS:
-                        meets_threshold = False
-                        break
+        # Count frequency of each spec across all PDFs
+        spec_frequency = {}
+        for result in results_with_specs:
+            for key in result.get("specs", {}).keys():
+                spec_frequency[key] = spec_frequency.get(key, 0) + 1
 
-                if not meets_threshold:
-                    indices_to_remove.append(i)
+        # Group specs by how many PDFs have them
+        specs_by_coverage = {}  # coverage_count -> list of specs
+        for spec, count in spec_frequency.items():
+            if count not in specs_by_coverage:
+                specs_by_coverage[count] = []
+            specs_by_coverage[count].append(spec)
 
-            if indices_to_remove:
-                changed = True
-                for idx in indices_to_remove:
-                    remaining_indices.remove(idx)
-                    print(f"  Removed PDF {idx + 1} (insufficient commonality)")
+        # Build column list: start with specs in all PDFs, work down
+        common_keys = []
+        for coverage in range(num_pdfs, 0, -1):
+            if coverage in specs_by_coverage:
+                specs_at_level = specs_by_coverage[coverage]
+                print(f"  Specs in {coverage}/{num_pdfs} PDFs: {specs_at_level}")
+                for spec in specs_at_level:
+                    if len(common_keys) < TARGET_SPECS:
+                        common_keys.append(spec)
+            if len(common_keys) >= TARGET_SPECS:
+                break
 
-        print(f"\n  Remaining after filtering: {len(remaining_indices)} results")
-        for idx in remaining_indices:
-            print(f"    - PDF {idx + 1}: {results_with_specs[idx]['url'][:60]}...")
+        print(f"\n  Selected {len(common_keys)} spec columns: {common_keys}")
 
-        # Get filtered results
-        filtered_results = [results_with_specs[i] for i in remaining_indices]
+        # All PDFs are included (we built specs around them)
+        filtered_results = results_with_specs
 
-        if len(filtered_results) == 0:
-            print("WARNING: All results filtered out! Keeping original results.")
-            filtered_results = results_with_specs
+        # Calculate fill rate for logging
+        total_cells = len(filtered_results) * len(common_keys)
+        filled_cells = 0
+        for result in filtered_results:
+            pdf_specs = result.get("specs", {})
+            filled_cells += sum(1 for key in common_keys if key in pdf_specs)
+        fill_rate = (filled_cells / total_cells * 100) if total_cells > 0 else 0
+        print(f"  Fill rate: {filled_cells}/{total_cells} cells ({fill_rate:.0f}%)")
 
-        # STEP 3d: Collect ALL specs that appear across the filtered results
-        print(f"\n=== COLLECTING ALL COMMON SPECS ===")
-
-        # Get spec keys present in at least one filtered result
-        filtered_pdf_indices = [str(i + 1) for i in remaining_indices] if remaining_indices else [str(i + 1) for i in range(len(results_with_specs))]
-
-        selected_specs = []
-        for std_key, info in verified_specs.items():
-            # Check if this spec appears in at least one filtered result
-            has_match = any(pdf_idx in info["pdf_matches"] for pdf_idx in filtered_pdf_indices)
-            if has_match:
-                selected_specs.append((std_key, info))
-
-        print(f"Selected {len(selected_specs)} specs for output")
-
-        # STEP 3e: Build final results with standardized keys
+        # STEP 5: Build final results with only common specs
         print(f"\n=== BUILDING FINAL RESULTS ===")
 
         final_results = []
@@ -528,49 +520,19 @@ class PDFScraper:
             pdf_specs = result.get("specs", {})
             standardized_specs = {}
 
-            # Find which PDF index this result was in the original results_with_specs
-            result_idx = results_with_specs.index(result)
-            pdf_idx_str = str(result_idx + 1)  # 1-indexed
-
-            for std_key, info in selected_specs:
-                original_key = info["pdf_matches"].get(pdf_idx_str)
-                if original_key and original_key in pdf_specs:
-                    standardized_specs[info["display_name"]] = pdf_specs[original_key]
-                else:
-                    # Try case-insensitive match
-                    found = False
-                    if original_key:
-                        lower_key = original_key.lower()
-                        for actual_key in pdf_specs:
-                            if actual_key.lower() == lower_key:
-                                standardized_specs[info["display_name"]] = pdf_specs[actual_key]
-                                found = True
-                                break
-                    if not found:
-                        standardized_specs[info["display_name"]] = "N/A"
+            for key in common_keys:
+                standardized_specs[key] = pdf_specs.get(key, "N/A")
 
             result["specs"] = standardized_specs
-            # Remove markdown from response to save bandwidth
             result.pop("md", None)
             result.pop("score", None)
             final_results.append(result)
+            print(f"  {result.get('product_name', 'Unknown')}: {len([v for v in standardized_specs.values() if v != 'N/A'])}/{len(standardized_specs)} specs filled")
 
-        # STEP 4: Contact URL extraction (parallel)
+        # STEP 5: Contact URL extraction (fast derived URLs only, skip crawling)
         print(f"\n=== EXTRACTING CONTACT URLS ===")
-
-        async def get_contact_url(result):
-            derived_url = derive_contact_url(result["url"])
-            result["contact_url"] = derived_url
-            try:
-                domain = urlparse(result["url"]).netloc
-                actual_contact = await find_contact_url(domain, timeout=8)
-                if actual_contact:
-                    result["contact_url"] = actual_contact
-            except:
-                pass
-
-        contact_tasks = [get_contact_url(r) for r in final_results]
-        await asyncio.gather(*contact_tasks, return_exceptions=True)
+        for result in final_results:
+            result["contact_url"] = derive_contact_url(result["url"])
 
         print(f"\n=== PIPELINE COMPLETE: {len(final_results)} results ===")
         return final_results

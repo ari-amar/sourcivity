@@ -4,8 +4,11 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env and .env.local files
+load_dotenv()  # Load from app/api/.env
+# Also load from project root .env.local (two levels up from app/api)
+_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+load_dotenv(dotenv_path=os.path.join(_project_root, ".env.local"))
 
 from enums import AiClientName, SearchEngineClientName
 from models import *

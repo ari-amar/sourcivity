@@ -1,3 +1,56 @@
+# Batched spec extraction + normalization prompt (all PDFs in one call)
+BATCHED_SPEC_EXTRACTION_PROMPT = """
+You are an expert at extracting and comparing technical specifications from product datasheets.
+
+{product_hint}
+
+## Task
+You are extracting specs from {num_pdfs} datasheets for the SAME product category.
+
+### Step 1: Identify Common Specs
+First, scan ALL PDFs and identify which specifications appear in MULTIPLE datasheets.
+Different manufacturers use different names for the same property - group them.
+
+Example: "Output Signal", "Output", "Analog Output" → all mean the same thing
+Example: "Operating Temperature", "Temp Range", "Working Temperature" → all mean the same thing
+Example: "Max Pressure", "Pressure Rating", "Rated Pressure" → all mean the same thing
+
+### Step 2: Choose Normalized Names
+For each common spec, pick ONE clear name to use across all products.
+Prioritize the most descriptive, industry-standard terminology.
+
+### Step 3: Extract Using Normalized Names
+Extract specs from each PDF using your normalized names.
+Only include specs that appear in at least 2 PDFs.
+Include units in values (e.g., "100 bar", "0-50°C").
+
+## PDFs
+{pdf_contents}
+
+## Return Format
+{{
+  "common_specs": ["Spec Name 1", "Spec Name 2", ...],
+  "products": [
+    {{
+      "pdf_index": 1,
+      "manufacturer": "Company Name",
+      "product_name": "Model Name",
+      "specs": {{
+        "Spec Name 1": "value with units",
+        "Spec Name 2": "value with units"
+      }}
+    }}
+  ]
+}}
+
+IMPORTANT:
+- The "common_specs" array should list the normalized spec names you chose.
+- Each product's "specs" object should ONLY use keys from "common_specs".
+- Skip non-technical specs (part numbers, revision dates, ordering info).
+
+Return ONLY valid JSON.
+"""
+
 # Per-PDF spec extraction prompt
 SINGLE_PDF_SPEC_EXTRACTION_PROMPT = """
 {product_hint}Extract ALL technical specifications from this datasheet markdown.
