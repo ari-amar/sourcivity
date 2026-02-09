@@ -10,6 +10,18 @@ echo "🚀 Starting Sourcivity development servers..."
 echo "📁 Working directory: $SCRIPT_DIR"
 echo ""
 
+# Kill any existing processes on ports 8000 and 3000
+if lsof -ti :8000 > /dev/null 2>&1; then
+    echo "🛑 Killing existing backend on port 8000..."
+    lsof -ti :8000 | xargs kill -9 2>/dev/null
+    sleep 1
+fi
+if lsof -ti :3000 > /dev/null 2>&1; then
+    echo "🛑 Killing existing frontend on port 3000..."
+    lsof -ti :3000 | xargs kill -9 2>/dev/null
+    sleep 1
+fi
+
 # Check if Python is installed
 if ! command -v python3 &> /dev/null; then
     echo "❌ Python3 is not installed. Please install Python3 to run the backend."
@@ -44,8 +56,7 @@ pip3 install -r requirements.txt 2>/dev/null || echo "⚠️  No requirements.tx
 echo ""
 echo "✅ Starting backend server on http://localhost:8000..."
 cd "$SCRIPT_DIR/app/api"
-# -u flag ensures unbuffered Python output, sed adds colored prefix
-PYTHONUNBUFFERED=1 python3 -u main.py 2>&1 | sed -l 's/^/[BACKEND] /' &
+PYTHONUNBUFFERED=1 python3 main.py 2>&1 | awk '{print "\033[0;36m[BACKEND]\033[0m " $0; fflush()}' &
 BACKEND_PID=$!
 
 # Wait for backend to start
@@ -53,7 +64,7 @@ sleep 3
 
 echo "✅ Starting frontend server on http://localhost:3000..."
 cd "$SCRIPT_DIR"
-npm run dev 2>&1 | sed -l 's/^/[FRONTEND] /' &
+npm run dev 2>&1 | awk '{print "\033[0;33m[FRONTEND]\033[0m " $0; fflush()}' &
 FRONTEND_PID=$!
 
 echo ""

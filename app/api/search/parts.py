@@ -26,10 +26,10 @@ async def search_parts(request: PartSearchRequest, ai_client: AiClientBase, sear
 	search_engine_start = time.time()
 	pdf_search_results: List[SearchEngineResult] = []
 
-	# Request 10 results from Exa (reduced from 20 for faster processing)
+	# Request 20 results from Exa for larger pool of valid PDFs
 	prompt_results = await search_engine_client.search(
 		query=search_query,
-		max_results=10
+		max_results=20
 	)
 	pdf_search_results.extend(prompt_results.results)
 
