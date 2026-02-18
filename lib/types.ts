@@ -16,6 +16,8 @@ export interface TimingData {
 export interface SearchResultsData {
   response: string;
   query?: string;
+  searchMode?: string;
+  usSuppliersOnly?: boolean;
   createdAt?: string;
   columns?: string[];
   timing?: TimingData;

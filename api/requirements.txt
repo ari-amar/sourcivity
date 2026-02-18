@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+python-dotenv
+httpx
+requests
+pymupdf
+pdf2markdown4llm
+beautifulsoup4
+exa-py
+anthropic
+cloudflare
+pydantic

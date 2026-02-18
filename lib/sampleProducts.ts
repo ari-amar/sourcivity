@@ -12,15 +12,11 @@ export const sampleProducts: ProductItem[] = [
     supplierType: 'Distributor',
     supplierFlag: '🇺🇸',
     hasSpecSheet: true,
-    material: 'AISI 304 Stainless Steel',
-    threadSize: '1/4" NPT',
-    loadRating: {
-      lb: 250,
-      n: 1100
-    },
-    tempRange: {
-      min: { f: -40, c: -40 },
-      max: { f: 250, c: 121 }
+    columnData: {
+      'Material': 'AISI 304 Stainless Steel',
+      'Thread Size': '1/4" NPT',
+      'Load Rating': '250 lb (1100 N)',
+      'Temp Range': '-40°F to 250°F (-40°C to 121°C)'
     }
   },
   {
@@ -30,15 +26,11 @@ export const sampleProducts: ProductItem[] = [
     supplierType: 'EM',
     supplierFlag: '🇺🇸',
     hasSpecSheet: true,
-    material: 'Carbon Steel (ASTM A36)',
-    threadSize: '1/2" NPT',
-    loadRating: {
-      lb: 500,
-      n: 2200
-    },
-    tempRange: {
-      min: { f: -20, c: -29 },
-      max: { f: 200, c: 93 }
+    columnData: {
+      'Material': 'Carbon Steel (ASTM A36)',
+      'Thread Size': '1/2" NPT',
+      'Load Rating': '500 lb (2200 N)',
+      'Temp Range': '-20°F to 200°F (-29°C to 93°C)'
     }
   },
   {
@@ -48,15 +40,11 @@ export const sampleProducts: ProductItem[] = [
     supplierType: 'Distributor',
     supplierFlag: '🇺🇸',
     hasSpecSheet: true,
-    material: 'Alloy Steel (Grade 8)',
-    threadSize: '3/4" NPT',
-    loadRating: {
-      lb: 1000,
-      n: 4450
-    },
-    tempRange: {
-      min: { f: -30, c: -34 },
-      max: { f: 300, c: 149 }
+    columnData: {
+      'Material': 'Alloy Steel (Grade 8)',
+      'Thread Size': '3/4" NPT',
+      'Load Rating': '1000 lb (4450 N)',
+      'Temp Range': '-30°F to 300°F (-34°C to 149°C)'
     }
   },
   {
@@ -66,15 +54,11 @@ export const sampleProducts: ProductItem[] = [
     supplierType: 'Distributor',
     supplierFlag: '🇺🇸',
     hasSpecSheet: true,
-    material: 'Zinc-Plated Steel',
-    threadSize: '3/8" NPT',
-    loadRating: {
-      lb: 350,
-      n: 1560
-    },
-    tempRange: {
-      min: { f: -10, c: -23 },
-      max: { f: 180, c: 82 }
+    columnData: {
+      'Material': 'Zinc-Plated Steel',
+      'Thread Size': '3/8" NPT',
+      'Load Rating': '350 lb (1560 N)',
+      'Temp Range': '-10°F to 180°F (-23°C to 82°C)'
     }
   }
 ];

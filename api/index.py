@@ -1,6 +1,6 @@
 """
 Vercel serverless function handler for FastAPI application.
-This file wraps the FastAPI app to work with Vercel's serverless function architecture.
+Exports the FastAPI app directly for Vercel's native ASGI support.
 """
 import os
 import sys
@@ -18,10 +18,5 @@ if env_file.exists():
     load_dotenv(env_file)
 
 # Import the FastAPI app after setting up the path
+# Vercel's Python runtime natively supports ASGI apps (FastAPI)
 from app import app
-from mangum import Mangum
-
-# Create the ASGI handler for AWS Lambda/Vercel
-# Using lifespan="off" because we handle initialization in app.py with lazy loading
-handler = Mangum(app, lifespan="off")
-

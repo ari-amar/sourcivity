@@ -15,10 +15,13 @@ The platform uses AI to understand natural language queries, scrape relevant tec
 ### 🔍 Dual Search Modes
 
 #### Parts Search
-- **PDF Datasheet Analysis**: Automatically downloads and extracts specs from manufacturer PDFs
+- **PDF Datasheet Analysis**: Automatically downloads and extracts specs from manufacturer PDFs using Docling-based conversion
+- **Parallel PDF Processing**: Downloads and processes multiple PDFs concurrently for faster results
 - **AI-Powered Specification Extraction**: Uses Claude AI to identify relevant technical parameters
+- **Spec Normalization**: AI-driven normalization of specification names across products for consistent comparison
 - **Structured Results**: Presents parts in comparable tables with consistent specifications
 - **Direct Datasheet Links**: One-click access to source documentation
+- **Contact URL Discovery**: Automatically finds supplier contact pages
 - **US Supplier Filtering**: Option to show only US-based suppliers
 
 #### Services Search
@@ -38,10 +41,14 @@ The platform uses a modular AI architecture supporting multiple providers:
 
 **AI Tasks:**
 - Natural language query understanding
-- PDF-to-markdown conversion and parsing
+- PDF-to-markdown conversion via Docling
 - Technical specification extraction from datasheets
+- Specification name normalization across products
 - Manufacturing capability extraction from web pages
+- Result filtering and quality assessment
 - Structured JSON data generation
+
+For a detailed walkthrough of the search pipeline, see [`docs/search-process.md`](docs/search-process.md).
 
 ### 🎨 Modern UI Features
 
@@ -64,7 +71,7 @@ The platform uses a modular AI architecture supporting multiple providers:
 - **Framework**: FastAPI with async support
 - **AI Clients**: Anthropic SDK, Cloudflare SDK
 - **Search**: Exa Python SDK for intelligent web search
-- **PDF Processing**: PyMuPDF + pymupdf4llm for datasheet extraction
+- **PDF Processing**: Docling (pdf2markdown4llm) for PDF-to-markdown conversion, PyMuPDF for page count validation
 - **Web Scraping**: BeautifulSoup4 for HTML parsing
 
 ### Data Flow
@@ -78,9 +85,11 @@ Backend (FastAPI) → AI Query Generation
     ↓
 Exa Search → Find PDFs (parts) or Web Pages (services)
     ↓
-Download & Scrape Content
+Parallel Download & Scrape Content (concurrent PDF/page processing)
     ↓
-AI Extraction → Structured JSON
+Batched AI Extraction (Semaphore-limited) → Structured JSON
+    ↓
+Spec Normalization & Filtering
     ↓
 Response → Frontend → Rendered Results
 ```
@@ -123,7 +132,7 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
 CLERK_SECRET_KEY=sk_test_...
 
 # Backend API URL
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
 ```
 
 #### 3. Backend Setup
@@ -175,6 +184,8 @@ python3 main.py
 npm run dev:all
 ```
 
+This runs `start-dev.sh`, which automatically handles port cleanup, environment validation, and starts both servers with colored logging.
+
 #### 5. Open the Application
 
 Navigate to [http://localhost:3000](http://localhost:3000)
@@ -224,8 +235,10 @@ sourcivity/
 │   │   │   ├── ai_clients/          # Anthropic, Cloudflare clients
 │   │   │   └── search_engine_clients/  # Exa client
 │   │   ├── utils/
-│   │   │   ├── pdf_scraper.py       # PDF datasheet scraping
+│   │   │   ├── pdf_scraper.py       # PDF datasheet scraping (Docling-based)
 │   │   │   └── service_scraper.py   # Web page scraping
+│   │   ├── local_testing/           # Local testing utilities
+│   │   ├── archive/                 # Archived old implementations
 │   │   ├── app.py                   # FastAPI application
 │   │   ├── main.py                  # Server entry point
 │   │   ├── models.py                # Pydantic models
@@ -243,11 +256,14 @@ sourcivity/
 │   ├── RFQCart.tsx                  # RFQ cart (if enabled)
 │   ├── ClientHeader.tsx             # Navigation header
 │   └── ...
+├── docs/                            # Internal documentation
+│   └── search-process.md           # Detailed search pipeline docs
 ├── lib/
 │   ├── searchApi.ts                 # React Query hooks for search
 │   ├── types.ts                     # TypeScript type definitions
 │   ├── searchHistoryContext.tsx    # Search history state
 │   └── utils.ts                     # Utility functions
+├── start-dev.sh                     # Dev startup script (used by npm run dev:all)
 └── public/                          # Static assets
 ```
 
@@ -282,7 +298,7 @@ npm run dev:all      # Start both frontend and backend
 |----------|----------|-------------|
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Clerk public key for authentication |
 | `CLERK_SECRET_KEY` | Yes | Clerk secret key |
-| `NEXT_PUBLIC_API_URL` | Yes | Backend API URL (default: http://localhost:8000) |
+| `NEXT_PUBLIC_BACKEND_URL` | Yes | Backend API URL (default: http://localhost:8000) |
 
 ### Backend (app/api/config/env.config)
 
@@ -308,8 +324,8 @@ npm run dev:all      # Start both frontend and backend
 - **FastAPI** - Modern Python web framework
 - **Anthropic SDK** - Claude AI integration
 - **Exa Python** - Intelligent web search
-- **PyMuPDF** - PDF processing
-- **pymupdf4llm** - PDF to markdown conversion
+- **pdf2markdown4llm** - Docling-based PDF to markdown conversion
+- **PyMuPDF** - PDF page count validation
 - **BeautifulSoup4** - HTML parsing
 - **Pydantic** - Data validation
 
@@ -346,7 +362,7 @@ vercel
 Set environment variables in Vercel dashboard:
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `CLERK_SECRET_KEY`
-- `NEXT_PUBLIC_API_URL` (your backend URL)
+- `NEXT_PUBLIC_BACKEND_URL` (your backend URL)
 
 ### Backend Deployment Options
 
@@ -390,7 +406,9 @@ CMD ["python", "main.py"]
 ### PDF Extraction Fails
 
 - Check if PDF URLs are accessible (not behind paywalls)
-- Verify `pymupdf` and `pymupdf4llm` are installed
+- Verify `pdf2markdown4llm` and `pymupdf` are installed
+- PDFs with more than 20 pages are automatically skipped
+- If a URL returns HTML instead of a PDF, the scraper will attempt to find linked PDFs
 - Review extraction prompts for compatibility with PDF content
 
 ### Service Extraction Returns No Data
