@@ -28,6 +28,7 @@ _demo_rate = {}  # { ip: [timestamps] }
 DEMO_RATE_LIMIT = 5
 DEMO_RATE_WINDOW = 3600
 DEMO_RATE_WHITELIST = ("2607:fb91:", "2607:fb90:e917:83c3:")  # IP prefixes exempt from rate limiting
+ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "").split(",")  # comma-separated allowed origins
 
 # --- Activity logging ---
 ACTIVITY_CSV = os.path.join(WORKSPACE_DIR, "activity.csv")
@@ -59,12 +60,24 @@ def _read_body(handler):
     return json.loads(raw) if raw else {}
 
 
+def _check_origin(handler):
+    """Return the origin if allowed, else empty string."""
+    origin = handler.headers.get("Origin", "")
+    if not origin:
+        return ""  # same-origin requests have no Origin header
+    if any(o.strip() for o in ALLOWED_ORIGINS if o.strip() and origin.startswith(o.strip())):
+        return origin
+    return ""
+
+
 def _send_json(handler, data, status=200):
     """Send a JSON response with CORS headers."""
     body = json.dumps(data).encode()
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    origin = _check_origin(handler)
+    if origin:
+        handler.send_header("Access-Control-Allow-Origin", origin)
     handler.end_headers()
     handler.wfile.write(body)
 
