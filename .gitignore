@@ -1,0 +1,13 @@
+# Secrets & credentials
+.env
+credentials/
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+
+# OS
+.DS_Store

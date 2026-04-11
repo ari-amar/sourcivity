@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sourcivity — shadcn/ui + Tailwind</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            border: 'hsl(240 3.7% 15.9%)',
+            input: 'hsl(240 3.7% 15.9%)',
+            ring: 'hsl(240 4.9% 83.9%)',
+            background: 'hsl(240 10% 3.9%)',
+            foreground: 'hsl(0 0% 98%)',
+            card: 'hsl(240 10% 3.9%)',
+            primary: { DEFAULT: 'hsl(0 0% 98%)', foreground: 'hsl(240 5.9% 10%)' },
+            secondary: { DEFAULT: 'hsl(240 3.7% 15.9%)', foreground: 'hsl(0 0% 98%)' },
+            muted: { DEFAULT: 'hsl(240 3.7% 15.9%)', foreground: 'hsl(240 5% 64.9%)' },
+            accent: { DEFAULT: 'hsl(240 3.7% 15.9%)', foreground: 'hsl(0 0% 98%)' },
+            destructive: { DEFAULT: 'hsl(0 62.8% 30.6%)', foreground: 'hsl(0 0% 98%)' },
+          },
+          borderRadius: { lg: '0.5rem', md: 'calc(0.5rem - 2px)', sm: 'calc(0.5rem - 4px)' },
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .badge { display: inline-flex; align-items: center; border-radius: 9999px; padding: 2px 10px; font-size: 12px; font-weight: 500; }
+  </style>
+</head>
+<body class="bg-background text-foreground min-h-screen">
+
+  <!-- Sidebar + Main Layout -->
+  <div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="w-56 border-r border-border bg-background p-4 flex flex-col gap-1">
+      <div class="flex items-center gap-2 px-2 mb-6">
+        <div class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white text-sm font-bold">S</div>
+        <span class="font-semibold text-sm">Sourcivity</span>
+      </div>
+      <button class="flex items-center gap-3 px-3 py-2 rounded-md bg-secondary text-foreground text-sm font-medium">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Supplier Search
+      </button>
+      <button class="flex items-center gap-3 px-3 py-2 rounded-md text-muted-foreground text-sm hover:bg-secondary/50">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Quote Tracker
+      </button>
+      <button class="flex items-center gap-3 px-3 py-2 rounded-md text-muted-foreground text-sm hover:bg-secondary/50">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 4L12 13 2 4"/></svg>
+        RFQ Inbox
+      </button>
+      <div class="mt-auto pt-4 border-t border-border">
+        <div class="flex items-center gap-2 px-2">
+          <div class="w-7 h-7 rounded-full bg-blue-900 flex items-center justify-center text-blue-300 text-xs font-bold">A</div>
+          <div class="text-xs"><div class="text-foreground font-medium">Ari Claw</div><div class="text-muted-foreground">ari@sourcivity.io</div></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-6">
+      <!-- Search Header -->
+      <div class="mb-6">
+        <h1 class="text-2xl font-semibold tracking-tight mb-1">Supplier Search</h1>
+        <p class="text-sm text-muted-foreground">Find US manufacturers and distributors for industrial parts</p>
+      </div>
+
+      <!-- Search Bar (shadcn Command style) -->
+      <div class="relative mb-6">
+        <svg class="absolute left-3 top-3 w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" value="inconel 718 forgings" class="w-full h-10 pl-10 pr-4 rounded-md border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background" placeholder="Search for suppliers...">
+      </div>
+
+      <!-- Results Cards -->
+      <div class="grid gap-3">
+        <!-- Result Card 1 -->
+        <div class="rounded-lg border border-border bg-card p-4 hover:bg-secondary/30 transition-colors">
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <a href="#" class="text-sm font-semibold text-blue-400 hover:underline">Anderson Shumaker</a>
+                <span class="badge bg-blue-950 text-blue-400 border border-blue-800">IL</span>
+              </div>
+              <p class="text-xs text-muted-foreground mb-2">Open-die forgings in Inconel 718, Hastelloy, titanium, and other exotic alloys</p>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="badge bg-secondary text-muted-foreground border border-border">AS9100</span>
+                <span class="badge bg-secondary text-muted-foreground border border-border">ISO 9001</span>
+                <span class="text-xs text-muted-foreground">103 yrs &middot; 150 emp</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 ml-4">
+              <p class="text-xs text-muted-foreground italic max-w-[200px]">Specializes in open-die Inconel 718 forgings for aerospace</p>
+              <button class="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border hover:bg-secondary transition-colors">
+                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 4L12 13 2 4"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Result Card 2 -->
+        <div class="rounded-lg border border-border bg-card p-4 hover:bg-secondary/30 transition-colors">
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <a href="#" class="text-sm font-semibold text-blue-400 hover:underline">Altemp Alloys</a>
+                <span class="badge bg-blue-950 text-blue-400 border border-blue-800">CA</span>
+              </div>
+              <p class="text-xs text-muted-foreground mb-2">High-temp & exotic alloy forgings — Inconel, Hastelloy, stainless steel</p>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="badge bg-secondary text-muted-foreground border border-border">AMS 5664</span>
+                <span class="badge bg-secondary text-muted-foreground border border-border">ASTM B637</span>
+                <span class="text-xs text-muted-foreground">47 yrs &middot; 60 emp &middot; $10M</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 ml-4">
+              <p class="text-xs text-muted-foreground italic max-w-[200px]">Stocks Inconel 718 forgings, sheet, plate and bar since 1979</p>
+              <button class="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border hover:bg-secondary transition-colors">
+                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 4L12 13 2 4"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Result Card 3 -->
+        <div class="rounded-lg border border-border bg-card p-4 hover:bg-secondary/30 transition-colors">
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <a href="#" class="text-sm font-semibold text-blue-400 hover:underline">Weldaloy Specialty Forgings</a>
+                <span class="badge bg-blue-950 text-blue-400 border border-blue-800">MI</span>
+              </div>
+              <p class="text-xs text-muted-foreground mb-2">Custom open-die forgings, rolled rings, and seamless rings in superalloys</p>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="badge bg-secondary text-muted-foreground border border-border">NADCAP</span>
+                <span class="badge bg-secondary text-muted-foreground border border-border">AS9100D</span>
+                <span class="badge bg-secondary text-muted-foreground border border-border">ISO 9001:2015</span>
+                <span class="text-xs text-muted-foreground">79 yrs &middot; 200 emp &middot; $45M</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 ml-4">
+              <p class="text-xs text-muted-foreground italic max-w-[200px]">Full-service forging with in-house heat treat and NDT</p>
+              <button class="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border hover:bg-secondary transition-colors">
+                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 4L12 13 2 4"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Result Card 4 -->
+        <div class="rounded-lg border border-border bg-card p-4 hover:bg-secondary/30 transition-colors">
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <a href="#" class="text-sm font-semibold text-blue-400 hover:underline">ForceBeyond</a>
+                <span class="badge bg-blue-950 text-blue-400 border border-blue-800">TX</span>
+              </div>
+              <p class="text-xs text-muted-foreground mb-2">Superalloy forging services — Inconel 718, 625, Waspaloy, Rene 41</p>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="badge bg-secondary text-muted-foreground border border-border">AS9100</span>
+                <span class="text-xs text-muted-foreground">15 yrs &middot; 80 emp</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 ml-4">
+              <p class="text-xs text-muted-foreground italic max-w-[200px]">Closed-die and open-die forgings for aerospace and power gen</p>
+              <button class="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border hover:bg-secondary transition-colors text-muted-foreground">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

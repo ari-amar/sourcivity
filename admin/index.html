@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sourcivity Admin</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+           background: #0f1117; color: #e1e4e8; min-height: 100vh; }
+
+    /* Login */
+    .login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .login-box { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 32px; width: 320px; }
+    .login-box h2 { margin-bottom: 16px; color: #58a6ff; }
+    .login-box input { width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d;
+                       border-radius: 6px; color: #e1e4e8; font-size: 14px; margin-bottom: 12px; }
+    .login-box button { width: 100%; padding: 10px; background: #238636; border: none; border-radius: 6px;
+                        color: #fff; font-size: 14px; cursor: pointer; font-weight: 600; }
+    .login-box button:hover { background: #2ea043; }
+    .login-error { color: #f85149; font-size: 13px; margin-top: 8px; display: none; }
+
+    /* Dashboard */
+    .dashboard { display: none; }
+    header { background: #161b22; border-bottom: 1px solid #30363d; padding: 12px 24px;
+             display: flex; align-items: center; justify-content: space-between; }
+    header h1 { font-size: 18px; color: #58a6ff; }
+    header .logout { background: none; border: 1px solid #30363d; color: #8b949e; padding: 6px 12px;
+                     border-radius: 6px; cursor: pointer; font-size: 13px; }
+    header .logout:hover { color: #e1e4e8; border-color: #58a6ff; }
+
+    .container { max-width: 1100px; margin: 24px auto; padding: 0 20px; }
+
+    /* Stats */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+    .stat-card .label { color: #8b949e; font-size: 12px; text-transform: uppercase; margin-bottom: 4px; }
+    .stat-card .value { font-size: 28px; font-weight: 700; color: #e1e4e8; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+    .tab-btn { background: none; border: 1px solid #30363d; color: #8b949e; padding: 8px 16px;
+               border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .tab-btn.active { background: #21262d; color: #58a6ff; border-color: #58a6ff; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; background: #161b22; border: 1px solid #30363d;
+            border-radius: 8px; overflow: hidden; }
+    th { background: #21262d; color: #8b949e; font-size: 12px; text-transform: uppercase;
+         padding: 10px 14px; text-align: left; border-bottom: 1px solid #30363d; }
+    td { padding: 10px 14px; border-bottom: 1px solid #21262d; font-size: 13px; }
+    tr:hover td { background: #1c2128; }
+
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .badge-green { background: #1a2318; border: 1px solid #2a4030; color: #7ee787; }
+    .badge-red { background: #2d1215; border: 1px solid #4d2327; color: #f85149; }
+    .badge-blue { background: #162230; border: 1px solid #1f4068; color: #58a6ff; }
+    .badge-gray { background: #21262d; border: 1px solid #30363d; color: #8b949e; }
+
+    .action-label { font-weight: 600; }
+    .action-search { color: #58a6ff; }
+    .action-rfq_draft { color: #d29922; }
+    .action-rfq_send { color: #3fb950; }
+    .action-compare { color: #bc8cff; }
+
+    .empty-msg { text-align: center; color: #8b949e; padding: 40px; }
+
+    @media (max-width: 700px) {
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .container { padding: 0 12px; }
+      header { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+      #tab-customers, #tab-activity { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      table { min-width: 600px; font-size: 12px; }
+      th, td { padding: 8px 8px; white-space: nowrap; }
+      .tabs { flex-wrap: wrap; gap: 4px; }
+      .login-box { width: 90vw; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Login Screen -->
+  <div class="login-screen" id="login-screen">
+    <div class="login-box">
+      <h2>Sourcivity Admin</h2>
+      <input type="password" id="pw-input" placeholder="Password" autofocus>
+      <button id="login-btn">Log In</button>
+      <div class="login-error" id="login-error">Wrong password</div>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div class="dashboard" id="dashboard">
+    <header>
+      <h1>Sourcivity Admin</h1>
+      <button class="logout" id="logout-btn">Log Out</button>
+    </header>
+    <div class="container">
+      <div class="stats" id="stats"></div>
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="customers">Customers</button>
+        <button class="tab-btn" data-tab="activity">All Activity</button>
+      </div>
+      <div id="tab-customers">
+        <table><thead><tr>
+          <th>Customer</th><th>Company</th><th>State</th><th>Port</th>
+          <th>Searches</th><th>RFQs Sent</th><th>Quotes</th><th>Last Active</th><th>Status</th>
+        </tr></thead><tbody id="customers-body"></tbody></table>
+      </div>
+      <div id="tab-activity" style="display:none">
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+          <input id="ip-filter" type="text" placeholder="Filter IP... (prefix - to exclude)" style="background:#0d1117;border:1px solid #30363d;color:#e1e4e8;padding:6px 12px;border-radius:6px;font-size:13px;width:200px">
+          <button id="toggle-my-ip" style="background:#21262d;border:1px solid #30363d;color:#8b949e;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px">Hide My IP</button>
+          <button id="export-activity-btn" style="background:#21262d;border:1px solid #30363d;color:#8b949e;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px">Export CSV</button>
+          <button id="clear-activity-btn" style="background:#2d1215;border:1px solid #4d2327;color:#f85149;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px">Clear Activity</button>
+        </div>
+        <table><thead><tr>
+          <th>Time</th><th>Customer</th><th>Action</th><th>Detail</th><th>IP</th><th>Location</th>
+        </tr></thead><tbody id="activity-body"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let pw = localStorage.getItem('admin_pw') || '';
+
+    const $ = id => document.getElementById(id);
+
+    async function api(path) {
+      const res = await fetch(path, { headers: { 'X-Admin-Password': pw } });
+      if (res.status === 401) { logout(); throw new Error('Unauthorized'); }
+      return res.json();
+    }
+
+    async function login() {
+      pw = $('pw-input').value;
+      try {
+        const r = await api('/api/auth');
+        if (r.ok) {
+          localStorage.setItem('admin_pw', pw);
+          $('login-screen').style.display = 'none';
+          $('dashboard').style.display = 'block';
+          loadDashboard();
+        }
+      } catch(e) {
+        $('login-error').style.display = 'block';
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('admin_pw');
+      pw = '';
+      $('login-screen').style.display = 'flex';
+      $('dashboard').style.display = 'none';
+    }
+
+    async function loadDashboard() {
+      const [custData, actData] = await Promise.all([
+        api('/api/customers'),
+        api('/api/activity')
+      ]);
+
+      const customers = custData.customers || [];
+      const activity = actData.activity || [];
+      window._allActivity = activity;
+
+      // Stats
+      const totalSearches = customers.reduce((s, c) => s + (c.searches || 0), 0);
+      const totalRfqs = customers.reduce((s, c) => s + (c.rfqs_sent || 0), 0);
+      const activeToday = customers.filter(c => c.last_active && c.last_active.startsWith(new Date().toISOString().slice(0, 10))).length;
+      $('stats').innerHTML = `
+        <div class="stat-card"><div class="label">Customers</div><div class="value">${customers.length}</div></div>
+        <div class="stat-card"><div class="label">Total Searches</div><div class="value">${totalSearches}</div></div>
+        <div class="stat-card"><div class="label">RFQs Sent</div><div class="value">${totalRfqs}</div></div>
+        <div class="stat-card"><div class="label">Active Today</div><div class="value">${activeToday}</div></div>
+      `;
+
+      // Customers table
+      $('customers-body').innerHTML = customers.length ? customers.map(c => `<tr>
+        <td><strong>${c.customer_full_name || c.customer_name || c.slug}</strong></td>
+        <td>${c.customer_company || '-'}</td>
+        <td>${c.customer_state || '-'}</td>
+        <td>${c.serve_port || '-'}</td>
+        <td>${c.searches || 0}</td>
+        <td>${c.rfqs_sent || 0}</td>
+        <td>${c.quotes || 0}</td>
+        <td>${c.last_active === 'never' ? '<span class="badge badge-gray">never</span>' : c.last_active}</td>
+        <td>${c.running ? '<span class="badge badge-green">running</span>' : '<span class="badge badge-red">stopped</span>'}</td>
+      </tr>`).join('') : '<tr><td colspan="9" class="empty-msg">No customers deployed yet</td></tr>';
+
+      // Activity table
+      renderActivity();
+    }
+
+    function renderActivity() {
+      let activity = window._allActivity || [];
+      if (myIpActive) {
+        activity = activity.filter(a => !HIDDEN_IP_PREFIXES.some(p => (a.ip || '').startsWith(p)));
+      }
+      const raw = ($('ip-filter').value || '').trim().toLowerCase();
+      const exclude = raw.startsWith('-');
+      const filter = exclude ? raw.slice(1).trim() : raw;
+      const filtered = filter ? activity.filter(a => {
+        const match = (a.ip || '').toLowerCase().includes(filter) || (a.location || '').toLowerCase().includes(filter);
+        return exclude ? !match : match;
+      }) : activity;
+      $('activity-body').innerHTML = filtered.length ? filtered.slice(0, 200).map(a => `<tr>
+        <td>${a.timestamp || ''}</td>
+        <td><span class="badge badge-blue">${a.customer || ''}</span></td>
+        <td><span class="action-label action-${a.action || ''}">${a.action || ''}</span></td>
+        <td>${a.detail || ''}</td>
+        <td><code style="color:#8b949e;font-size:12px">${(a.ip && a.ip !== 'None') ? a.ip : ''}</code></td>
+        <td style="color:#8b949e;font-size:12px">${a.location || ''}</td>
+      </tr>`).join('') : '<tr><td colspan="6" class="empty-msg">' + (filter ? 'No activity matching filter' : 'No activity recorded yet') + '</td></tr>';
+    }
+
+    // Events
+    $('login-btn').addEventListener('click', login);
+    $('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+    $('logout-btn').addEventListener('click', logout);
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        $('tab-customers').style.display = tab === 'customers' ? '' : 'none';
+        $('tab-activity').style.display = tab === 'activity' ? '' : 'none';
+      });
+    });
+
+    // IP filter
+    $('ip-filter').addEventListener('input', renderActivity);
+
+    // Hide my IPs toggle
+    const HIDDEN_IP_PREFIXES = [
+      '2607:fb9',
+    ];
+    let myIpActive = false;
+    $('toggle-my-ip').addEventListener('click', () => {
+      myIpActive = !myIpActive;
+      const btn = $('toggle-my-ip');
+      btn.style.background = myIpActive ? '#1f4068' : '#21262d';
+      btn.style.borderColor = myIpActive ? '#58a6ff' : '#30363d';
+      btn.style.color = myIpActive ? '#58a6ff' : '#8b949e';
+      if (!myIpActive) $('ip-filter').value = '';
+      renderActivity();
+    });
+
+    // Export activity CSV
+    $('export-activity-btn').addEventListener('click', async () => {
+      try {
+        const data = await api('/api/activity');
+        const activity = data.activity || [];
+        if (!activity.length) return alert('No activity to export.');
+        const headers = ['timestamp','customer','action','detail','ip','location'];
+        const rows = activity.map(a => headers.map(h => '"' + ((a[h] || '').toString().replace(/"/g, '""')) + '"').join(','));
+        const csv = [headers.join(','), ...rows].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'sourcivity-activity-' + new Date().toISOString().slice(0,10) + '.csv';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      } catch(e) { alert('Export failed: ' + e.message); }
+    });
+
+    // Clear activity
+    $('clear-activity-btn').addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to clear ALL activity logs? This cannot be undone.')) return;
+      try {
+        const res = await fetch('/api/activity/clear', {
+          method: 'POST',
+          headers: { 'X-Admin-Password': pw }
+        });
+        const data = await res.json();
+        if (data.ok) {
+          loadDashboard();
+        } else {
+          alert('Clear failed: ' + (data.error || 'Unknown error'));
+        }
+      } catch(e) { alert('Clear failed: ' + e.message); }
+    });
+
+    // Auto-login if password stored
+    if (pw) {
+      api('/api/auth').then(r => {
+        if (r.ok) {
+          $('login-screen').style.display = 'none';
+          $('dashboard').style.display = 'block';
+          loadDashboard();
+        } else { logout(); }
+      }).catch(() => logout());
+    }
+  </script>
+</body>
+</html>

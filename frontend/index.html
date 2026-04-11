@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sourcivity</title>
+  <link rel="icon" type="image/png" href="sourcivity-logo.png">
+  <link rel="apple-touch-icon" href="sourcivity-logo.png">
+  <meta property="og:title" content="Sourcivity">
+  <meta property="og:description" content="AI-powered supplier search and procurement">
+  <meta property="og:image" content="sourcivity-logo.png">
+  <meta property="og:type" content="website">
+  <link rel="stylesheet" href="style.css?v=103">
+</head>
+<body>
+  <header>
+    <div class="logo-group">
+      <img src="sourcivity-logo.png" alt="Sourcivity" class="header-logo">
+      <h1>Sourcivity</h1>
+    </div>
+    <nav>
+      <button class="nav-btn active" data-tab="search">Supplier Search</button>
+      <button class="nav-btn" data-tab="quotes">Quote Tracker</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- EMAIL SETUP BANNER (hidden by default, shown via JS if email not configured) -->
+    <div id="email-setup-banner" class="email-setup-banner hidden">
+      <span>📧</span>
+      <span>To send RFQ emails, please provide your Gmail address and app password. Contact <a href="mailto:ari@sourcivity.io">ari@sourcivity.io</a> with this info to get set up.</span>
+    </div>
+
+    <!-- SUPPLIER SEARCH TAB -->
+    <section id="tab-search" class="tab active">
+      <div class="search-bar">
+        <input type="text" id="search-input" placeholder="Search for a supplier or service...">
+        <button id="search-btn">Search</button>
+      </div>
+      <div id="suggestions" class="suggestions">
+        <div id="suggestion-chips" class="suggestion-chips"></div>
+      </div>
+      <div id="search-status" class="status-msg hidden"></div>
+      <div id="search-results" class="results-container">
+        <table id="results-table" class="hidden">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Company</th>
+              <th>State</th>
+              <th>Products / Services</th>
+              <th>Certs</th>
+              <th>Reputation</th>
+              <th>Match</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- QUOTE TRACKER TAB -->
+    <section id="tab-quotes" class="tab hidden">
+      <div class="tracker-header">
+        <h2>Quote Tracker</h2>
+        <div class="tracker-controls">
+          <div class="status-filters" id="status-filters">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="sent">Sent</button>
+            <button class="filter-btn" data-filter="responded">Responded</button>
+            <button class="filter-btn" data-filter="overdue">Overdue</button>
+            <button class="filter-btn" data-filter="received">Received</button>
+            <button class="filter-btn" data-filter="bounced">Bounced</button>
+          </div>
+          <button id="refresh-quotes-btn">Refresh</button>
+        </div>
+      </div>
+      <div id="quotes-status" class="status-msg hidden"></div>
+      <table id="quotes-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Supplier</th>
+            <th>Part / Service</th>
+            <th>Quoted Price</th>
+            <th>Unit</th>
+            <th>Lead Time</th>
+            <th>MOQ</th>
+            <th>Payment Terms</th>
+            <th>Valid Until</th>
+            <th>Status</th>
+            <th>Latest</th>
+          </tr>
+        </thead>
+        <tbody id="quotes-body"></tbody>
+      </table>
+    </section>
+
+    <!-- RFQ MODAL -->
+    <div id="rfq-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Send RFQ</h2>
+          <button class="modal-close" id="rfq-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p id="rfq-supplier-info"></p>
+          <label for="rfq-part">Part / Service Description:</label>
+          <input type="text" id="rfq-part" placeholder="e.g. 1/2 inch titanium ball bearings, Grade 23">
+          <label for="rfq-qty">Quantity:</label>
+          <input type="text" id="rfq-qty" placeholder="e.g. 500 units, or leave blank for pricing tiers">
+          <label for="rfq-notes">Additional Notes:</label>
+          <textarea id="rfq-notes" rows="3" placeholder="Any specs, delivery location, or special requirements"></textarea>
+          <div id="rfq-preview" class="hidden">
+            <h3>Email Preview <span style="font-size:0.8em;font-weight:normal;color:#888">(edit before sending)</span></h3>
+            <div class="rfq-email-fields">
+              <label>To:</label>
+              <input type="text" id="rfq-to" class="rfq-email-input" />
+              <label>Subject:</label>
+              <input type="text" id="rfq-subject" class="rfq-email-input" />
+              <label>Body:</label>
+              <textarea id="rfq-body" class="rfq-email-body" rows="14"></textarea>
+            </div>
+          </div>
+          <div id="rfq-status" class="status-msg hidden"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="rfq-preview-btn">Preview Email</button>
+          <button id="rfq-send-btn" class="btn-primary hidden">Edit & Send</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js?v=109"></script>
+</body>
+</html>

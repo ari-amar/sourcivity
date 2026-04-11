@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Sourcivity logo: diamond grid of rounded pills in blue shades -->
+  <!-- Row 1 (top) - 2 pills -->
+  <rect x="95" y="20" width="16" height="28" rx="8" fill="#3B7DC2" transform="rotate(-45, 103, 34)"/>
+  <rect x="125" y="20" width="16" height="28" rx="8" fill="#5BA0D0" transform="rotate(-45, 133, 34)"/>
+
+  <!-- Row 2 - 3 pills -->
+  <rect x="65" y="50" width="16" height="28" rx="8" fill="#1B4F8A" transform="rotate(-45, 73, 64)"/>
+  <rect x="95" y="50" width="16" height="28" rx="8" fill="#6BB8D8" transform="rotate(-45, 103, 64)"/>
+  <rect x="125" y="50" width="16" height="28" rx="8" fill="#4A8BBF" transform="rotate(-45, 133, 64)"/>
+
+  <!-- Row 3 - 4 pills -->
+  <rect x="35" y="80" width="16" height="28" rx="8" fill="#5DBED6" transform="rotate(-45, 43, 94)"/>
+  <rect x="65" y="80" width="16" height="28" rx="8" fill="#6DD4E0" transform="rotate(-45, 73, 94)"/>
+  <rect x="95" y="80" width="16" height="28" rx="8" fill="#4A8BBF" transform="rotate(-45, 103, 94)"/>
+  <rect x="125" y="80" width="16" height="28" rx="8" fill="#1B4F8A" transform="rotate(-45, 133, 94)"/>
+
+  <!-- Row 4 - 3 pills -->
+  <rect x="35" y="110" width="16" height="28" rx="8" fill="#3B7DC2" transform="rotate(-45, 43, 124)"/>
+  <rect x="65" y="110" width="16" height="28" rx="8" fill="#5BA0D0" transform="rotate(-45, 73, 124)"/>
+  <rect x="95" y="110" width="16" height="28" rx="8" fill="#4590C4" transform="rotate(-45, 103, 124)"/>
+
+  <!-- Row 5 (bottom) - 2 pills -->
+  <rect x="35" y="140" width="16" height="28" rx="8" fill="#1B4F8A" transform="rotate(-45, 43, 154)"/>
+  <rect x="65" y="140" width="16" height="28" rx="8" fill="#5DBED6" transform="rotate(-45, 73, 154)"/>
+</svg>

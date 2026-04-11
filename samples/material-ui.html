@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sourcivity — Material UI Style</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Roboto', sans-serif; background: #121212; color: #e0e0e0; min-height: 100vh; }
+
+    /* App Bar */
+    .appbar { background: #1e1e1e; height: 64px; display: flex; align-items: center; padding: 0 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); position: sticky; top: 0; z-index: 10; }
+    .appbar .logo { display: flex; align-items: center; gap: 12px; }
+    .appbar .logo-icon { width: 36px; height: 36px; background: #90caf9; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #121212; font-weight: 700; font-size: 18px; }
+    .appbar .logo-text { font-size: 18px; font-weight: 500; letter-spacing: 0.5px; }
+    .appbar .spacer { flex: 1; }
+    .appbar .avatar { width: 36px; height: 36px; border-radius: 50%; background: #1a237e; display: flex; align-items: center; justify-content: center; color: #90caf9; font-size: 14px; font-weight: 500; }
+
+    /* Layout */
+    .layout { display: flex; }
+
+    /* Navigation Rail */
+    .nav-rail { width: 72px; background: #1e1e1e; min-height: calc(100vh - 64px); display: flex; flex-direction: column; align-items: center; padding-top: 8px; gap: 4px; border-right: 1px solid #2e2e2e; }
+    .nav-item { width: 56px; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-radius: 16px; cursor: pointer; transition: background 0.2s; color: #9e9e9e; }
+    .nav-item:hover { background: #2e2e2e; }
+    .nav-item.active { background: #1a237e; color: #90caf9; }
+    .nav-item .material-icons-outlined { font-size: 24px; }
+    .nav-item span { font-size: 10px; font-weight: 500; }
+
+    /* Content */
+    .content { flex: 1; padding: 24px 32px; max-width: 1200px; }
+
+    /* Typography */
+    h1 { font-size: 24px; font-weight: 400; letter-spacing: 0; margin-bottom: 4px; }
+    .subtitle { font-size: 14px; color: #9e9e9e; margin-bottom: 24px; }
+
+    /* Search - MUI Filled Input style */
+    .search-field { position: relative; margin-bottom: 24px; }
+    .search-field input { width: 100%; height: 56px; padding: 16px 16px 16px 52px; background: #2e2e2e; border: none; border-bottom: 2px solid transparent; border-radius: 12px 12px 0 0; color: #e0e0e0; font-size: 16px; font-family: 'Roboto', sans-serif; outline: none; transition: all 0.2s; }
+    .search-field input:focus { border-bottom-color: #90caf9; background: #353535; }
+    .search-field .material-icons-outlined { position: absolute; left: 16px; top: 16px; color: #9e9e9e; }
+    .search-field label { position: absolute; left: 52px; top: 8px; font-size: 12px; color: #90caf9; font-weight: 500; }
+
+    /* Cards - MUI Card Elevated */
+    .results-grid { display: flex; flex-direction: column; gap: 12px; }
+
+    .result-card { background: #1e1e1e; border-radius: 12px; padding: 20px; transition: box-shadow 0.2s, background 0.2s; cursor: default; }
+    .result-card:hover { background: #252525; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+
+    .card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
+    .card-top .company { font-size: 16px; font-weight: 500; color: #90caf9; }
+    .card-top .state-chip { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; background: #1a237e; border-radius: 12px; font-size: 12px; font-weight: 500; color: #90caf9; margin-left: 8px; }
+
+    .card-body { font-size: 14px; color: #b0b0b0; margin-bottom: 10px; }
+
+    .card-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .chip { display: inline-flex; align-items: center; height: 26px; padding: 0 12px; border-radius: 8px; font-size: 12px; font-weight: 500; }
+    .chip-outlined { border: 1px solid #424242; color: #b0b0b0; background: transparent; }
+    .chip-filled { background: #2e2e2e; color: #9e9e9e; }
+
+    .card-footer { display: flex; align-items: center; justify-content: space-between; }
+    .card-meta { font-size: 12px; color: #757575; }
+    .card-match { font-size: 13px; color: #9e9e9e; font-style: italic; flex: 1; margin-right: 16px; }
+
+    /* FAB-style action button */
+    .fab-small { width: 40px; height: 40px; border-radius: 12px; border: none; background: #1a237e; color: #90caf9; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    .fab-small:hover { background: #283593; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+    .fab-small .material-icons-outlined { font-size: 20px; }
+
+    /* Divider */
+    .divider { height: 1px; background: #2e2e2e; margin: 8px 0; }
+  </style>
+</head>
+<body>
+
+  <!-- App Bar -->
+  <div class="appbar">
+    <div class="logo">
+      <div class="logo-icon">S</div>
+      <div class="logo-text">Sourcivity</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="avatar">AC</div>
+  </div>
+
+  <div class="layout">
+    <!-- Navigation Rail -->
+    <div class="nav-rail">
+      <div class="nav-item active">
+        <span class="material-icons-outlined">search</span>
+        <span>Search</span>
+      </div>
+      <div class="nav-item">
+        <span class="material-icons-outlined">description</span>
+        <span>Quotes</span>
+      </div>
+      <div class="nav-item">
+        <span class="material-icons-outlined">email</span>
+        <span>RFQs</span>
+      </div>
+      <div class="nav-item">
+        <span class="material-icons-outlined">bar_chart</span>
+        <span>Analytics</span>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+      <h1>Supplier Search</h1>
+      <p class="subtitle">Find US manufacturers and distributors for industrial parts</p>
+
+      <!-- Search Field -->
+      <div class="search-field">
+        <label>Search suppliers</label>
+        <span class="material-icons-outlined">search</span>
+        <input type="text" value="inconel 718 forgings">
+      </div>
+
+      <!-- Results -->
+      <div class="results-grid">
+        <!-- Card 1 -->
+        <div class="result-card">
+          <div class="card-top">
+            <div>
+              <span class="company">Anderson Shumaker</span>
+              <span class="state-chip">IL</span>
+            </div>
+          </div>
+          <div class="card-body">Open-die forgings in Inconel 718, Hastelloy, titanium, and other exotic alloys</div>
+          <div class="card-chips">
+            <span class="chip chip-outlined">AS9100</span>
+            <span class="chip chip-outlined">ISO 9001</span>
+            <span class="chip chip-filled">103 yrs</span>
+            <span class="chip chip-filled">150 emp</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-match">Specializes in open-die Inconel 718 forgings for aerospace</span>
+            <button class="fab-small"><span class="material-icons-outlined">email</span></button>
+          </div>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="result-card">
+          <div class="card-top">
+            <div>
+              <span class="company">Altemp Alloys</span>
+              <span class="state-chip">CA</span>
+            </div>
+          </div>
+          <div class="card-body">High-temp & exotic alloy forgings — Inconel, Hastelloy, stainless steel</div>
+          <div class="card-chips">
+            <span class="chip chip-outlined">AMS 5664</span>
+            <span class="chip chip-outlined">ASTM B637</span>
+            <span class="chip chip-filled">47 yrs</span>
+            <span class="chip chip-filled">60 emp</span>
+            <span class="chip chip-filled">$10M</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-match">Stocks Inconel 718 forgings, sheet, plate and bar since 1979</span>
+            <button class="fab-small"><span class="material-icons-outlined">email</span></button>
+          </div>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="result-card">
+          <div class="card-top">
+            <div>
+              <span class="company">Weldaloy Specialty Forgings</span>
+              <span class="state-chip">MI</span>
+            </div>
+          </div>
+          <div class="card-body">Custom open-die forgings, rolled rings, and seamless rings in superalloys</div>
+          <div class="card-chips">
+            <span class="chip chip-outlined">NADCAP</span>
+            <span class="chip chip-outlined">AS9100D</span>
+            <span class="chip chip-outlined">ISO 9001:2015</span>
+            <span class="chip chip-filled">79 yrs</span>
+            <span class="chip chip-filled">200 emp</span>
+            <span class="chip chip-filled">$45M</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-match">Full-service forging with in-house heat treat and NDT</span>
+            <button class="fab-small"><span class="material-icons-outlined">email</span></button>
+          </div>
+        </div>
+
+        <!-- Card 4 -->
+        <div class="result-card">
+          <div class="card-top">
+            <div>
+              <span class="company">ForceBeyond</span>
+              <span class="state-chip">TX</span>
+            </div>
+          </div>
+          <div class="card-body">Superalloy forging services — Inconel 718, 625, Waspaloy, Rene 41</div>
+          <div class="card-chips">
+            <span class="chip chip-outlined">AS9100</span>
+            <span class="chip chip-filled">15 yrs</span>
+            <span class="chip chip-filled">80 emp</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-match">Closed-die and open-die forgings for aerospace and power gen</span>
+            <button class="fab-small" style="background:#2e2e2e;color:#757575;box-shadow:none"><span class="material-icons-outlined">open_in_new</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

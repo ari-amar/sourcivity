@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sourcivity — Demo</title>
+  <link rel="icon" type="image/png" href="sourcivity-logo.png">
+  <link rel="apple-touch-icon" href="sourcivity-logo.png">
+  <meta property="og:title" content="Sourcivity Demo">
+  <meta property="og:description" content="AI-powered supplier search and procurement — try it live">
+  <meta property="og:image" content="sourcivity-logo.png">
+  <meta property="og:type" content="website">
+  <link rel="stylesheet" href="style.css?v=104">
+  <style>
+    .demo-banner {
+      background: linear-gradient(90deg, #1c2333 0%, #162230 100%);
+      border: 1px solid #1f4068;
+      border-radius: 8px;
+      padding: 10px 18px;
+      margin: 0 auto 16px auto;
+      max-width: 900px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 13px;
+      color: #8b949e;
+    }
+    .demo-banner a {
+      color: #58a6ff;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .demo-banner a:hover { text-decoration: underline; }
+    .demo-badge {
+      background: #d29922;
+      color: #0f1117;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    @media (max-width: 768px) {
+      .demo-banner {
+        flex-direction: column;
+        text-align: center;
+        font-size: 12px;
+        padding: 10px 14px;
+        gap: 6px;
+      }
+      .demo-cta-box {
+        padding: 24px 20px;
+        margin: 0 12px;
+      }
+      .demo-cta-box h3 { font-size: 16px; }
+      .demo-cta-box p { font-size: 13px; }
+    }
+    .demo-cta-popup {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 200;
+    }
+    .demo-cta-box {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 32px 40px;
+      max-width: 440px;
+      text-align: center;
+    }
+    .demo-cta-box h3 {
+      font-size: 18px;
+      color: #e1e4e8;
+      margin-bottom: 12px;
+    }
+    .demo-cta-box p {
+      font-size: 14px;
+      color: #8b949e;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+    .demo-cta-box a.cta-link {
+      display: inline-block;
+      padding: 10px 24px;
+      background: #1f6feb;
+      color: #fff;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    .demo-cta-box a.cta-link:hover { background: #388bfd; }
+    .demo-cta-box .cta-dismiss {
+      display: block;
+      margin-top: 8px;
+      color: #484f58;
+      font-size: 13px;
+      cursor: pointer;
+      background: none;
+      border: none;
+    }
+    .demo-cta-box .cta-dismiss:hover { color: #8b949e; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo-group">
+      <img src="sourcivity-logo.png" alt="Sourcivity" class="header-logo">
+      <h1>Sourcivity</h1>
+    </div>
+    <nav>
+      <button class="nav-btn active" data-tab="search">Supplier Search</button>
+      <button class="nav-btn" data-tab="quotes">Quote Tracker</button>
+    </nav>
+  </header>
+
+  <main>
+    <div class="demo-banner">
+      <span><span class="demo-badge">Demo</span> &nbsp; 5 searches per hour &bull; Search results only &bull; RFQ sending disabled</span>
+      <a href="mailto:ari@sourcivity.io">Get full access &rarr;</a>
+    </div>
+
+    <!-- SUPPLIER SEARCH TAB -->
+    <section id="tab-search" class="tab active">
+      <div class="search-bar">
+        <input type="text" id="search-input" placeholder="Search for a supplier or service...">
+        <button id="search-btn">Search</button>
+      </div>
+      <div id="suggestions" class="suggestions">
+        <div id="suggestion-chips" class="suggestion-chips"></div>
+      </div>
+      <div id="search-status" class="status-msg hidden"></div>
+      <div id="search-results" class="results-container">
+        <table id="results-table" class="hidden">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Company</th>
+              <th>State</th>
+              <th>Products / Services</th>
+              <th>Certs</th>
+              <th>Reputation</th>
+              <th>Match</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- QUOTE TRACKER TAB -->
+    <section id="tab-quotes" class="tab hidden">
+      <div class="tracker-header">
+        <h2>Quote Tracker</h2>
+        <div class="tracker-controls">
+          <div class="status-filters" id="status-filters">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="sent">Sent</button>
+            <button class="filter-btn" data-filter="responded">Responded</button>
+            <button class="filter-btn" data-filter="overdue">Overdue</button>
+            <button class="filter-btn" data-filter="received">Received</button>
+            <button class="filter-btn" data-filter="bounced">Bounced</button>
+          </div>
+          <button id="refresh-quotes-btn">Refresh</button>
+        </div>
+      </div>
+      <div id="quotes-status" class="status-msg hidden"></div>
+      <table id="quotes-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Supplier</th>
+            <th>Part / Service</th>
+            <th>Quoted Price</th>
+            <th>Unit</th>
+            <th>Lead Time</th>
+            <th>MOQ</th>
+            <th>Payment Terms</th>
+            <th>Valid Until</th>
+            <th>Status</th>
+            <th>Latest</th>
+          </tr>
+        </thead>
+        <tbody id="quotes-body"></tbody>
+      </table>
+    </section>
+
+    <!-- RFQ MODAL (demo version — shows form but redirects to CTA) -->
+    <div id="rfq-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Send RFQ</h2>
+          <button class="modal-close" id="rfq-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p id="rfq-supplier-info"></p>
+          <label for="rfq-part">Part / Service Description:</label>
+          <input type="text" id="rfq-part" placeholder="e.g. 1/2 inch titanium ball bearings, Grade 23">
+          <label for="rfq-qty">Quantity:</label>
+          <input type="text" id="rfq-qty" placeholder="e.g. 500 units, or leave blank for pricing tiers">
+          <label for="rfq-notes">Additional Notes:</label>
+          <textarea id="rfq-notes" rows="3" placeholder="Any specs, delivery location, or special requirements"></textarea>
+          <div id="rfq-status" class="status-msg hidden"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="rfq-submit-btn" class="btn-primary">Submit RFQ</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js?v=104"></script>
+</body>
+</html>
