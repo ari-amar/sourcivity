@@ -100,8 +100,11 @@ def handle(query, skip_enrichment=False):
         if all_infobox:
             extra_context += "\n\nKnowledge panel:\n" + json.dumps(all_infobox[:2], indent=1)
 
+        # Sanitize query — strip anything that looks like prompt injection
+        safe_query = re.sub(r'(?i)(ignore|forget|disregard|override|system|instruction|prompt)', '', query).strip()[:200]
+
         # Hard cap: truncate context if too long (~5500 chars ≈ ~1500 tokens, leaves room for system+output)
-        user_msg = f"Query: {query}\n\nSearch results:\n{search_context}{extra_context}"
+        user_msg = f"Query: {safe_query}\n\nSearch results:\n{search_context}{extra_context}"
         if len(user_msg) > 12000:
             user_msg = user_msg[:12000] + "\n... (truncated)"
 

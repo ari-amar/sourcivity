@@ -47,9 +47,8 @@ def log_activity(action, detail="", ip=""):
 
 
 def _get_real_ip(handler):
-    """Get real client IP from Cloudflare headers, falling back to socket address."""
+    """Get real client IP — only trust CF-Connecting-IP (set by Cloudflare, not spoofable by clients)."""
     return (handler.headers.get("CF-Connecting-IP")
-            or handler.headers.get("X-Forwarded-For", "").split(",")[0].strip()
             or handler.client_address[0])
 
 
@@ -275,7 +274,9 @@ Additional notes: {notes or 'none'}"""
     def do_OPTIONS(self):
         """Handle CORS preflight."""
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        origin = _check_origin(self)
+        if origin:
+            self.send_header("Access-Control-Allow-Origin", origin)
         self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()

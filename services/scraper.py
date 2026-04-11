@@ -9,10 +9,11 @@ import ssl
 import urllib.parse
 import urllib.request
 
-# Reusable SSL context that doesn't verify certs (many industrial sites have bad certs)
+# Default SSL context with verification; fallback to unverified only on cert errors
 _ssl_ctx = ssl.create_default_context()
-_ssl_ctx.check_hostname = False
-_ssl_ctx.verify_mode = ssl.CERT_NONE
+_ssl_ctx_noverify = ssl.create_default_context()
+_ssl_ctx_noverify.check_hostname = False
+_ssl_ctx_noverify.verify_mode = ssl.CERT_NONE
 
 EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}')
 CONTACT_HREF_RE = re.compile(
@@ -50,7 +51,11 @@ def _fetch_page(url, timeout=8):
         if not url.startswith('http'):
             url = 'https://' + url
         req = urllib.request.Request(url, headers=_BROWSER_HEADERS)
-        with urllib.request.urlopen(req, timeout=timeout, context=_ssl_ctx) as resp:
+        try:
+            resp_ctx = urllib.request.urlopen(req, timeout=timeout, context=_ssl_ctx)
+        except (ssl.SSLCertVerificationError, ssl.SSLError):
+            resp_ctx = urllib.request.urlopen(req, timeout=timeout, context=_ssl_ctx_noverify)
+        with resp_ctx as resp:
             html = resp.read(500_000).decode('utf-8', errors='ignore')
             if 'cf-mitigated' in str(resp.headers) or 'Just a moment...' in html[:500]:
                 _blocked_sites.append(url)
