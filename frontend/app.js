@@ -73,11 +73,15 @@ function updateCartBar() {
   } else {
     cartBar.classList.add('hidden');
   }
-  // Update checkbox states in table
-  document.querySelectorAll('.rfq-checkbox').forEach(cb => {
-    const idx = parseInt(cb.dataset.index);
+  // Update selected state on email action icons
+  document.querySelectorAll('.action-email[data-index]').forEach(btn => {
+    const idx = parseInt(btn.dataset.index);
     const supplier = searchResults[idx];
-    cb.checked = supplier && rfqCart.some(s => s.email === supplier.email && s.name === supplier.name);
+    if (supplier && rfqCart.some(s => s.email === supplier.email && s.name === supplier.name)) {
+      btn.classList.add('selected');
+    } else {
+      btn.classList.remove('selected');
+    }
   });
 }
 
@@ -249,14 +253,10 @@ function renderSearchResults(results) {
     const stateVal = s.state || s.location || '';
     const stateCell = stateVal ? '<span class="info-pill state-pill">' + esc(stateVal) + '</span>' : '\u2014';
 
-    // Checkbox for cart (only for suppliers with email)
+    // Mark email icons as selected if already in cart
     const isInCart = rfqCart.some(c => c.email === s.email && c.name === s.name);
-    const checkboxCell = contactType === 'email'
-      ? '<input type="checkbox" class="rfq-checkbox" data-index="' + i + '"' + (isInCart ? ' checked' : '') + '>'
-      : '';
 
     tr.innerHTML = `
-      <td>${checkboxCell}</td>
       <td>${i + 1}</td>
       <td><strong>${nameCell}</strong></td>
       <td>${stateCell}</td>
@@ -266,26 +266,28 @@ function renderSearchResults(results) {
       <td>${esc(s.matchReason || '\u2014')}</td>
       <td>${actionCell}</td>
     `;
+
+    // Apply selected state after inserting HTML
+    if (isInCart) {
+      const emailBtn = tr.querySelector('.action-email[data-index]');
+      if (emailBtn) emailBtn.classList.add('selected');
+    }
+
     resultsBody.appendChild(tr);
   });
 
   resultsTable.classList.remove('hidden');
 
-  document.querySelectorAll('.action-icon[data-index]').forEach(btn => {
+  // Email icons: click to toggle cart selection
+  document.querySelectorAll('.action-email[data-index]').forEach(btn => {
     btn.addEventListener('click', () => {
-      openRfqModal(searchResults[parseInt(btn.dataset.index)]);
+      toggleCartSupplier(searchResults[parseInt(btn.dataset.index)]);
     });
   });
 
   document.querySelectorAll('.action-icon[data-form-index]').forEach(btn => {
     btn.addEventListener('click', () => {
       openContactFormPopup(searchResults[parseInt(btn.dataset.formIndex)]);
-    });
-  });
-
-  document.querySelectorAll('.rfq-checkbox').forEach(cb => {
-    cb.addEventListener('change', () => {
-      toggleCartSupplier(searchResults[parseInt(cb.dataset.index)]);
     });
   });
 }
