@@ -10,7 +10,7 @@
   <meta property="og:description" content="AI-powered supplier search and procurement — try it live">
   <meta property="og:image" content="sourcivity-logo.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="style.css?v=104">
+  <link rel="stylesheet" href="style.css?v=105">
   <style>
     .demo-banner {
       background: linear-gradient(90deg, #1c2333 0%, #162230 100%);
@@ -105,6 +105,78 @@
       border: none;
     }
     .demo-cta-box .cta-dismiss:hover { color: #8b949e; }
+
+    /* Selected email icon in cart */
+    .action-email.selected {
+      background: #1f6feb;
+      border-color: #58a6ff;
+      color: #fff;
+      box-shadow: 0 0 8px rgba(31, 111, 235, 0.5);
+    }
+    .action-email.selected:hover {
+      background: #1a5cc7;
+    }
+
+    /* RFQ CART BAR */
+    .rfq-cart-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(135deg, #0d1b2a 0%, #162447 100%);
+      border-top: 2px solid #1f6feb;
+      padding: 14px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 90;
+      box-shadow: 0 -6px 20px rgba(0,0,0,0.5);
+      animation: slideUp 0.25s ease-out;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    #rfq-cart-count {
+      font-size: 15px;
+      color: #e1e4e8;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #rfq-cart-count::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: #1f6feb;
+      border-radius: 50%;
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.3); }
+    }
+    #rfq-cart-checkout {
+      padding: 10px 28px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, #1f6feb 0%, #388bfd 100%);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      box-shadow: 0 2px 8px rgba(31, 111, 235, 0.3);
+    }
+    #rfq-cart-checkout:hover {
+      background: linear-gradient(135deg, #388bfd 0%, #58a6ff 100%);
+      box-shadow: 0 4px 16px rgba(31, 111, 235, 0.5);
+      transform: translateY(-1px);
+    }
   </style>
 </head>
 <body>
@@ -191,30 +263,13 @@
       </table>
     </section>
 
-    <!-- RFQ MODAL (demo version — shows form but redirects to CTA) -->
-    <div id="rfq-modal" class="modal hidden">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>Send RFQ</h2>
-          <button class="modal-close" id="rfq-close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <p id="rfq-supplier-info"></p>
-          <label for="rfq-part">Part / Service Description:</label>
-          <input type="text" id="rfq-part" placeholder="e.g. 1/2 inch titanium ball bearings, Grade 23">
-          <label for="rfq-qty">Quantity:</label>
-          <input type="text" id="rfq-qty" placeholder="e.g. 500 units, or leave blank for pricing tiers">
-          <label for="rfq-notes">Additional Notes:</label>
-          <textarea id="rfq-notes" rows="3" placeholder="Any specs, delivery location, or special requirements"></textarea>
-          <div id="rfq-status" class="status-msg hidden"></div>
-        </div>
-        <div class="modal-footer">
-          <button id="rfq-submit-btn" class="btn-primary">Submit RFQ</button>
-        </div>
-      </div>
+    <!-- RFQ CART BAR -->
+    <div id="rfq-cart-bar" class="rfq-cart-bar hidden">
+      <span id="rfq-cart-count">0 suppliers selected</span>
+      <button id="rfq-cart-checkout">Checkout</button>
     </div>
   </main>
 
-  <script src="app.js?v=104"></script>
+  <script src="app.js?v=105"></script>
 </body>
 </html>

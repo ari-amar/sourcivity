@@ -26,8 +26,8 @@ const SUGGESTIONS = [
 let searchResults = [];
 let allQuotes = [];
 let activeFilter = 'all';
-let selectedSupplier = null;
 let suggestionInterval = null;
+let rfqCart = [];
 
 // === DOM REFS ===
 const navBtns = document.querySelectorAll('.nav-btn');
@@ -39,14 +39,43 @@ const resultsBody = document.getElementById('results-body');
 const quotesBody = document.getElementById('quotes-body');
 const quotesStatus = document.getElementById('quotes-status');
 const refreshQuotesBtn = document.getElementById('refresh-quotes-btn');
-const rfqModal = document.getElementById('rfq-modal');
-const rfqClose = document.getElementById('rfq-close');
-const rfqSupplierInfo = document.getElementById('rfq-supplier-info');
-const rfqPart = document.getElementById('rfq-part');
-const rfqQty = document.getElementById('rfq-qty');
-const rfqNotes = document.getElementById('rfq-notes');
-const rfqStatus = document.getElementById('rfq-status');
-const rfqSubmitBtn = document.getElementById('rfq-submit-btn');
+const cartBar = document.getElementById('rfq-cart-bar');
+const cartCount = document.getElementById('rfq-cart-count');
+const cartCheckoutBtn = document.getElementById('rfq-cart-checkout');
+
+// === CART BAR ===
+function updateCartBar() {
+  if (rfqCart.length > 0) {
+    cartBar.classList.remove('hidden');
+    cartCount.textContent = rfqCart.length + ' supplier' + (rfqCart.length === 1 ? '' : 's') + ' selected';
+  } else {
+    cartBar.classList.add('hidden');
+  }
+  // Update selected state on email action icons
+  document.querySelectorAll('.action-email[data-index]').forEach(btn => {
+    const idx = parseInt(btn.dataset.index);
+    const supplier = searchResults[idx];
+    if (supplier && rfqCart.some(s => s.email === supplier.email && s.name === supplier.name)) {
+      btn.classList.add('selected');
+    } else {
+      btn.classList.remove('selected');
+    }
+  });
+}
+
+function toggleCartSupplier(supplier) {
+  const idx = rfqCart.findIndex(s => s.email === supplier.email && s.name === supplier.name);
+  if (idx >= 0) {
+    rfqCart.splice(idx, 1);
+  } else {
+    rfqCart.push(supplier);
+  }
+  updateCartBar();
+}
+
+cartCheckoutBtn.addEventListener('click', () => {
+  showCtaPopup();
+});
 
 // === TAB NAVIGATION ===
 navBtns.forEach(btn => {
@@ -149,17 +178,32 @@ function pollForUpdates(searchId) {
   }, 1500);
 }
 
+function getContactType(s) {
+  const email = (s.email || '').toLowerCase();
+  if (email.match(/[\w.-]+@[\w.-]+\.\w+/)) return 'email';
+  return 'none';
+}
+
 function renderSearchResults(results) {
   resultsBody.innerHTML = '';
   results.forEach((s, i) => {
     const tr = document.createElement('tr');
+    const contactType = getContactType(s);
     const nameCell = s.website
       ? '<a href="' + ensureHttp(esc(s.website)) + '" target="_blank">' + esc(s.name || '\u2014') + '</a>'
       : esc(s.name || '\u2014');
 
-    // Demo: always show RFQ button (envelope icon) — opens modal with CTA
+    // Demo: show email icon for all suppliers — clicking adds to cart
     const emailIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 4L12 13 2 4"/></svg>';
-    const actionCell = '<button class="action-icon action-email" data-index="' + i + '" title="Send RFQ">' + emailIcon + '</button>';
+    const linkIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+
+    let actionCell = '';
+    if (contactType === 'email') {
+      actionCell = '<button class="action-icon action-email" data-index="' + i + '" title="Select for RFQ">' + emailIcon + '</button>';
+    } else {
+      const contactUrl = s.website ? ensureHttp(esc(s.website)) + '/contact' : '#';
+      actionCell = '<a href="' + contactUrl + '" target="_blank" class="action-icon action-link" title="Visit Website">' + linkIcon + '</a>';
+    }
 
     const repParts = [];
     if (s.yearsInBusiness) repParts.push(esc(s.yearsInBusiness));
@@ -179,6 +223,8 @@ function renderSearchResults(results) {
     const stateVal = s.state || s.location || '';
     const stateCell = stateVal ? '<span class="info-pill state-pill">' + esc(stateVal) + '</span>' : '\u2014';
 
+    const isInCart = rfqCart.some(c => c.email === s.email && c.name === s.name);
+
     tr.innerHTML = `
       <td>${i + 1}</td>
       <td><strong>${nameCell}</strong></td>
@@ -189,50 +235,34 @@ function renderSearchResults(results) {
       <td>${esc(s.matchReason || '\u2014')}</td>
       <td>${actionCell}</td>
     `;
+
+    if (isInCart) {
+      const emailBtn = tr.querySelector('.action-email[data-index]');
+      if (emailBtn) emailBtn.classList.add('selected');
+    }
+
     resultsBody.appendChild(tr);
   });
 
   resultsTable.classList.remove('hidden');
 
-  document.querySelectorAll('.action-icon[data-index]').forEach(btn => {
+  // Email icons: click to toggle cart selection
+  document.querySelectorAll('.action-email[data-index]').forEach(btn => {
     btn.addEventListener('click', () => {
-      openRfqModal(searchResults[parseInt(btn.dataset.index)]);
+      toggleCartSupplier(searchResults[parseInt(btn.dataset.index)]);
     });
   });
 }
 
-// === RFQ MODAL (demo — shows form, submit shows CTA popup) ===
-function openRfqModal(supplier) {
-  selectedSupplier = supplier;
-  rfqSupplierInfo.textContent = 'Sending RFQ to: ' + (supplier.name || 'Unknown');
-  rfqPart.value = '';
-  rfqQty.value = '';
-  rfqNotes.value = '';
-  hideStatus(rfqStatus);
-  rfqModal.classList.remove('hidden');
-}
-
-rfqClose.addEventListener('click', () => rfqModal.classList.add('hidden'));
-rfqModal.addEventListener('click', (e) => {
-  if (e.target === rfqModal) rfqModal.classList.add('hidden');
-});
-
-rfqSubmitBtn.addEventListener('click', () => {
-  if (!rfqPart.value.trim()) {
-    showStatus(rfqStatus, 'error', 'Please enter a part/service description.');
-    return;
-  }
-  rfqModal.classList.add('hidden');
-  showCtaPopup();
-});
-
+// === CTA POPUP (demo — shown instead of actual RFQ sending) ===
 function showCtaPopup() {
+  const count = rfqCart.length;
   const overlay = document.createElement('div');
   overlay.className = 'demo-cta-popup';
   overlay.innerHTML = `
     <div class="demo-cta-box">
       <h3>Ready to send RFQs?</h3>
-      <p>The demo lets you search and explore suppliers. To send RFQs, track quotes, and manage your procurement workflow — get started with a full Sourcivity account.</p>
+      <p>You've selected ${count} supplier${count === 1 ? '' : 's'}. The demo lets you search and explore suppliers. To send RFQs, track quotes, and manage your procurement workflow — get started with a full Sourcivity account.</p>
       <a class="cta-link" href="mailto:ari@sourcivity.io?subject=Sourcivity%20Access%20Request&body=Hi%20Ari%2C%0A%0AI%20tried%20the%20Sourcivity%20demo%20and%20I%27d%20like%20to%20get%20full%20access.%0A%0AThanks!">Contact ari@sourcivity.io</a>
       <button class="cta-dismiss">Continue browsing</button>
     </div>
