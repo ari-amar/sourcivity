@@ -178,32 +178,17 @@ function pollForUpdates(searchId) {
   }, 1500);
 }
 
-function getContactType(s) {
-  const email = (s.email || '').toLowerCase();
-  if (email.match(/[\w.-]+@[\w.-]+\.\w+/)) return 'email';
-  return 'none';
-}
-
 function renderSearchResults(results) {
   resultsBody.innerHTML = '';
   results.forEach((s, i) => {
     const tr = document.createElement('tr');
-    const contactType = getContactType(s);
     const nameCell = s.website
       ? '<a href="' + ensureHttp(esc(s.website)) + '" target="_blank">' + esc(s.name || '\u2014') + '</a>'
       : esc(s.name || '\u2014');
 
-    // Demo: show email icon for all suppliers — clicking adds to cart
+    // Demo: always show email icon for all suppliers — clicking adds to cart
     const emailIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 4L12 13 2 4"/></svg>';
-    const linkIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
-
-    let actionCell = '';
-    if (contactType === 'email') {
-      actionCell = '<button class="action-icon action-email" data-index="' + i + '" title="Select for RFQ">' + emailIcon + '</button>';
-    } else {
-      const contactUrl = s.website ? ensureHttp(esc(s.website)) + '/contact' : '#';
-      actionCell = '<a href="' + contactUrl + '" target="_blank" class="action-icon action-link" title="Visit Website">' + linkIcon + '</a>';
-    }
+    const actionCell = '<button class="action-icon action-email" data-index="' + i + '" title="Select for RFQ">' + emailIcon + '</button>';
 
     const repParts = [];
     if (s.yearsInBusiness) repParts.push(esc(s.yearsInBusiness));
