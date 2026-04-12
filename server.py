@@ -127,7 +127,9 @@ class AppHandler(SimpleHTTPRequestHandler):
             return
 
         # --- Demo mode: block restricted endpoints ---
-        if DEMO_MODE and self.path in ("/api/rfq/draft", "/api/rfq/send", "/api/enrich",
+        if DEMO_MODE and self.path in ("/api/rfq/draft", "/api/rfq/send",
+                                        "/api/rfq/batch-draft", "/api/rfq/batch-send",
+                                        "/api/enrich",
                                         "/api/inbox/check", "/api/browser/detect-forms",
                                         "/api/browser/autofill", "/api/browser/fill-form",
                                         "/api/quotes/compare"):
@@ -175,6 +177,27 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
             log_activity("rfq_draft", f"{supplier.get('name', '?')} - {part}", _get_real_ip(self))
             result = rfq.handle_draft(supplier, part, qty, notes)
+            _send_json(self, result)
+
+        elif self.path == "/api/rfq/batch-draft":
+            suppliers = data.get("suppliers", [])
+            part = data.get("part", "")
+            qty = data.get("qty", "")
+            notes = data.get("notes", "")
+            if not part or not suppliers:
+                _send_json(self, {"error": "Missing part or suppliers"}, 400)
+                return
+            log_activity("rfq_batch_draft", f"{len(suppliers)} suppliers - {part}", _get_real_ip(self))
+            result = rfq.handle_batch_draft(suppliers, part, qty, notes)
+            _send_json(self, result)
+
+        elif self.path == "/api/rfq/batch-send":
+            items = data.get("items", [])
+            if not items:
+                _send_json(self, {"error": "Missing items"}, 400)
+                return
+            log_activity("rfq_batch_send", f"{len(items)} emails", _get_real_ip(self))
+            result = rfq.handle_batch_send(items)
             _send_json(self, result)
 
         elif self.path == "/api/rfq/send":

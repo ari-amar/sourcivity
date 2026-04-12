@@ -38,6 +38,7 @@ let allQuotes = [];
 let activeFilter = 'all';
 let selectedSupplier = null;
 let suggestionInterval = null;
+let rfqCart = [];
 
 // === DOM REFS ===
 const navBtns = document.querySelectorAll('.nav-btn');
@@ -60,6 +61,37 @@ const rfqPreviewText = document.getElementById('rfq-preview-text');
 const rfqPreviewBtn = document.getElementById('rfq-preview-btn');
 const rfqSendBtn = document.getElementById('rfq-send-btn');
 const rfqStatus = document.getElementById('rfq-status');
+const cartBar = document.getElementById('rfq-cart-bar');
+const cartCount = document.getElementById('rfq-cart-count');
+const cartCheckoutBtn = document.getElementById('rfq-cart-checkout');
+
+// === CART BAR ===
+function updateCartBar() {
+  if (rfqCart.length > 0) {
+    cartBar.classList.remove('hidden');
+    cartCount.textContent = rfqCart.length + ' supplier' + (rfqCart.length === 1 ? '' : 's') + ' selected';
+  } else {
+    cartBar.classList.add('hidden');
+  }
+  // Update checkbox states in table
+  document.querySelectorAll('.rfq-checkbox').forEach(cb => {
+    const idx = parseInt(cb.dataset.index);
+    const supplier = searchResults[idx];
+    cb.checked = supplier && rfqCart.some(s => s.email === supplier.email && s.name === supplier.name);
+  });
+}
+
+function toggleCartSupplier(supplier) {
+  const idx = rfqCart.findIndex(s => s.email === supplier.email && s.name === supplier.name);
+  if (idx >= 0) {
+    rfqCart.splice(idx, 1);
+  } else {
+    rfqCart.push(supplier);
+  }
+  updateCartBar();
+}
+
+cartCheckoutBtn.addEventListener('click', openCheckoutModal);
 
 // === TAB NAVIGATION ===
 navBtns.forEach(btn => {
@@ -217,7 +249,14 @@ function renderSearchResults(results) {
     const stateVal = s.state || s.location || '';
     const stateCell = stateVal ? '<span class="info-pill state-pill">' + esc(stateVal) + '</span>' : '\u2014';
 
+    // Checkbox for cart (only for suppliers with email)
+    const isInCart = rfqCart.some(c => c.email === s.email && c.name === s.name);
+    const checkboxCell = contactType === 'email'
+      ? '<input type="checkbox" class="rfq-checkbox" data-index="' + i + '"' + (isInCart ? ' checked' : '') + '>'
+      : '';
+
     tr.innerHTML = `
+      <td>${checkboxCell}</td>
       <td>${i + 1}</td>
       <td><strong>${nameCell}</strong></td>
       <td>${stateCell}</td>
@@ -241,6 +280,12 @@ function renderSearchResults(results) {
   document.querySelectorAll('.action-icon[data-form-index]').forEach(btn => {
     btn.addEventListener('click', () => {
       openContactFormPopup(searchResults[parseInt(btn.dataset.formIndex)]);
+    });
+  });
+
+  document.querySelectorAll('.rfq-checkbox').forEach(cb => {
+    cb.addEventListener('change', () => {
+      toggleCartSupplier(searchResults[parseInt(cb.dataset.index)]);
     });
   });
 }
@@ -617,6 +662,232 @@ function showFormFillModal(supplier, url, form) {
   });
 }
 
+
+// === CHECKOUT MODAL ===
+const checkoutModal = document.getElementById('checkout-modal');
+const checkoutClose = document.getElementById('checkout-close');
+const checkoutSuppliers = document.getElementById('checkout-suppliers');
+const checkoutPart = document.getElementById('checkout-part');
+const checkoutQty = document.getElementById('checkout-qty');
+const checkoutNotes = document.getElementById('checkout-notes');
+const checkoutPreviews = document.getElementById('checkout-previews');
+const checkoutStatus = document.getElementById('checkout-status');
+const checkoutGenerateBtn = document.getElementById('checkout-generate-btn');
+const checkoutSendBtn = document.getElementById('checkout-send-btn');
+
+function openCheckoutModal() {
+  if (!emailConfigured) {
+    alert('Email is not configured yet. Please contact ari@sourcivity.io with your Gmail address and app password to enable RFQ sending.');
+    return;
+  }
+  if (rfqCart.length === 0) return;
+
+  checkoutPart.value = '';
+  checkoutQty.value = '';
+  checkoutNotes.value = '';
+  checkoutPreviews.classList.add('hidden');
+  checkoutPreviews.innerHTML = '';
+  checkoutSendBtn.classList.add('hidden');
+  checkoutGenerateBtn.disabled = false;
+  checkoutGenerateBtn.textContent = 'Generate & Preview Emails';
+  hideStatus(checkoutStatus);
+  renderCheckoutSuppliers();
+  checkoutModal.classList.remove('hidden');
+}
+
+function renderCheckoutSuppliers() {
+  checkoutSuppliers.innerHTML = '';
+  rfqCart.forEach((s, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'checkout-supplier-chip';
+    chip.innerHTML = esc(s.name) + ' <button class="checkout-supplier-remove" data-index="' + i + '">&times;</button>';
+    checkoutSuppliers.appendChild(chip);
+  });
+  document.querySelectorAll('.checkout-supplier-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      rfqCart.splice(parseInt(btn.dataset.index), 1);
+      updateCartBar();
+      if (rfqCart.length === 0) {
+        checkoutModal.classList.add('hidden');
+      } else {
+        renderCheckoutSuppliers();
+      }
+    });
+  });
+}
+
+checkoutClose.addEventListener('click', () => checkoutModal.classList.add('hidden'));
+checkoutModal.addEventListener('click', (e) => {
+  if (e.target === checkoutModal) checkoutModal.classList.add('hidden');
+});
+
+// Generate previews
+checkoutGenerateBtn.addEventListener('click', async () => {
+  if (!checkoutPart.value.trim()) {
+    showStatus(checkoutStatus, 'error', 'Please enter a part/service description.');
+    return;
+  }
+  if (rfqCart.length === 0) return;
+
+  checkoutGenerateBtn.disabled = true;
+  checkoutGenerateBtn.textContent = 'Generating...';
+  showStatus(checkoutStatus, 'loading', 'Generating ' + rfqCart.length + ' email previews...');
+  checkoutPreviews.classList.add('hidden');
+  checkoutSendBtn.classList.add('hidden');
+
+  try {
+    const res = await fetch(API_URL + '/api/rfq/batch-draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        suppliers: rfqCart,
+        part: checkoutPart.value.trim(),
+        qty: checkoutQty.value.trim(),
+        notes: checkoutNotes.value.trim()
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    checkoutPreviews.innerHTML = '';
+    (data.emails || []).forEach((email, i) => {
+      if (email.error) {
+        const card = document.createElement('div');
+        card.className = 'checkout-preview-card';
+        card.innerHTML = '<h4>' + esc(email.supplier_name) + '</h4><p style="color:#f85149;">Error: ' + esc(email.error) + '</p>';
+        checkoutPreviews.appendChild(card);
+        return;
+      }
+
+      // Parse email text into To/Subject/Body
+      const lines = email.email_text.split('\n');
+      let toAddr = '', subject = '', bodyLines = [];
+      let pastHeaders = false;
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!pastHeaders && trimmed.toLowerCase().startsWith('subject:')) {
+          subject = trimmed.substring(8).trim();
+        } else if (!pastHeaders && trimmed.toLowerCase().startsWith('to:')) {
+          toAddr = trimmed.substring(3).trim();
+        } else if (!pastHeaders && trimmed.toLowerCase().startsWith('from:')) {
+          continue;
+        } else if (!pastHeaders && trimmed === '') {
+          pastHeaders = true;
+        } else {
+          pastHeaders = true;
+          bodyLines.push(line);
+        }
+      }
+
+      const card = document.createElement('div');
+      card.className = 'checkout-preview-card';
+      card.dataset.supplierIndex = i;
+      card.innerHTML = `
+        <h4>${esc(email.supplier_name)}</h4>
+        <div class="rfq-email-fields">
+          <label>To:</label>
+          <input type="text" class="checkout-to" value="${esc(toAddr || email.supplier_email || '')}">
+          <label>Subject:</label>
+          <input type="text" class="checkout-subject" value="${esc(subject || 'Request for Quote')}">
+          <label>Body:</label>
+          <textarea class="checkout-body" rows="8">${esc(bodyLines.join('\n').trim())}</textarea>
+        </div>
+      `;
+      checkoutPreviews.appendChild(card);
+    });
+
+    checkoutPreviews.classList.remove('hidden');
+    checkoutSendBtn.classList.remove('hidden');
+    hideStatus(checkoutStatus);
+  } catch (err) {
+    showStatus(checkoutStatus, 'error', 'Preview failed: ' + err.message);
+  } finally {
+    checkoutGenerateBtn.disabled = false;
+    checkoutGenerateBtn.textContent = 'Generate & Preview Emails';
+  }
+});
+
+// Send all
+checkoutSendBtn.addEventListener('click', async () => {
+  const cards = checkoutPreviews.querySelectorAll('.checkout-preview-card');
+  const items = [];
+
+  cards.forEach((card, i) => {
+    const toInput = card.querySelector('.checkout-to');
+    if (!toInput) return; // error card
+    const subjectInput = card.querySelector('.checkout-subject');
+    const bodyTextarea = card.querySelector('.checkout-body');
+    const supplier = rfqCart[parseInt(card.dataset.supplierIndex)];
+    items.push({
+      supplier: supplier,
+      email_text: 'Subject: ' + subjectInput.value + '\nTo: ' + toInput.value + '\n\n' + bodyTextarea.value,
+      part: checkoutPart.value.trim(),
+      category: ''
+    });
+  });
+
+  if (items.length === 0) return;
+
+  checkoutSendBtn.disabled = true;
+  checkoutSendBtn.textContent = 'Sending...';
+  showStatus(checkoutStatus, 'loading', 'Sending ' + items.length + ' emails...');
+
+  try {
+    const res = await fetch(API_URL + '/api/rfq/batch-send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    // Show results
+    const results = data.results || [];
+    let successCount = 0;
+    let progressHtml = '<div class="checkout-progress">';
+    results.forEach(r => {
+      if (r.success) {
+        successCount++;
+        progressHtml += '<div class="checkout-progress-item success">&#10003; ' + esc(r.supplier_name) + ' — ' + esc(r.message) + '</div>';
+      } else {
+        progressHtml += '<div class="checkout-progress-item error">&#10007; ' + esc(r.supplier_name) + ' — ' + esc(r.error) + '</div>';
+      }
+    });
+    progressHtml += '</div>';
+    checkoutPreviews.innerHTML = progressHtml;
+
+    if (successCount > 0) {
+      showStatus(checkoutStatus, 'success', successCount + ' of ' + results.length + ' emails sent successfully!');
+      checkoutSendBtn.classList.add('hidden');
+
+      // Clear cart and switch to quotes tab after delay
+      setTimeout(() => {
+        rfqCart = [];
+        updateCartBar();
+        checkoutModal.classList.add('hidden');
+        navBtns.forEach(b => {
+          b.classList.remove('active');
+          if (b.dataset.tab === 'quotes') b.classList.add('active');
+        });
+        document.querySelectorAll('.tab').forEach(t => {
+          t.classList.remove('active');
+          t.classList.add('hidden');
+        });
+        document.getElementById('tab-quotes').classList.remove('hidden');
+        document.getElementById('tab-quotes').classList.add('active');
+        loadQuotes();
+      }, 3000);
+    } else {
+      showStatus(checkoutStatus, 'error', 'All sends failed. Check errors above.');
+      checkoutSendBtn.disabled = false;
+      checkoutSendBtn.textContent = 'Send All';
+    }
+  } catch (err) {
+    showStatus(checkoutStatus, 'error', 'Send failed: ' + err.message);
+    checkoutSendBtn.disabled = false;
+    checkoutSendBtn.textContent = 'Send All';
+  }
+});
 
 // === HELPERS ===
 function showStatus(el, type, msg) {

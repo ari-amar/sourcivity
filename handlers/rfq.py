@@ -136,6 +136,56 @@ def handle_send(supplier, email_text, part, category=""):
     return {"success": True, "message": f"RFQ sent to {supplier_name} at {to_addr}"}
 
 
+def handle_batch_draft(suppliers, part, qty="", notes=""):
+    """Draft RFQ emails for multiple suppliers in parallel. Returns list of drafts."""
+    results = [None] * len(suppliers)
+
+    def draft_one(i, supplier):
+        result = handle_draft(supplier, part, qty, notes)
+        results[i] = {
+            "supplier_name": supplier.get("name", "Unknown"),
+            "supplier_email": supplier.get("email", ""),
+            "email_text": result.get("email_text", ""),
+            "error": result.get("error", ""),
+        }
+
+    threads = []
+    for i, supplier in enumerate(suppliers):
+        t = threading.Thread(target=draft_one, args=(i, supplier))
+        threads.append(t)
+        t.start()
+
+    for t in threads:
+        t.join()
+
+    return {"emails": results}
+
+
+def handle_batch_send(items):
+    """Send multiple RFQ emails sequentially. Returns list of results."""
+    results = []
+    for item in items:
+        supplier = item.get("supplier", {})
+        email_text = item.get("email_text", "")
+        part = item.get("part", "")
+        category = item.get("category", "")
+        try:
+            result = handle_send(supplier, email_text, part, category)
+            results.append({
+                "supplier_name": supplier.get("name", "Unknown"),
+                "success": result.get("success", False),
+                "message": result.get("message", ""),
+                "error": result.get("error", ""),
+            })
+        except Exception as e:
+            results.append({
+                "supplier_name": supplier.get("name", "Unknown"),
+                "success": False,
+                "error": str(e),
+            })
+    return {"results": results}
+
+
 def _guess_category(part):
     """Guess the best category for a part description."""
     part_lower = part.lower()

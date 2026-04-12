@@ -45,6 +45,7 @@
         <table id="results-table" class="hidden">
           <thead>
             <tr>
+              <th></th>
               <th>#</th>
               <th>Company</th>
               <th>State</th>
@@ -96,6 +97,37 @@
         <tbody id="quotes-body"></tbody>
       </table>
     </section>
+
+    <!-- RFQ CART BAR -->
+    <div id="rfq-cart-bar" class="rfq-cart-bar hidden">
+      <span id="rfq-cart-count">0 suppliers selected</span>
+      <button id="rfq-cart-checkout" class="btn-primary">Checkout</button>
+    </div>
+
+    <!-- CHECKOUT MODAL -->
+    <div id="checkout-modal" class="modal hidden">
+      <div class="modal-content checkout-modal-content">
+        <div class="modal-header">
+          <h2>Batch RFQ Checkout</h2>
+          <button class="modal-close" id="checkout-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="checkout-suppliers" class="checkout-suppliers"></div>
+          <label for="checkout-part">Part / Service Description:</label>
+          <input type="text" id="checkout-part" placeholder="e.g. 1/2 inch titanium ball bearings, Grade 23">
+          <label for="checkout-qty">Quantity:</label>
+          <input type="text" id="checkout-qty" placeholder="e.g. 500 units, or leave blank for pricing tiers">
+          <label for="checkout-notes">Additional Notes:</label>
+          <textarea id="checkout-notes" rows="3" placeholder="Any specs, delivery location, or special requirements"></textarea>
+          <div id="checkout-previews" class="checkout-previews hidden"></div>
+          <div id="checkout-status" class="status-msg hidden"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="checkout-generate-btn">Generate & Preview Emails</button>
+          <button id="checkout-send-btn" class="btn-primary hidden">Send All</button>
+        </div>
+      </div>
+    </div>
 
     <!-- RFQ MODAL -->
     <div id="rfq-modal" class="modal hidden">
