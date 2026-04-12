@@ -23,11 +23,24 @@ fi
 
 LOG_FILE="/tmp/sourcivity-${CUSTOMER}.log"
 
-# Kill existing instance for this customer (by log file match)
-EXISTING_PID=$(ps aux | grep "ENV_FILE=$ENV_FILE" | grep -v grep | awk '{print $2}')
-if [ -n "$EXISTING_PID" ]; then
-  echo "Stopping existing instance (pid $EXISTING_PID)..."
-  kill $EXISTING_PID 2>/dev/null
+# Kill existing instance using .pid file, then port as fallback
+PID_FILE="$CUSTOMER_DIR/.pid"
+if [ -f "$PID_FILE" ]; then
+  OLD_PID=$(cat "$PID_FILE")
+  if kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "Stopping existing instance (pid $OLD_PID)..."
+    kill "$OLD_PID" 2>/dev/null
+    sleep 1
+    # Force kill if still alive
+    kill -0 "$OLD_PID" 2>/dev/null && kill -9 "$OLD_PID" 2>/dev/null
+  fi
+fi
+# Fallback: kill anything on the port
+PORT=$(grep SERVE_PORT "$ENV_FILE" | cut -d= -f2)
+EXISTING=$(lsof -ti:"$PORT" 2>/dev/null)
+if [ -n "$EXISTING" ]; then
+  echo "Killing process on port $PORT (pid $EXISTING)..."
+  kill $EXISTING 2>/dev/null
   sleep 1
 fi
 
