@@ -187,7 +187,41 @@ def handle_batch_send(items):
 
 
 def _guess_category(part):
-    """Guess the best category for a part description."""
+    """Use LLM to pick the best category for a part description."""
+    # Get existing categories from the CSV so the LLM reuses them
+    try:
+        existing_quotes, _ = csv_store.read_quotes()
+        existing_cats = sorted(set(q.get("category", "") for q in existing_quotes if q.get("category")))
+    except Exception:
+        existing_cats = []
+
+    # Merge with config defaults
+    all_cats = sorted(set(existing_cats + list(CATEGORIES)))
+    cat_list = "\n".join(f"- {c}" for c in all_cats) if all_cats else "(none yet)"
+
+    system = f"""You are a procurement categorization assistant. Given a part/service description, pick the BEST matching category from the existing list below. If none fit well, create a short new category name (2-4 words, Title Case, use & for conjunctions).
+
+Existing categories:
+{cat_list}
+
+Rules:
+1. Prefer an existing category if the part reasonably fits.
+2. Only create a new category if the part clearly doesn't belong in any existing one.
+3. Return ONLY the category name — nothing else. No quotes, no explanation."""
+
+    try:
+        result = llm.call_llm(system, f"Part/Service: {part}", max_tokens=30)
+        category = result.strip().strip('"').strip("'")
+        # Sanity check: if LLM returned something too long or weird, fall back
+        if len(category) > 50 or "\n" in category:
+            return _guess_category_fallback(part)
+        return category
+    except Exception:
+        return _guess_category_fallback(part)
+
+
+def _guess_category_fallback(part):
+    """Simple keyword fallback if LLM is unavailable."""
     part_lower = part.lower()
     keywords = {
         "Flow Measurement & Control": ["flow", "meter", "sensor", "gauge", "instrument"],
@@ -196,6 +230,11 @@ def _guess_category(part):
         "Power Transmission": ["gear", "belt", "coupling", "clutch", "drive", "motor", "bearing"],
         "Pneumatics": ["pneumatic", "cylinder", "air", "actuator"],
         "Fasteners": ["fastener", "bolt", "screw", "nut", "rivet"],
+        "Seals & Gaskets": ["seal", "gasket", "o-ring", "packing", "ptfe"],
+        "Heat Transfer & Thermal": ["heat exchanger", "furnace", "heater", "condenser", "coil", "thermal"],
+        "Pumps & Compressors": ["pump", "compressor", "blower", "vacuum"],
+        "Tubing & Piping": ["tube", "tubing", "pipe", "piping", "hose", "fitting"],
+        "Electrical & Controls": ["electrical", "control", "plc", "vfd", "drive", "wire", "cable"],
     }
     for cat, words in keywords.items():
         if any(w in part_lower for w in words):
