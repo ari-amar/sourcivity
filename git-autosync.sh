@@ -13,7 +13,7 @@ AFTER=$(git rev-parse HEAD 2>/dev/null)
 # If remote had new commits, restart all customer servers
 if [ "$BEFORE" != "$AFTER" ]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Pulled new changes, restarting servers..."
-    for c in ari chris sharan billy harold demo; do
+    for c in demo; do
         bash /home/ubuntu/customers/start.sh "$c" >> /tmp/sourcivity-restart.log 2>&1
     done
     # Restart dev instance
