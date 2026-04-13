@@ -158,23 +158,16 @@ STRICT RULES:
 
         search_id = str(uuid.uuid4())[:8]
 
+        # Strip emails in demo mode; set _enriching spinner on all suppliers
         if skip_enrichment:
-            # Demo mode: strip emails, no background scraping, but still enrich reputation
             for s in suppliers:
                 s.pop("email", None)
-                s.pop("_enriching", None)
-            _searches[search_id] = {"suppliers": list(suppliers), "status": "enriching", "blocked": [], "query": query, "ts": time.time()}
-            thread = threading.Thread(target=_background_reputation, args=(search_id,), daemon=True)
-            thread.start()
-            return {"searchId": search_id, "suppliers": suppliers, "status": "enriching"}
-
-        # Full mode: enrich reputation + scrape emails in background
         for s in suppliers:
             if not s.get("email"):
                 s["_enriching"] = True
         _searches[search_id] = {"suppliers": list(suppliers), "status": "enriching", "blocked": [], "query": query, "ts": time.time()}
 
-        thread = threading.Thread(target=_background_enrich, args=(search_id, suppliers), daemon=True)
+        thread = threading.Thread(target=_background_enrich, args=(search_id, suppliers, skip_enrichment), daemon=True)
         thread.start()
 
         return {"searchId": search_id, "suppliers": suppliers, "status": "enriching"}
@@ -254,40 +247,17 @@ Use ```json fences."""
     return suppliers
 
 
-def _background_reputation(search_id):
-    """Enrich reputation data in background (demo mode — no email scraping).
 
-    Publishes after reputation so the frontend sees years/employees/certs
-    before waiting for match reasons LLM call.
-    """
-    try:
-        entry = _searches.get(search_id)
-        if not entry:
-            return
-        suppliers = entry["suppliers"]
-        query = entry.get("query", "")
+def _background_enrich(search_id, suppliers, skip_emails=False):
+    """Enrich reputation + match reasons + website scraping in parallel.
 
-        # Phase 1: Reputation — publish immediately so frontend gets years/employees/certs
-        enriched = _enrich_reputation(suppliers)
-        _searches[search_id] = {"suppliers": list(enriched), "status": "enriching", "blocked": [], "query": query, "ts": time.time()}
-
-        # Phase 2: Match reasons — publish final
-        enriched = _regenerate_match_reasons(enriched, query)
-        _searches[search_id] = {"suppliers": enriched, "status": "done", "blocked": [], "query": query, "ts": time.time()}
-    except Exception as e:
-        print(f"[search] Background reputation error: {e}")
-        if search_id in _searches:
-            _searches[search_id]["status"] = "done"
-
-
-def _background_enrich(search_id, suppliers):
-    """Enrich reputation + match reasons, then scrape emails in parallel.
+    skip_emails=True: identical pipeline but no email extraction (demo mode).
 
     Rendering order:
       Render 1 (instant):  name, state, products, certs*, years*, employees*, revenue* (* if in Brave)
       Render 2 (~3-5s):    reputation gaps filled (years, employees, revenue, certs)
-      Render 3 (~5-7s):    match reasons (runs parallel with email scraping)
-      Render 4 (~5-15s):   emails trickle in per-supplier as each finishes
+      Render 3 (~5-7s):    match reasons (runs parallel with website scraping)
+      Render 4 (~5-15s):   location/certs/emails trickle in per-supplier as each finishes
     """
     try:
         query = _searches.get(search_id, {}).get("query", "")
@@ -296,20 +266,19 @@ def _background_enrich(search_id, suppliers):
         suppliers = _enrich_reputation(suppliers)
         _searches[search_id] = {"suppliers": list(suppliers), "status": "enriching", "blocked": [], "query": query, "ts": time.time()}
 
-        # Phase 2: Match reasons + email scraping in parallel
-        # Match reasons only need certs/years/employees (available now), NOT emails
-        scraper._blocked_sites.clear()
-        # Keep a mutable reference to the current supplier list for per-supplier updates
+        # Phase 2: Match reasons + website scraping in parallel
+        if not skip_emails:
+            scraper._blocked_sites.clear()
         current_suppliers = list(suppliers)
 
         def _on_supplier_enriched(idx, enriched_supplier):
-            """Called as each supplier's email scraping finishes — publish immediately."""
+            """Called as each supplier finishes website scraping — publish immediately."""
             enriched_supplier.pop("_enriching", None)
             current_suppliers[idx] = enriched_supplier
             _searches[search_id] = {
                 "suppliers": list(current_suppliers),
                 "status": "enriching",
-                "blocked": scraper.get_blocked_sites(),
+                "blocked": [] if skip_emails else scraper.get_blocked_sites(),
                 "query": query,
                 "ts": time.time(),
             }
@@ -317,17 +286,16 @@ def _background_enrich(search_id, suppliers):
         def _do_match_reasons():
             return _regenerate_match_reasons(list(suppliers), query)
 
-        def _do_email_scraping():
-            return scraper.enrich_suppliers(list(suppliers), on_each=_on_supplier_enriched)
+        def _do_scraping():
+            return scraper.enrich_suppliers(list(suppliers), on_each=_on_supplier_enriched, skip_email=skip_emails)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
             match_future = pool.submit(_do_match_reasons)
-            email_future = pool.submit(_do_email_scraping)
+            scrape_future = pool.submit(_do_scraping)
 
             # Match reasons typically finish first (~2-3s LLM call)
             try:
                 matched = match_future.result()
-                # Merge match reasons into current_suppliers (which may have email updates already)
                 reason_map = {s.get("name"): s.get("matchReason") for s in matched if s.get("matchReason")}
                 for s in current_suppliers:
                     reason = reason_map.get(s.get("name"))
@@ -337,14 +305,13 @@ def _background_enrich(search_id, suppliers):
             except Exception as e:
                 print(f"[search] Match reason error: {e}")
 
-            # Wait for email scraping to finish
+            # Wait for website scraping to finish
             try:
-                enriched = email_future.result()
-                blocked = scraper.get_blocked_sites()
+                enriched = scrape_future.result()
+                blocked = [] if skip_emails else scraper.get_blocked_sites()
                 # Final merge: use enriched list but keep match reasons from above
                 for s in enriched:
                     s.pop("_enriching", None)
-                    # Preserve match reasons already set
                     name = s.get("name")
                     for cs in current_suppliers:
                         if cs.get("name") == name and cs.get("matchReason"):
@@ -362,7 +329,7 @@ def _background_enrich(search_id, suppliers):
 
                 _searches[search_id] = {"suppliers": enriched, "status": "done", "blocked": blocked, "query": query, "ts": time.time()}
             except Exception as e:
-                print(f"[search] Email scraping error: {e}")
+                print(f"[search] Website scraping error: {e}")
                 for s in current_suppliers:
                     s.pop("_enriching", None)
                 _searches[search_id] = {"suppliers": current_suppliers, "status": "done", "blocked": [], "query": query, "ts": time.time()}

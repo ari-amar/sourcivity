@@ -3,6 +3,7 @@ import json
 import subprocess
 import sys
 import os
+import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from config import HIMALAYA_BIN, EMAIL_ADDRESS, EMAIL_DISPLAY_NAME
@@ -55,6 +56,45 @@ def send_email(to, subject, body):
             return True
         print(f"Email send failed: {e}")
         return False
+
+
+def get_attachment_text(email_id):
+    """Download attachments for an email and extract text from PDFs/spreadsheets.
+    Returns combined text string, or empty string if none found."""
+    texts = []
+    with tempfile.TemporaryDirectory() as tmpdir:
+        try:
+            _run(["attachment", "download", str(email_id), "--output-dir", tmpdir])
+        except Exception as e:
+            print(f"Attachment download failed for {email_id}: {e}")
+            return ""
+
+        for fname in os.listdir(tmpdir):
+            fpath = os.path.join(tmpdir, fname)
+            ext = fname.lower().rsplit(".", 1)[-1] if "." in fname else ""
+            try:
+                if ext == "pdf":
+                    import pdfplumber
+                    with pdfplumber.open(fpath) as pdf:
+                        for page in pdf.pages:
+                            t = page.extract_text()
+                            if t:
+                                texts.append(t)
+                elif ext in ("xlsx", "xls"):
+                    import openpyxl
+                    wb = openpyxl.load_workbook(fpath, data_only=True)
+                    for ws in wb.worksheets:
+                        for row in ws.iter_rows(values_only=True):
+                            line = "\t".join(str(c) for c in row if c is not None)
+                            if line.strip():
+                                texts.append(line)
+                elif ext == "csv":
+                    with open(fpath, encoding="utf-8", errors="ignore") as f:
+                        texts.append(f.read())
+            except Exception as e:
+                print(f"Attachment parse failed ({fname}): {e}")
+
+    return "\n".join(texts)
 
 
 def search_inbox(query):

@@ -58,8 +58,16 @@ def handle():
         if not body:
             continue
 
+        # If body looks like it has no pricing, also try attachments
+        attachment_text = ""
+        body_lower = body.lower()
+        if any(kw in body_lower for kw in ("see attached", "attached please find", "attachment", "enclosed")):
+            attachment_text = email_client.get_attachment_text(msg["id"])
+
+        full_text = body + ("\n\n--- ATTACHMENT ---\n" + attachment_text if attachment_text else "")
+
         # Use LLM to extract quote data
-        extraction = llm.extract_json(body, """Extract pricing/quote information from this supplier email.
+        extraction = llm.extract_json(full_text, """Extract pricing/quote information from this supplier email.
 Return JSON with these fields (use empty string if not found):
 {
   "has_pricing": true/false,

@@ -27,7 +27,7 @@ else:
 _demo_rate = {}  # { ip: [timestamps] }
 DEMO_RATE_LIMIT = 5
 DEMO_RATE_WINDOW = 3600
-DEMO_RATE_WHITELIST = ("2607:fb91:", "2607:fb90:e917:83c3:")  # IP prefixes exempt from rate limiting
+DEMO_RATE_WHITELIST = ("2607:fb91:", "2607:fb90:e917:83c3:", "2607:fb90:62b7:8869:")  # IP prefixes exempt from rate limiting
 ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "").split(",")  # comma-separated allowed origins
 
 # --- Activity logging ---
@@ -35,21 +35,44 @@ ACTIVITY_CSV = os.path.join(WORKSPACE_DIR, "activity.csv")
 _activity_lock = threading.Lock()
 
 
-def log_activity(action, detail="", ip=""):
+def log_activity(action, detail="", ip="", referrer="", device="", extra=""):
     """Append one row to activity.csv (thread-safe)."""
     with _activity_lock:
         write_header = not os.path.exists(ACTIVITY_CSV)
         with open(ACTIVITY_CSV, "a", newline="") as f:
             w = csv.writer(f)
             if write_header:
-                w.writerow(["timestamp", "action", "detail", "ip"])
-            w.writerow([datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"), action, detail, ip])
+                w.writerow(["timestamp", "action", "detail", "ip", "referrer", "device", "extra"])
+            w.writerow([datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                        action, detail, ip, referrer, device, extra])
 
 
 def _get_real_ip(handler):
     """Get real client IP — only trust CF-Connecting-IP (set by Cloudflare, not spoofable by clients)."""
     return (handler.headers.get("CF-Connecting-IP")
             or handler.client_address[0])
+
+
+def _get_referrer(handler):
+    """Return cleaned referrer domain, or 'direct'."""
+    ref = handler.headers.get("Referer", "").strip()
+    if not ref:
+        return "direct"
+    try:
+        parsed = urlparse(ref)
+        return parsed.netloc or ref[:100]
+    except Exception:
+        return ref[:100]
+
+
+def _get_device(handler):
+    """Return 'mobile', 'tablet', or 'desktop' from User-Agent."""
+    ua = handler.headers.get("User-Agent", "").lower()
+    if "tablet" in ua or "ipad" in ua:
+        return "tablet"
+    if "mobile" in ua or "android" in ua or "iphone" in ua:
+        return "mobile"
+    return "desktop"
 
 
 def _read_body(handler):
@@ -156,8 +179,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                 hits.append(now)
                 _demo_rate[ip] = hits
 
-            log_activity("search", query, _get_real_ip(self))
+            ip = _get_real_ip(self)
             result = search.handle(query, skip_enrichment=DEMO_MODE)
+            count = len(result.get("suppliers", [])) if isinstance(result, dict) else 0
+            log_activity("search", query, ip, _get_referrer(self), _get_device(self), f"results:{count}")
             _send_json(self, result)
 
         elif self.path == "/api/enrich":
@@ -175,7 +200,7 @@ class AppHandler(SimpleHTTPRequestHandler):
             if not part:
                 _send_json(self, {"error": "Missing part"}, 400)
                 return
-            log_activity("rfq_draft", f"{supplier.get('name', '?')} - {part}", _get_real_ip(self))
+            log_activity("rfq_draft", f"{supplier.get('name', '?')} - {part}", _get_real_ip(self), _get_referrer(self), _get_device(self))
             result = rfq.handle_draft(supplier, part, qty, notes)
             _send_json(self, result)
 
@@ -187,7 +212,7 @@ class AppHandler(SimpleHTTPRequestHandler):
             if not part or not suppliers:
                 _send_json(self, {"error": "Missing part or suppliers"}, 400)
                 return
-            log_activity("rfq_batch_draft", f"{len(suppliers)} suppliers - {part}", _get_real_ip(self))
+            log_activity("rfq_batch_draft", f"{len(suppliers)} suppliers - {part}", _get_real_ip(self), _get_referrer(self), _get_device(self))
             result = rfq.handle_batch_draft(suppliers, part, qty, notes)
             _send_json(self, result)
 
@@ -196,7 +221,7 @@ class AppHandler(SimpleHTTPRequestHandler):
             if not items:
                 _send_json(self, {"error": "Missing items"}, 400)
                 return
-            log_activity("rfq_batch_send", f"{len(items)} emails", _get_real_ip(self))
+            log_activity("rfq_batch_send", f"{len(items)} emails", _get_real_ip(self), _get_referrer(self), _get_device(self))
             result = rfq.handle_batch_send(items)
             _send_json(self, result)
 
@@ -209,7 +234,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 _send_json(self, {"error": "Missing email_text"}, 400)
                 return
             try:
-                log_activity("rfq_send", f"{supplier.get('name', '?')} - {part}", _get_real_ip(self))
+                log_activity("rfq_send", f"{supplier.get('name', '?')} - {part}", _get_real_ip(self), _get_referrer(self), _get_device(self))
                 result = rfq.handle_send(supplier, email_text, part, category)
                 _send_json(self, result)
             except Exception as e:
@@ -287,7 +312,7 @@ Additional notes: {notes or 'none'}"""
             category = data.get("category")
             part = data.get("part")
             recommend = data.get("recommend", False)
-            log_activity("compare", f"{category} - {part}", _get_real_ip(self))
+            log_activity("compare", f"{category} - {part}", _get_real_ip(self), _get_referrer(self), _get_device(self))
             result = compare.handle(category, part, recommend)
             _send_json(self, result)
 
@@ -315,11 +340,34 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
 
+INBOX_POLL_INTERVAL = 15 * 60  # 15 minutes
+
+
+def _inbox_poller():
+    """Background thread: periodically check inbox for quote replies (non-demo only)."""
+    import time
+    while True:
+        time.sleep(INBOX_POLL_INTERVAL)
+        try:
+            result = inbox.handle()
+            if result.get("processed", 0) > 0:
+                print(f"[inbox-poll] Processed {result['processed']} reply(s): "
+                      + ", ".join(r['supplier'] for r in result.get('results', [])))
+        except Exception as e:
+            print(f"[inbox-poll] Error: {e}")
+
+
 if __name__ == "__main__":
     server = ThreadedHTTPServer(("0.0.0.0", SERVE_PORT), AppHandler)
     print(f"Sourcivity running at http://localhost:{SERVE_PORT}")
     print(f"Handlers: search, rfq, inbox, compare")
     print(f"Complex tasks: Telegram → OpenClaw agent")
+
+    if not DEMO_MODE:
+        t = threading.Thread(target=_inbox_poller, daemon=True, name="inbox-poller")
+        t.start()
+        print(f"Inbox auto-poll: every {INBOX_POLL_INTERVAL // 60} minutes")
+
     print("Press Ctrl+C to stop")
     try:
         server.serve_forever()

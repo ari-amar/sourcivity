@@ -407,11 +407,12 @@ def _extract_location(html):
     return None
 
 
-def _enrich_single(supplier):
-    """Enrich a single supplier with email, contactUrl, and location.
+def _enrich_single(supplier, skip_email=False):
+    """Enrich a single supplier with location, certs, contactUrl, and optionally email.
 
-    Fast path: urllib on homepage + 4 common contact paths (stops on first email found).
-    Slow path: single Playwright deep scan only if fast path finds nothing.
+    skip_email=True: skips all email extraction (demo mode) — everything else identical.
+    Fast path: urllib on homepage + 4 common paths.
+    Slow path: single Playwright deep scan only if still missing data after fast path.
     """
     website = supplier.get('website', '')
     if not website:
@@ -422,25 +423,28 @@ def _enrich_single(supplier):
     existing_contact = supplier.get('contactUrl', '').strip()
     has_contact = bool(existing_contact.startswith('http')) if existing_contact else False
 
-    if has_email and has_contact:
+    needs_location = supplier.get('state', '') in ('', 'US', 'USA')
+    needs_certs = supplier.get('certifications', 'N/A') in ('N/A', '', None)
+
+    # Early exit: nothing left to fetch
+    email_done = skip_email or has_email
+    if email_done and has_contact and not needs_location and not needs_certs:
         return supplier
 
     base_url = website if website.startswith('http') else 'https://' + website
-    needs_location = supplier.get('state', '') in ('', 'US', 'USA')
 
     def _has_valid_email():
         e = supplier.get('email', '').strip()
         return bool(e and EMAIL_RE.fullmatch(e))
 
-    needs_certs = supplier.get('certifications', 'N/A') in ('N/A', '', None)
     all_certs = []
 
     def _check_html(html):
-        """Extract email, contactUrl, location, and certs from HTML. Returns True if email found."""
+        """Extract contactUrl, location, certs, and (if not skip_email) email from HTML."""
         nonlocal all_certs
         if not html:
-            return False
-        if not _has_valid_email():
+            return
+        if not skip_email and not _has_valid_email():
             emails = _extract_emails(html)
             if emails:
                 supplier['email'] = _pick_best_email(emails)
@@ -459,20 +463,19 @@ def _enrich_single(supplier):
             certs = _extract_certifications(html)
             if certs:
                 all_certs.extend(certs)
-        return _has_valid_email()
 
     # --- Phase 1: Fast urllib pass (homepage + 4 common paths) ---
     homepage_html = _fetch_page(base_url, timeout=5)
-    if _check_html(homepage_html) and supplier.get('contactUrl', '').strip():
-        return supplier
+    _check_html(homepage_html)
 
-    if not _has_valid_email():
-        for path in ['/contact', '/contact-us', '/about', '/about-us']:
-            page_html = _fetch_page(base_url.rstrip('/') + path, timeout=5)
-            if _check_html(page_html):
-                break
+    for path in ['/contact', '/contact-us', '/about', '/about-us']:
+        # Stop when email (if needed) and state are both resolved
+        if (skip_email or _has_valid_email()) and supplier.get('state', '') not in ('', 'US', 'USA'):
+            break
+        page_html = _fetch_page(base_url.rstrip('/') + path, timeout=5)
+        _check_html(page_html)
 
-    # Fetch quality/certifications pages for certs (even if email already found)
+    # Cert pages — always checked regardless of email/state status
     if needs_certs and not all_certs:
         for path in ['/quality', '/certifications', '/capabilities']:
             page_html = _fetch_page(base_url.rstrip('/') + path, timeout=5)
@@ -480,7 +483,7 @@ def _enrich_single(supplier):
                 certs = _extract_certifications(page_html)
                 if certs:
                     all_certs.extend(certs)
-                    break  # Got certs, stop
+                    break
 
     # Merge collected certs
     if all_certs:
@@ -493,7 +496,11 @@ def _enrich_single(supplier):
                 unique.append(c.strip())
         supplier['certifications'] = ', '.join(unique[:6])
 
-    if _has_valid_email():
+    # Playwright needed if any data still missing
+    email_done = skip_email or _has_valid_email()
+    state_done = supplier.get('state', '') not in ('', 'US', 'USA')
+    certs_done = not needs_certs or bool(all_certs)
+    if email_done and state_done and certs_done:
         return supplier
 
     # --- Phase 2: Single Playwright deep scan (homepage → footer → contact link) ---
@@ -507,9 +514,10 @@ def _enrich_single(supplier):
                 page.goto(base_url, wait_until="domcontentloaded", timeout=12000)
                 page.wait_for_timeout(2000)
 
-                # Rendered homepage — catches JS-injected emails and certs
+                # Rendered homepage — catches JS-injected content
                 rendered_html = page.content()
-                emails = _extract_emails(rendered_html)
+                if not skip_email:
+                    emails = _extract_emails(rendered_html)
                 if needs_certs and not all_certs:
                     certs = _extract_certifications(rendered_html)
                     if certs:
@@ -521,39 +529,51 @@ def _enrich_single(supplier):
                     return footer ? footer.innerHTML : '';
                 }""")
                 if footer_text:
-                    emails.extend(_extract_emails(footer_text))
+                    if not skip_email:
+                        emails.extend(_extract_emails(footer_text))
                     if needs_certs and not all_certs:
                         certs = _extract_certifications(footer_text)
                         if certs:
                             all_certs.extend(certs)
 
-                if emails:
-                    supplier['email'] = _pick_best_email(list(set(emails)))
-                else:
-                    # Follow first contact/quote link on rendered page
-                    contact_href = page.evaluate("""() => {
-                        for (const a of document.querySelectorAll('a[href]')) {
-                            const text = (a.textContent || '').toLowerCase();
-                            const href = (a.href || '').toLowerCase();
-                            if ((text.includes('contact') || text.includes('quote') || href.includes('contact'))
-                                && a.href.startsWith('http')) {
-                                return a.href;
+                # Location from rendered page (catches JS-rendered addresses)
+                if needs_location and supplier.get('state', '') in ('', 'US', 'USA'):
+                    loc = _extract_location(rendered_html)
+                    if loc:
+                        if loc not in US_STATE_ABBRS:
+                            supplier['state'] = loc
+                            supplier['_non_us'] = True
+                        else:
+                            supplier['state'] = loc
+
+                if not skip_email:
+                    if emails:
+                        supplier['email'] = _pick_best_email(list(set(emails)))
+                    else:
+                        # Follow first contact/quote link on rendered page
+                        contact_href = page.evaluate("""() => {
+                            for (const a of document.querySelectorAll('a[href]')) {
+                                const text = (a.textContent || '').toLowerCase();
+                                const href = (a.href || '').toLowerCase();
+                                if ((text.includes('contact') || text.includes('quote') || href.includes('contact'))
+                                    && a.href.startsWith('http')) {
+                                    return a.href;
+                                }
                             }
-                        }
-                        return '';
-                    }""")
-                    if contact_href:
-                        try:
-                            page.goto(contact_href, wait_until="domcontentloaded", timeout=12000)
-                            page.wait_for_timeout(2000)
-                            contact_html = page.content()
-                            emails = _extract_emails(contact_html)
-                            if emails:
-                                supplier['email'] = _pick_best_email(emails)
-                            if not supplier.get('contactUrl', '').strip():
-                                supplier['contactUrl'] = contact_href
-                        except Exception:
-                            pass
+                            return '';
+                        }""")
+                        if contact_href:
+                            try:
+                                page.goto(contact_href, wait_until="domcontentloaded", timeout=12000)
+                                page.wait_for_timeout(2000)
+                                contact_html = page.content()
+                                emails = _extract_emails(contact_html)
+                                if emails:
+                                    supplier['email'] = _pick_best_email(emails)
+                                if not supplier.get('contactUrl', '').strip():
+                                    supplier['contactUrl'] = contact_href
+                            except Exception:
+                                pass
             except Exception:
                 pass
             browser.close()
@@ -574,12 +594,13 @@ def _enrich_single(supplier):
     return supplier
 
 
-def enrich_suppliers(suppliers, on_each=None):
+def enrich_suppliers(suppliers, on_each=None, skip_email=False):
     """Enrich a list of suppliers in parallel. Returns enriched list.
+    skip_email=True skips all email extraction (demo mode).
     If on_each callback is provided, it's called after each supplier finishes."""
     results = [None] * len(suppliers)
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
-        futures = {pool.submit(_enrich_single, s): i for i, s in enumerate(suppliers)}
+        futures = {pool.submit(_enrich_single, s, skip_email): i for i, s in enumerate(suppliers)}
         for f in concurrent.futures.as_completed(futures):
             idx = futures[f]
             try:
