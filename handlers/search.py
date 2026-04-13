@@ -255,14 +255,23 @@ Use ```json fences."""
 
 
 def _background_reputation(search_id):
-    """Enrich reputation data in background (demo mode — no email scraping)."""
+    """Enrich reputation data in background (demo mode — no email scraping).
+
+    Publishes after reputation so the frontend sees years/employees/certs
+    before waiting for match reasons LLM call.
+    """
     try:
         entry = _searches.get(search_id)
         if not entry:
             return
         suppliers = entry["suppliers"]
         query = entry.get("query", "")
+
+        # Phase 1: Reputation — publish immediately so frontend gets years/employees/certs
         enriched = _enrich_reputation(suppliers)
+        _searches[search_id] = {"suppliers": list(enriched), "status": "enriching", "blocked": [], "query": query, "ts": time.time()}
+
+        # Phase 2: Match reasons — publish final
         enriched = _regenerate_match_reasons(enriched, query)
         _searches[search_id] = {"suppliers": enriched, "status": "done", "blocked": [], "query": query, "ts": time.time()}
     except Exception as e:
