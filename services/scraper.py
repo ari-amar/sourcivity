@@ -344,34 +344,65 @@ def _extract_certifications(html):
 
 
 def _extract_location(html):
-    """Extract US state abbreviation from HTML. Returns 2-letter state code or None."""
+    """Extract location from HTML. Returns US state abbr, country code, or None.
+
+    Priority: US state (from address/ZIP) > US state (from text) > non-US country code.
+    If both US state and non-US indicators are found, prefer the US state.
+    """
     import re
     text = re.sub(r'<[^>]+>', ' ', html).lower()
 
-    # Check for non-US indicators first
-    for indicator, country_code in NON_US_INDICATORS.items():
-        if indicator in text:
-            # Could be a false positive (e.g. "ships to Canada"), so check context
-            # But if it appears near "headquarters", "located", "address", it's real
-            for ctx in ['headquarter', 'located in', 'based in', 'office in', 'address']:
-                idx = text.find(indicator)
-                if idx > 0 and ctx in text[max(0, idx-80):idx+len(indicator)+20]:
-                    return country_code
+    # --- Try to find a US state first (multiple patterns) ---
 
-    # Pattern: "City, ST ZIP" (e.g. "Houston, TX 77001")
+    # Pattern 1: "City, ST ZIP" (e.g. "Houston, TX 77001") — most reliable
     zip_match = re.search(r'([A-Z]{2})\s+\d{5}', html)
     if zip_match and zip_match.group(1) in US_STATE_ABBRS:
         return zip_match.group(1)
 
-    # Pattern: "City, State" with full state name
+    # Pattern 2: ", ST ZIP" with optional dash extension
+    zip_match2 = re.search(r',\s*([A-Z]{2})\s+\d{5}(?:-\d{4})?', html)
+    if zip_match2 and zip_match2.group(1) in US_STATE_ABBRS:
+        return zip_match2.group(1)
+
+    # Pattern 3: Full state name (e.g. "California", "New York")
+    us_state_found = None
     for state_name, abbr in US_STATES.items():
         if state_name in text:
-            return abbr
+            us_state_found = abbr
+            break
 
-    # Pattern: ", XX " where XX is a state abbreviation (in original HTML to preserve case)
-    state_re = re.search(r',\s*([A-Z]{2})\b', html)
-    if state_re and state_re.group(1) in US_STATE_ABBRS:
-        return state_re.group(1)
+    # Pattern 4: ", XX" where XX is a state abbreviation (in original HTML to preserve case)
+    if not us_state_found:
+        state_re = re.search(r',\s*([A-Z]{2})\b', html)
+        if state_re and state_re.group(1) in US_STATE_ABBRS:
+            us_state_found = state_re.group(1)
+
+    # Pattern 5: "XX United States" or "XX, US" or standalone state abbr near address-like context
+    if not us_state_found:
+        addr_match = re.search(r'([A-Z]{2})\s*,?\s*(?:United States|USA|U\.S\.A\.)', html)
+        if addr_match and addr_match.group(1) in US_STATE_ABBRS:
+            us_state_found = addr_match.group(1)
+
+    # Pattern 6: Look in structured data (JSON-LD, schema.org addressRegion)
+    if not us_state_found:
+        region_match = re.search(r'"addressRegion"\s*:\s*"([A-Z]{2})"', html)
+        if region_match and region_match.group(1) in US_STATE_ABBRS:
+            us_state_found = region_match.group(1)
+
+    # Pattern 7: meta/title tags with state info
+    if not us_state_found:
+        meta_match = re.search(r'(?:headquartered|located|based)\s+in\s+[\w\s]+,\s*([A-Z]{2})\b', html)
+        if meta_match and meta_match.group(1) in US_STATE_ABBRS:
+            us_state_found = meta_match.group(1)
+
+    # If we found a US state, always prefer it (even if non-US indicators exist)
+    if us_state_found:
+        return us_state_found
+
+    # --- No US state found, check for non-US country ---
+    for indicator, country_code in NON_US_INDICATORS.items():
+        if indicator in text:
+            return country_code
 
     return None
 

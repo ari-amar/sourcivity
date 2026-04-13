@@ -1020,7 +1020,7 @@ tbody td a:hover {
   font-weight: 600;
 }
 
-.state-pill.us-pill {
+.state-pill.non-us-pill {
   border-color: #d73a49;
 }
 

@@ -11,6 +11,12 @@ from services import llm, scraper, brave
 # { search_id: { "suppliers": [...], "status": "enriching"|"done", "blocked": [], "ts": time } }
 _searches = {}
 _MAX_AGE = 300  # clean up entries older than 5 minutes
+_US_STATE_ABBRS = {
+    'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
+    'KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
+    'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT',
+    'VA','WA','WV','WI','WY',
+}
 
 
 def _build_queries(query):
@@ -106,7 +112,7 @@ def handle(query, skip_enrichment=False):
 
 Return ONLY a JSON array inside ```json fences. Each supplier object must have these fields:
 - name: company name
-- state: For US suppliers, use US state abbreviation (e.g. "CA", "TX", "OH"). For non-US suppliers, use the ISO 3166-1 alpha-2 country code (e.g. "UK", "DE", "CN", "JP", "IN", "CA", "FR", "KR", "TW", "SG", "AU", "BR", "MX"). If you truly cannot determine the location, use "US".
+- state: For US suppliers, you MUST find the specific US state abbreviation (e.g. "CA", "TX", "OH"). Look carefully at addresses, city/state mentions, ZIP codes, "headquartered in", "located in", "based in" text in descriptions, snippets, profile info, FAQ data, and URL patterns. NEVER return just "US" — dig deeper to find the actual state. For non-US suppliers, use the ISO country code (e.g. "UK", "DE", "CN", "JP", "IN", "FR", "KR", "TW", "SG", "AU", "BR", "MX"). If a company has both US and international locations, always use the US state abbreviation.
 - products: what they make/sell relevant to the query (use Title Case, e.g. "Ceramic Hybrid Angular Contact Bearings")
 - certifications: quality certs found ANYWHERE in descriptions, extra_snippets, or FAQ. Look for: ISO 9001, ISO 13485, AS9100, ITAR, NADCAP, AMS, ASTM, QPL, Mil-Spec, FDA, CE, UL, RoHS. Also look for phrases like "certified", "accredited", "registered", "compliant". If truly none found, "N/A"
 - website: company website URL (root domain only, e.g. "https://example.com")
@@ -115,7 +121,7 @@ Return ONLY a JSON array inside ```json fences. Each supplier object must have t
 - employees: Look in FAQ for "employees", "size", "staff". Also check extra_snippets. Format: "60" or "500+" or "10K+". If unknown, ""
 - revenue: Look in FAQ for "revenue". Format: "$10M" or "$20.5B". If unknown, ""
 STRICT RULES:
-1. ONLY include companies physically located in the United States. Exclude any company headquartered in China, India, Canada, UK, Europe, or anywhere outside the US. Check the URL domain — .cn, .co.uk, .ca, .de etc. are NOT US companies.
+1. Include suppliers from any country. For US suppliers, always determine the specific state — never leave it as just "US". For non-US suppliers, use the 2-letter ISO country code.
 2. Skip aggregator/marketplace sites: ThomasNet, Alibaba, Amazon, GlobalSpec, Made-in-China, IndiaMART, eBay, Grainger catalog pages, McMaster-Carr catalog pages.
 3. Only include actual manufacturers, distributors, or service providers — not news articles, blog posts, or comparison pages.
 4. Extract 5-8 suppliers maximum.
@@ -431,9 +437,14 @@ def _enrich_reputation(suppliers):
                 # Use infobox long_desc for location/state
                 desc = infobox.get("long_desc", "")
                 if desc and supplier.get("state") in ("US", "USA", ""):
-                    state_match = re.search(r',\s*([A-Z]{2})\b', desc)
-                    if state_match:
-                        facts["state"] = state_match.group(1)
+                    # Try ZIP pattern first
+                    zip_m = re.search(r'([A-Z]{2})\s+\d{5}', desc)
+                    if zip_m and zip_m.group(1) in _US_STATE_ABBRS:
+                        facts["state"] = zip_m.group(1)
+                    else:
+                        state_match = re.search(r',\s*([A-Z]{2})\b', desc)
+                        if state_match and state_match.group(1) in _US_STATE_ABBRS:
+                            facts["state"] = state_match.group(1)
 
             # Extract certs from extra_snippets if current is N/A or empty
             if supplier.get("certifications", "N/A") in ("N/A", "", None):
