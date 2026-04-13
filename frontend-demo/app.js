@@ -205,8 +205,12 @@ function renderSearchResults(results) {
       ? rawCerts.split(/[,;]/).map(c => '<span class="info-pill cert-pill">' + esc(fixCertCase(c.trim())) + '</span>').join(' ')
       : '\u2014';
 
+    // State / country pill
     const stateVal = s.state || s.location || '';
-    const stateCell = stateVal ? '<span class="info-pill state-pill">' + esc(stateVal) + '</span>' : '\u2014';
+    const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY']);
+    const isUS = !stateVal || stateVal === 'US' || US_STATES.has(stateVal);
+    const pillClass = isUS ? 'info-pill state-pill us-pill' : 'info-pill state-pill';
+    const stateCell = stateVal ? '<span class="' + pillClass + '">' + esc(stateVal) + '</span>' : '\u2014';
 
     const isInCart = rfqCart.some(c => c.email === s.email && c.name === s.name);
 
