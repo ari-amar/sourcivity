@@ -276,18 +276,18 @@ US_STATE_ABBRS = set(US_STATES.values())
 
 NON_US_INDICATORS = {
     'united kingdom': 'UK', 'england': 'UK', 'u.k.': 'UK', 'uk ': 'UK', 'london': 'UK', 'manchester': 'UK', 'birmingham uk': 'UK',
-    'china': 'CN', 'shanghai': 'CN', 'beijing': 'CN', 'shenzhen': 'CN', 'guangzhou': 'CN', 'dongguan': 'CN',
-    'india': 'IN', 'mumbai': 'IN', 'delhi': 'IN', 'bangalore': 'IN', 'chennai': 'IN', 'hyderabad': 'IN', 'pune': 'IN',
-    'canada': 'CA', 'toronto': 'CA', 'vancouver': 'CA', 'montreal': 'CA', 'ontario': 'CA', 'alberta': 'CA',
-    'germany': 'DE', 'deutschland': 'DE', 'munich': 'DE', 'berlin': 'DE', 'stuttgart': 'DE',
-    'france': 'FR', 'paris': 'FR', 'lyon': 'FR',
-    'japan': 'JP', 'tokyo': 'JP', 'osaka': 'JP',
-    'korea': 'KR', 'seoul': 'KR',
-    'taiwan': 'TW', 'taipei': 'TW',
-    'singapore': 'SG',
-    'australia': 'AU', 'sydney': 'AU', 'melbourne': 'AU',
-    'brazil': 'BR',
-    'mexico': 'MX',
+    'china': 'CHN', 'shanghai': 'CHN', 'beijing': 'CHN', 'shenzhen': 'CHN', 'guangzhou': 'CHN', 'dongguan': 'CHN',
+    'india': 'IND', 'mumbai': 'IND', 'delhi': 'IND', 'bangalore': 'IND', 'chennai': 'IND', 'hyderabad': 'IND', 'pune': 'IND',
+    'canada': 'CAN', 'toronto': 'CAN', 'vancouver': 'CAN', 'montreal': 'CAN', 'ontario': 'CAN', 'alberta': 'CAN',
+    'germany': 'GER', 'deutschland': 'GER', 'munich': 'GER', 'berlin': 'GER', 'stuttgart': 'GER',
+    'france': 'FRA', 'paris': 'FRA', 'lyon': 'FRA',
+    'japan': 'JPN', 'tokyo': 'JPN', 'osaka': 'JPN',
+    'korea': 'KOR', 'seoul': 'KOR',
+    'taiwan': 'TWN', 'taipei': 'TWN',
+    'singapore': 'SGP',
+    'australia': 'AUS', 'sydney': 'AUS', 'melbourne': 'AUS',
+    'brazil': 'BRA',
+    'mexico': 'MEX',
 }
 
 

@@ -112,7 +112,7 @@ def handle(query, skip_enrichment=False):
 
 Return ONLY a JSON array inside ```json fences. Each supplier object must have these fields:
 - name: company name
-- state: For US suppliers, you MUST find the specific US state abbreviation (e.g. "CA", "TX", "OH"). Look carefully at addresses, city/state mentions, ZIP codes, "headquartered in", "located in", "based in" text in descriptions, snippets, profile info, FAQ data, and URL patterns. NEVER return just "US" — dig deeper to find the actual state. For non-US suppliers, use the ISO country code (e.g. "UK", "DE", "CN", "JP", "IN", "FR", "KR", "TW", "SG", "AU", "BR", "MX"). If a company has both US and international locations, always use the US state abbreviation.
+- state: For US suppliers, you MUST find the specific US state abbreviation (e.g. "CA", "TX", "OH"). Look carefully at addresses, city/state mentions, ZIP codes, "headquartered in", "located in", "based in" text in descriptions, snippets, profile info, FAQ data, and URL patterns. NEVER return just "US" — dig deeper to find the actual state. For non-US suppliers, use standard country abbreviations: "UK", "CHN", "IND", "CAN", "GER", "FRA", "JPN", "KOR", "TWN", "SGP", "AUS", "BRA", "MEX". If a company has both US and international locations, always use the US state abbreviation.
 - products: what they make/sell relevant to the query (use Title Case, e.g. "Ceramic Hybrid Angular Contact Bearings")
 - certifications: quality certs found ANYWHERE in descriptions, extra_snippets, or FAQ. Look for: ISO 9001, ISO 13485, AS9100, ITAR, NADCAP, AMS, ASTM, QPL, Mil-Spec, FDA, CE, UL, RoHS. Also look for phrases like "certified", "accredited", "registered", "compliant". If truly none found, "N/A"
 - website: company website URL (root domain only, e.g. "https://example.com")
@@ -121,7 +121,7 @@ Return ONLY a JSON array inside ```json fences. Each supplier object must have t
 - employees: Look in FAQ for "employees", "size", "staff". Also check extra_snippets. Format: "60" or "500+" or "10K+". If unknown, ""
 - revenue: Look in FAQ for "revenue". Format: "$10M" or "$20.5B". If unknown, ""
 STRICT RULES:
-1. Include suppliers from any country. For US suppliers, always determine the specific state — never leave it as just "US". For non-US suppliers, use the 2-letter ISO country code.
+1. Include suppliers from any country. For US suppliers, always determine the specific state — never leave it as just "US". For non-US suppliers, use standard abbreviations (UK, CHN, IND, CAN, GER, FRA, JPN, KOR, TWN, SGP, AUS, BRA, MEX).
 2. Skip aggregator/marketplace sites: ThomasNet, Alibaba, Amazon, GlobalSpec, Made-in-China, IndiaMART, eBay, Grainger catalog pages, McMaster-Carr catalog pages.
 3. Only include actual manufacturers, distributors, or service providers — not news articles, blog posts, or comparison pages.
 4. Extract 5-8 suppliers maximum.

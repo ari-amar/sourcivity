@@ -209,8 +209,7 @@ function renderSearchResults(results) {
     const stateVal = s.state || s.location || '';
     const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY']);
     const isUS = !stateVal || stateVal === 'US' || US_STATES.has(stateVal);
-    const pillClass = isUS ? 'info-pill state-pill' : 'info-pill state-pill non-us-pill';
-    const stateCell = stateVal ? '<span class="' + pillClass + '">' + esc(stateVal) + '</span>' : '\u2014';
+    const stateCell = stateVal ? '<span class="info-pill state-pill">' + (isUS ? '\ud83c\uddfa\ud83c\uddf8 ' : '') + esc(stateVal) + '</span>' : '\u2014';
 
     const isInCart = rfqCart.some(c => c.email === s.email && c.name === s.name);
 
