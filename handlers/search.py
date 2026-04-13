@@ -46,11 +46,7 @@ def handle(query, skip_enrichment=False):
                 except Exception:
                     pass
 
-        # Filter out non-US domains and aggregator sites
-        NON_US_TLDS = ('.cn', '.co.uk', '.uk', '.de', '.fr', '.it', '.es', '.jp', '.kr',
-                       '.in', '.ca', '.au', '.br', '.mx', '.ru', '.nl', '.se', '.ch',
-                       '.tw', '.hk', '.sg', '.co.in', '.com.cn', '.com.au', '.co.jp',
-                       '.com.br', '.co.kr', '.com.mx', '.com.sg', '.com.tw', '.co.nz')
+        # Filter out aggregator sites
         AGGREGATORS = ('thomasnet.com', 'alibaba.com', 'amazon.com', 'globalspec.com',
                        'made-in-china.com', 'indiamart.com', 'ebay.com', 'grainger.com',
                        'mcmaster.com', 'aliexpress.com', 'dhgate.com', 'tradekey.com',
@@ -60,9 +56,6 @@ def handle(query, skip_enrichment=False):
         filtered_results = []
         for r in all_results:
             url_lower = r["url"].lower()
-            # Skip non-US country domains
-            if any(url_lower.rstrip('/').endswith(tld) or f'{tld}/' in url_lower for tld in NON_US_TLDS):
-                continue
             # Skip aggregators
             if any(agg in url_lower for agg in AGGREGATORS):
                 continue
@@ -109,11 +102,11 @@ def handle(query, skip_enrichment=False):
             user_msg = user_msg[:12000] + "\n... (truncated)"
 
         # Step 3: Feed to LLM with enhanced prompt
-        system = """You are a US industrial supplier researcher. Given web search results (with extra snippets and FAQ data), extract real supplier companies.
+        system = """You are an industrial supplier researcher. Given web search results (with extra snippets and FAQ data), extract real supplier companies.
 
 Return ONLY a JSON array inside ```json fences. Each supplier object must have these fields:
 - name: company name
-- state: US state abbreviation ONLY (e.g. "CA", "TX", "OH"). Look for city/state in descriptions, snippets, profile info, or URL patterns. NEVER use "USA" — if you truly cannot determine the state, use "US".
+- state: For US suppliers, use US state abbreviation (e.g. "CA", "TX", "OH"). For non-US suppliers, use the ISO 3166-1 alpha-2 country code (e.g. "UK", "DE", "CN", "JP", "IN", "CA", "FR", "KR", "TW", "SG", "AU", "BR", "MX"). If you truly cannot determine the location, use "US".
 - products: what they make/sell relevant to the query (use Title Case, e.g. "Ceramic Hybrid Angular Contact Bearings")
 - certifications: quality certs found ANYWHERE in descriptions, extra_snippets, or FAQ. Look for: ISO 9001, ISO 13485, AS9100, ITAR, NADCAP, AMS, ASTM, QPL, Mil-Spec, FDA, CE, UL, RoHS. Also look for phrases like "certified", "accredited", "registered", "compliant". If truly none found, "N/A"
 - website: company website URL (root domain only, e.g. "https://example.com")
@@ -273,25 +266,96 @@ def _background_reputation(search_id):
 
 
 def _background_enrich(search_id, suppliers):
-    """Enrich reputation + scrape emails in background thread."""
+    """Enrich reputation + match reasons, then scrape emails in parallel.
+
+    Rendering order:
+      Render 1 (instant):  name, state, products, certs*, years*, employees*, revenue* (* if in Brave)
+      Render 2 (~3-5s):    reputation gaps filled (years, employees, revenue, certs)
+      Render 3 (~5-7s):    match reasons (runs parallel with email scraping)
+      Render 4 (~5-15s):   emails trickle in per-supplier as each finishes
+    """
     try:
         query = _searches.get(search_id, {}).get("query", "")
-        # Reputation first (fast), then email scraping (slow)
+
+        # Phase 1: Reputation enrichment — fills years, employees, revenue, certs gaps (~3-5s)
         suppliers = _enrich_reputation(suppliers)
         _searches[search_id] = {"suppliers": list(suppliers), "status": "enriching", "blocked": [], "query": query, "ts": time.time()}
+
+        # Phase 2: Match reasons + email scraping in parallel
+        # Match reasons only need certs/years/employees (available now), NOT emails
         scraper._blocked_sites.clear()
-        enriched = scraper.enrich_suppliers(suppliers)
-        blocked = scraper.get_blocked_sites()
-        # Remove _enriching flag from all suppliers
-        for s in enriched:
-            s.pop("_enriching", None)
-        # Regenerate match reasons with full enriched data
-        enriched = _regenerate_match_reasons(enriched, query)
-        _searches[search_id] = {"suppliers": enriched, "status": "done", "blocked": blocked, "query": query, "ts": time.time()}
+        # Keep a mutable reference to the current supplier list for per-supplier updates
+        current_suppliers = list(suppliers)
+
+        def _on_supplier_enriched(idx, enriched_supplier):
+            """Called as each supplier's email scraping finishes — publish immediately."""
+            enriched_supplier.pop("_enriching", None)
+            current_suppliers[idx] = enriched_supplier
+            _searches[search_id] = {
+                "suppliers": list(current_suppliers),
+                "status": "enriching",
+                "blocked": scraper.get_blocked_sites(),
+                "query": query,
+                "ts": time.time(),
+            }
+
+        def _do_match_reasons():
+            return _regenerate_match_reasons(list(suppliers), query)
+
+        def _do_email_scraping():
+            return scraper.enrich_suppliers(list(suppliers), on_each=_on_supplier_enriched)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            match_future = pool.submit(_do_match_reasons)
+            email_future = pool.submit(_do_email_scraping)
+
+            # Match reasons typically finish first (~2-3s LLM call)
+            try:
+                matched = match_future.result()
+                # Merge match reasons into current_suppliers (which may have email updates already)
+                reason_map = {s.get("name"): s.get("matchReason") for s in matched if s.get("matchReason")}
+                for s in current_suppliers:
+                    reason = reason_map.get(s.get("name"))
+                    if reason:
+                        s["matchReason"] = reason
+                _searches[search_id] = {"suppliers": list(current_suppliers), "status": "enriching", "blocked": [], "query": query, "ts": time.time()}
+            except Exception as e:
+                print(f"[search] Match reason error: {e}")
+
+            # Wait for email scraping to finish
+            try:
+                enriched = email_future.result()
+                blocked = scraper.get_blocked_sites()
+                # Final merge: use enriched list but keep match reasons from above
+                for s in enriched:
+                    s.pop("_enriching", None)
+                    # Preserve match reasons already set
+                    name = s.get("name")
+                    for cs in current_suppliers:
+                        if cs.get("name") == name and cs.get("matchReason"):
+                            s["matchReason"] = cs["matchReason"]
+                            break
+
+                # Re-run match reasons only if scraping found new certs
+                has_new_certs = any(
+                    s.get("certifications", "N/A") not in ("N/A", "", None)
+                    and s.get("certifications") != next((orig.get("certifications") for orig in suppliers if orig.get("name") == s.get("name")), None)
+                    for s in enriched
+                )
+                if has_new_certs:
+                    enriched = _regenerate_match_reasons(enriched, query)
+
+                _searches[search_id] = {"suppliers": enriched, "status": "done", "blocked": blocked, "query": query, "ts": time.time()}
+            except Exception as e:
+                print(f"[search] Email scraping error: {e}")
+                for s in current_suppliers:
+                    s.pop("_enriching", None)
+                _searches[search_id] = {"suppliers": current_suppliers, "status": "done", "blocked": [], "query": query, "ts": time.time()}
+
     except Exception as e:
-        # On error, mark done with whatever we have
         for s in suppliers:
             s.pop("_enriching", None)
+        query = _searches.get(search_id, {}).get("query", "")
         _searches[search_id] = {"suppliers": suppliers, "status": "done", "blocked": [], "query": query, "ts": time.time()}
         print(f"[search] Background enrichment error: {e}")
 

@@ -274,16 +274,21 @@ US_STATES = {
 }
 US_STATE_ABBRS = set(US_STATES.values())
 
-NON_US_INDICATORS = [
-    'united kingdom', 'england', 'u.k.', 'uk ', 'london', 'manchester', 'birmingham uk',
-    'china', 'shanghai', 'beijing', 'shenzhen', 'guangzhou', 'dongguan',
-    'india', 'mumbai', 'delhi', 'bangalore', 'chennai', 'hyderabad', 'pune',
-    'canada', 'toronto', 'vancouver', 'montreal', 'ontario', 'alberta',
-    'germany', 'deutschland', 'munich', 'berlin', 'stuttgart',
-    'france', 'paris', 'lyon', 'japan', 'tokyo', 'osaka',
-    'korea', 'seoul', 'taiwan', 'taipei', 'singapore',
-    'australia', 'sydney', 'melbourne', 'brazil', 'mexico',
-]
+NON_US_INDICATORS = {
+    'united kingdom': 'UK', 'england': 'UK', 'u.k.': 'UK', 'uk ': 'UK', 'london': 'UK', 'manchester': 'UK', 'birmingham uk': 'UK',
+    'china': 'CN', 'shanghai': 'CN', 'beijing': 'CN', 'shenzhen': 'CN', 'guangzhou': 'CN', 'dongguan': 'CN',
+    'india': 'IN', 'mumbai': 'IN', 'delhi': 'IN', 'bangalore': 'IN', 'chennai': 'IN', 'hyderabad': 'IN', 'pune': 'IN',
+    'canada': 'CA', 'toronto': 'CA', 'vancouver': 'CA', 'montreal': 'CA', 'ontario': 'CA', 'alberta': 'CA',
+    'germany': 'DE', 'deutschland': 'DE', 'munich': 'DE', 'berlin': 'DE', 'stuttgart': 'DE',
+    'france': 'FR', 'paris': 'FR', 'lyon': 'FR',
+    'japan': 'JP', 'tokyo': 'JP', 'osaka': 'JP',
+    'korea': 'KR', 'seoul': 'KR',
+    'taiwan': 'TW', 'taipei': 'TW',
+    'singapore': 'SG',
+    'australia': 'AU', 'sydney': 'AU', 'melbourne': 'AU',
+    'brazil': 'BR',
+    'mexico': 'MX',
+}
 
 
 # --- Certification extraction ---
@@ -344,14 +349,14 @@ def _extract_location(html):
     text = re.sub(r'<[^>]+>', ' ', html).lower()
 
     # Check for non-US indicators first
-    for indicator in NON_US_INDICATORS:
+    for indicator, country_code in NON_US_INDICATORS.items():
         if indicator in text:
             # Could be a false positive (e.g. "ships to Canada"), so check context
             # But if it appears near "headquarters", "located", "address", it's real
             for ctx in ['headquarter', 'located in', 'based in', 'office in', 'address']:
                 idx = text.find(indicator)
                 if idx > 0 and ctx in text[max(0, idx-80):idx+len(indicator)+20]:
-                    return 'NON-US'
+                    return country_code
 
     # Pattern: "City, ST ZIP" (e.g. "Houston, TX 77001")
     zip_match = re.search(r'([A-Z]{2})\s+\d{5}', html)
@@ -414,7 +419,8 @@ def _enrich_single(supplier):
                 supplier['contactUrl'] = contact
         if needs_location and supplier.get('state', '') in ('', 'US', 'USA'):
             loc = _extract_location(html)
-            if loc == 'NON-US':
+            if loc and loc not in US_STATE_ABBRS:
+                supplier['state'] = loc
                 supplier['_non_us'] = True
             elif loc:
                 supplier['state'] = loc
@@ -537,12 +543,24 @@ def _enrich_single(supplier):
     return supplier
 
 
-def enrich_suppliers(suppliers):
-    """Enrich a list of suppliers in parallel. Returns enriched list, non-US filtered out."""
+def enrich_suppliers(suppliers, on_each=None):
+    """Enrich a list of suppliers in parallel. Returns enriched list.
+    If on_each callback is provided, it's called after each supplier finishes."""
+    results = [None] * len(suppliers)
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
-        enriched = list(pool.map(_enrich_single, suppliers))
-    # Filter out suppliers identified as non-US during scraping
-    return [s for s in enriched if not s.get('_non_us')]
+        futures = {pool.submit(_enrich_single, s): i for i, s in enumerate(suppliers)}
+        for f in concurrent.futures.as_completed(futures):
+            idx = futures[f]
+            try:
+                results[idx] = f.result()
+            except Exception:
+                results[idx] = suppliers[idx]
+            if on_each:
+                try:
+                    on_each(idx, results[idx])
+                except Exception:
+                    pass
+    return results
 
 
 # --- Browser form detection + fill ---
