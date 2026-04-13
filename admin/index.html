@@ -115,7 +115,7 @@
           <button id="clear-activity-btn" style="background:#2d1215;border:1px solid #4d2327;color:#f85149;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px">Clear Activity</button>
         </div>
         <table><thead><tr>
-          <th>Time</th><th>Customer</th><th>Action</th><th>Detail</th><th>IP</th><th>Location</th>
+          <th>Time</th><th>Customer</th><th>Action</th><th>Detail</th><th>Extra</th><th>Device</th><th>Referrer</th><th>IP</th><th>Location</th>
         </tr></thead><tbody id="activity-body"></tbody></table>
       </div>
     </div>
@@ -204,14 +204,18 @@
         const match = (a.ip || '').toLowerCase().includes(filter) || (a.location || '').toLowerCase().includes(filter);
         return exclude ? !match : match;
       }) : activity;
+      const deviceIcon = d => d === 'mobile' ? '📱' : d === 'tablet' ? '🖥' : d === 'desktop' ? '💻' : '';
       $('activity-body').innerHTML = filtered.length ? filtered.slice(0, 200).map(a => `<tr>
         <td>${a.timestamp || ''}</td>
         <td><span class="badge badge-blue">${a.customer || ''}</span></td>
         <td><span class="action-label action-${a.action || ''}">${a.action || ''}</span></td>
         <td>${a.detail || ''}</td>
+        <td style="color:#8b949e;font-size:12px">${a.extra || ''}</td>
+        <td style="font-size:14px" title="${a.device || ''}">${deviceIcon(a.device)}</td>
+        <td style="color:#8b949e;font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${a.referrer || ''}">${a.referrer || ''}</td>
         <td><code style="color:#8b949e;font-size:12px">${(a.ip && a.ip !== 'None') ? a.ip : ''}</code></td>
         <td style="color:#8b949e;font-size:12px">${a.location || ''}</td>
-      </tr>`).join('') : '<tr><td colspan="6" class="empty-msg">' + (filter ? 'No activity matching filter' : 'No activity recorded yet') + '</td></tr>';
+      </tr>`).join('') : '<tr><td colspan="9" class="empty-msg">' + (filter ? 'No activity matching filter' : 'No activity recorded yet') + '</td></tr>';
     }
 
     // Events
@@ -236,13 +240,17 @@
     const HIDDEN_IP_PREFIXES = [
       '2607:fb9',
     ];
-    let myIpActive = false;
-    $('toggle-my-ip').addEventListener('click', () => {
-      myIpActive = !myIpActive;
+    let myIpActive = true;
+    function applyMyIpStyle() {
       const btn = $('toggle-my-ip');
       btn.style.background = myIpActive ? '#1f4068' : '#21262d';
       btn.style.borderColor = myIpActive ? '#58a6ff' : '#30363d';
       btn.style.color = myIpActive ? '#58a6ff' : '#8b949e';
+    }
+    applyMyIpStyle();
+    $('toggle-my-ip').addEventListener('click', () => {
+      myIpActive = !myIpActive;
+      applyMyIpStyle();
       if (!myIpActive) $('ip-filter').value = '';
       renderActivity();
     });
@@ -253,7 +261,7 @@
         const data = await api('/api/activity');
         const activity = data.activity || [];
         if (!activity.length) return alert('No activity to export.');
-        const headers = ['timestamp','customer','action','detail','ip','location'];
+        const headers = ['timestamp','customer','action','detail','extra','device','referrer','ip','location'];
         const rows = activity.map(a => headers.map(h => '"' + ((a[h] || '').toString().replace(/"/g, '""')) + '"').join(','));
         const csv = [headers.join(','), ...rows].join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
