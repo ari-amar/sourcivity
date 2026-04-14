@@ -19,12 +19,25 @@ _US_STATE_ABBRS = {
 }
 
 
+_INDIAN_CITY_TOKENS = {'mumbai', 'delhi', 'bangalore', 'chennai', 'hyderabad', 'pune', 'kolkata', 'india'}
+
 def _is_us_supplier(supplier):
     """Return True if the supplier's state field resolves to a US state."""
     state = supplier.get('state', '') or ''
-    # Normalize ISO 3166-2 (e.g. US-PA → PA)
+    # Strip "US-" prefix (e.g. US-PA → PA)
     if state.upper().startswith('US-'):
         state = state[3:]
+
+    # "IN" is ambiguous — it's Indiana but also a common abbreviation for India.
+    # Use secondary signals to disambiguate before accepting it as a US state.
+    if state.upper() == 'IN':
+        website = (supplier.get('website', '') or '').lower()
+        name_products = (supplier.get('name', '') + ' ' + supplier.get('products', '')).lower()
+        if '.co.in' in website or website.rstrip('/').endswith('.in'):
+            return False
+        if any(tok in name_products for tok in _INDIAN_CITY_TOKENS):
+            return False
+
     return state.upper() in _US_STATE_ABBRS or state.upper() in ('', 'US', 'USA')
 
 
@@ -135,7 +148,7 @@ def handle(query, skip_enrichment=False, region='north_america'):
             rule_1 = (
                 '1. PRIORITIZE non-US international suppliers — aim for at most 1-2 US results out of 5-8 total. '
                 'Actively seek out suppliers from Europe, Asia, and other regions. '
-                'For US suppliers, use the specific state. For all others, use standard country abbreviations.'
+                'For US suppliers, use the specific state. For all others, use the full country name.'
             )
             rule_2 = (
                 '2. Skip consumer e-commerce sites: Amazon, eBay, AliExpress, DHgate, '
@@ -147,11 +160,14 @@ def handle(query, skip_enrichment=False, region='north_america'):
                 '(e.g. "CA", "TX", "OH"). Look carefully at addresses, city/state mentions, ZIP codes, '
                 '"headquartered in", "located in", "based in" text in descriptions, snippets, profile info, '
                 'FAQ data, and URL patterns. NEVER return just "US" — dig deeper to find the actual state. '
-                'If a company has both US and international locations, always use the US state abbreviation.'
+                'If a company has both US and international locations, always use the US state abbreviation. '
+                'CRITICAL: "IN" = Indiana (US state). Companies from India, Mumbai, Delhi, Bangalore, '
+                'Chennai, Pune, Hyderabad, or with .co.in / .in websites are NOT US suppliers — exclude them entirely.'
             )
             rule_1 = (
                 '1. ONLY include suppliers with US headquarters or primary US operations. '
                 'Any company headquartered outside the US must be excluded entirely — no exceptions. '
+                'India-based companies must NEVER appear, even if state looks like "IN" (Indiana). '
                 'Always determine the specific US state — never return just "US".'
             )
             rule_2 = (
