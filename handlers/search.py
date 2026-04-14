@@ -142,9 +142,9 @@ def handle(query, skip_enrichment=False, region='north_america'):
                 'If a company has both US and international locations, always use the US state abbreviation.'
             )
             rule_1 = (
-                '1. Include suppliers from any country. For US suppliers, always determine the specific state '
-                '— never leave it as just "US". For non-US suppliers, use standard abbreviations '
-                '(UK, CHN, IND, CAN, GER, FRA, JPN, KOR, TWN, SGP, AUS, BRA, MEX).'
+                '1. Only include US-based suppliers. If a result is clearly a non-US company '
+                '(headquartered in another country with no US presence), skip it. '
+                'Always determine the specific US state — never leave it as just "US".'
             )
             rule_2 = (
                 '2. Skip aggregator/marketplace sites: ThomasNet, Alibaba, Amazon, GlobalSpec, '
