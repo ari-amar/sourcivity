@@ -191,62 +191,53 @@ main {
 }
 
 /* REGION TOGGLE */
-.region-switch {
-  display: inline-block;
-  cursor: pointer;
-  margin-bottom: 6px;
+.region-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
 }
-.region-switch input {
-  display: none;
+.region-emoji {
+  font-size: 18px;
+  line-height: 1;
+  transition: opacity 0.2s;
+  user-select: none;
+}
+#region-emoji-global { opacity: 0.35; }
+.region-track-wrap {
+  cursor: pointer;
+}
+.region-track-wrap input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
 .region-track {
+  display: block;
+  width: 44px;
+  height: 24px;
+  background: #30363d;
+  border-radius: 12px;
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 72px;
-  height: 34px;
-  background: #161b22;
-  border: 1px solid #30363d;
-  border-radius: 17px;
-  padding: 0 5px;
-  box-sizing: border-box;
-  transition: border-color 0.2s;
-}
-.region-switch:hover .region-track {
-  border-color: #484f58;
-}
-.region-emoji-na,
-.region-emoji-global {
-  font-size: 17px;
-  line-height: 1;
-  position: relative;
-  z-index: 1;
-  transition: opacity 0.2s;
-}
-.region-emoji-global {
-  opacity: 0.3;
+  transition: background 0.2s;
 }
 .region-knob {
   position: absolute;
-  left: 3px;
   top: 3px;
-  width: 32px;
-  height: 26px;
-  background: #21262d;
-  border: 1px solid #484f58;
-  border-radius: 13px;
-  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 0;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  background: #8b949e;
+  border-radius: 50%;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s;
 }
-.region-switch input:checked ~ .region-track .region-knob {
-  transform: translateX(34px);
+.region-track-wrap input:checked ~ .region-track {
+  background: #1f4a8a;
 }
-.region-switch input:checked ~ .region-track .region-emoji-na {
-  opacity: 0.3;
-}
-.region-switch input:checked ~ .region-track .region-emoji-global {
-  opacity: 1;
+.region-track-wrap input:checked ~ .region-track .region-knob {
+  transform: translateX(20px);
+  background: #58a6ff;
 }
 
 /* SUGGESTION CHIPS */

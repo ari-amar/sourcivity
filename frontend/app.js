@@ -129,6 +129,8 @@ const regionSwitchInput = document.getElementById('region-switch-input');
 if (regionSwitchInput) {
   regionSwitchInput.addEventListener('change', () => {
     searchRegion = regionSwitchInput.checked ? 'global' : 'north_america';
+    document.getElementById('region-emoji-na').style.opacity = regionSwitchInput.checked ? '0.35' : '1';
+    document.getElementById('region-emoji-global').style.opacity = regionSwitchInput.checked ? '1' : '0.35';
   });
 }
 
