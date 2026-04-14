@@ -248,19 +248,29 @@ function renderSearchResults(results) {
       return c.replace(/\b(iso|as|itar|nadcap|nist|astm|fda|gmp|rohs|ul|ce|sae|iatf|ohsas)\b/gi, m => m.toUpperCase())
               .replace(/\b(sp)\b/gi, m => m.toUpperCase());
     };
+    const pendingCell = '<span class="action-icon action-spin" style="opacity:0.4">' +
+      '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></span>';
     const certCell = rawCerts && rawCerts !== 'N/A'
       ? rawCerts.split(/[,;]/).map(c => '<span class="info-pill cert-pill">' + esc(fixCertCase(c.trim())) + '</span>').join(' ')
-      : '—';
+      : (s._enriching ? pendingCell : '—');
 
     const stateVal = s.state || s.location || '';
     const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY']);
     const normalizedState = stateVal.startsWith('US-') ? stateVal.slice(3) : stateVal;
     const isUS = !stateVal || stateVal === 'US' || US_STATES.has(stateVal) || US_STATES.has(normalizedState);
-    const countryFlag = code => /^[A-Za-z]{2}$/.test(code)
-      ? [...code.toUpperCase()].map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('')
-      : '';
+    // Map scraper 3-letter codes → ISO 2-letter for flag emoji
+    const COUNTRY_FLAG_MAP = {
+      'UK':'GB','GBR':'GB','CHN':'CN','IND':'IN','CAN':'CA','GER':'DE','DEU':'DE',
+      'FRA':'FR','JPN':'JP','KOR':'KR','TWN':'TW','SGP':'SG','AUS':'AU','BRA':'BR','MEX':'MX'
+    };
+    const countryFlag = code => {
+      const iso2 = COUNTRY_FLAG_MAP[code.toUpperCase()] || (/^[A-Za-z]{2}$/.test(code) ? code.toUpperCase() : null);
+      return iso2 ? [...iso2].map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('') : '';
+    };
     const stateFlag = isUS ? '🇺🇸 ' : (countryFlag(stateVal) + ' ');
-    const stateCell = stateVal ? '<span class="info-pill state-pill">' + stateFlag + esc(stateVal) + '</span>' : '—';
+    const stateCell = stateVal
+      ? '<span class="info-pill state-pill">' + stateFlag + esc(stateVal) + '</span>'
+      : (s._enriching ? pendingCell : '—');
 
     const isInCart = rfqCart.some(c => c.name === s.name);
 
