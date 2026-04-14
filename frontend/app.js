@@ -125,12 +125,14 @@ searchInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') doSearch();
 });
 
-document.querySelectorAll('.region-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    searchRegion = btn.dataset.region;
-    document.querySelectorAll('.region-btn').forEach(b => b.classList.toggle('active', b === btn));
+const regionSwitchInput = document.getElementById('region-switch-input');
+if (regionSwitchInput) {
+  regionSwitchInput.addEventListener('change', () => {
+    searchRegion = regionSwitchInput.checked ? 'global' : 'north_america';
+    document.getElementById('region-label-na').classList.toggle('region-label-active', !regionSwitchInput.checked);
+    document.getElementById('region-label-global').classList.toggle('region-label-active', regionSwitchInput.checked);
   });
-});
+}
 
 let _pollInterval = null;
 let _searchPending = false;
