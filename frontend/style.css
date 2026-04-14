@@ -244,10 +244,12 @@ main {
 
 /* SUGGESTION CHIPS */
 .suggestions {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 20px;
+  min-height: 32px;
 }
 
 .suggestion-chips {
@@ -255,12 +257,15 @@ main {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
+  padding-right: 100px; /* prevent chips overlapping the toggle */
 }
 
-/* REGION TOGGLE — sits just after the chips, separated by a small gap */
+/* REGION TOGGLE — globe aligned with right edge of search bar */
 .region-toggle {
-  margin-left: 16px;
-  flex-shrink: 0;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .suggestion-chip {
