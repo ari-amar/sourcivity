@@ -19,13 +19,22 @@ _US_STATE_ABBRS = {
 }
 
 
+def _is_us_supplier(supplier):
+    """Return True if the supplier's state field resolves to a US state."""
+    state = supplier.get('state', '') or ''
+    # Normalize ISO 3166-2 (e.g. US-PA → PA)
+    if state.upper().startswith('US-'):
+        state = state[3:]
+    return state.upper() in _US_STATE_ABBRS or state.upper() in ('', 'US', 'USA')
+
+
 def _build_queries(query, region='north_america'):
     """Generate 3 search variations for broader coverage."""
     if region == 'global':
         return [
-            f"{query} supplier manufacturer",
-            f"{query} distributor vendor",
-            f"{query} company buy purchase",
+            f"{query} supplier manufacturer international",
+            f"{query} manufacturer supplier Europe Asia",
+            f"{query} supplier China Germany Japan UK India",
         ]
     return [
         f"{query} supplier manufacturer USA",
@@ -124,7 +133,8 @@ def handle(query, skip_enrichment=False, region='north_america'):
                 'If unknown, use the country name.'
             )
             rule_1 = (
-                '1. Include suppliers from any country worldwide. '
+                '1. PRIORITIZE non-US international suppliers — aim for at most 1-2 US results out of 5-8 total. '
+                'Actively seek out suppliers from Europe, Asia, and other regions. '
                 'For US suppliers, use the specific state. For all others, use standard country abbreviations.'
             )
             rule_2 = (
@@ -137,14 +147,12 @@ def handle(query, skip_enrichment=False, region='north_america'):
                 '(e.g. "CA", "TX", "OH"). Look carefully at addresses, city/state mentions, ZIP codes, '
                 '"headquartered in", "located in", "based in" text in descriptions, snippets, profile info, '
                 'FAQ data, and URL patterns. NEVER return just "US" — dig deeper to find the actual state. '
-                'For non-US suppliers, use standard country abbreviations: "UK", "CHN", "IND", "CAN", "GER", '
-                '"FRA", "JPN", "KOR", "TWN", "SGP", "AUS", "BRA", "MEX". '
                 'If a company has both US and international locations, always use the US state abbreviation.'
             )
             rule_1 = (
-                '1. Only include US-based suppliers. If a result is clearly a non-US company '
-                '(headquartered in another country with no US presence), skip it. '
-                'Always determine the specific US state — never leave it as just "US".'
+                '1. ONLY include suppliers with US headquarters or primary US operations. '
+                'Any company headquartered outside the US must be excluded entirely — no exceptions. '
+                'Always determine the specific US state — never return just "US".'
             )
             rule_2 = (
                 '2. Skip aggregator/marketplace sites: ThomasNet, Alibaba, Amazon, GlobalSpec, '
@@ -185,6 +193,12 @@ STRICT RULES:
 
         if not suppliers:
             return {"suppliers": [], "error": "No suppliers found. Try a different search term."}
+
+        # Hard filter: in NA mode, drop any non-US suppliers the LLM returned
+        if region == 'north_america':
+            suppliers = [s for s in suppliers if _is_us_supplier(s)]
+            if not suppliers:
+                return {"suppliers": [], "error": "No US suppliers found. Try a different search term."}
 
         # Title-case products field
         _LOWERCASE_WORDS = {'and', 'or', 'the', 'a', 'an', 'of', 'for', 'in', 'on', 'with', 'to', 'by', 'at'}
