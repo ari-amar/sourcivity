@@ -198,21 +198,13 @@ main {
   margin-bottom: 8px;
 }
 .region-emoji {
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
   transition: opacity 0.2s;
   user-select: none;
 }
 #region-emoji-global { opacity: 0.35; }
-.region-track-wrap {
-  cursor: pointer;
-}
-.region-track-wrap input {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
+.region-input { display: none; }
 .region-track {
   display: block;
   width: 44px;
@@ -220,6 +212,7 @@ main {
   background: #30363d;
   border-radius: 12px;
   position: relative;
+  cursor: pointer;
   transition: background 0.2s;
 }
 .region-knob {
@@ -232,10 +225,8 @@ main {
   border-radius: 50%;
   transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s;
 }
-.region-track-wrap input:checked ~ .region-track {
-  background: #1f4a8a;
-}
-.region-track-wrap input:checked ~ .region-track .region-knob {
+.region-input:checked + .region-track { background: #1f4a8a; }
+.region-input:checked + .region-track .region-knob {
   transform: translateX(20px);
   background: #58a6ff;
 }
