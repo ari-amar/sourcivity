@@ -274,16 +274,18 @@ function renderSearchResults(results) {
     const isUS = !stateVal || stateVal === 'US' || US_STATES.has(stateVal) || US_STATES.has(normalizedState);
     // Display the clean value — never show raw "US-XX" or bare "US"
     const displayVal = isUS ? (normalizedState === 'US' || normalizedState === '' ? '' : normalizedState) : stateVal;
-    // Map scraper 3-letter codes → ISO 2-letter for flag emoji
+    // Map common country names → ISO 2-letter for flag emoji
     const COUNTRY_FLAG_MAP = {
-      'UK':'GB','GBR':'GB','CHN':'CN','IND':'IN','CAN':'CA','GER':'DE','DEU':'DE',
-      'FRA':'FR','JPN':'JP','KOR':'KR','TWN':'TW','SGP':'SG','AUS':'AU','BRA':'BR','MEX':'MX'
+      'UK':'GB','UNITED KINGDOM':'GB',
+      'CHINA':'CN','INDIA':'IN','CANADA':'CA','GERMANY':'DE',
+      'FRANCE':'FR','JAPAN':'JP','KOREA':'KR','TAIWAN':'TW',
+      'SINGAPORE':'SG','AUSTRALIA':'AU','BRAZIL':'BR','MEXICO':'MX'
     };
     const countryFlag = code => {
       const iso2 = COUNTRY_FLAG_MAP[code.toUpperCase()] || (/^[A-Za-z]{2}$/.test(code) ? code.toUpperCase() : null);
       return iso2 ? [...iso2].map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('') : '';
     };
-    const flagEmoji = isUS ? '🇺🇸' : (countryFlag(stateVal) || '🌐');
+    const flagEmoji = isUS ? '🇺🇸' : countryFlag(stateVal);
     const stateCell = s._enriching ? pendingCell
       : (stateVal ? '<span class="info-pill state-pill">' + flagEmoji + (displayVal ? ' ' + esc(displayVal) : '') + '</span>' : '—');
 

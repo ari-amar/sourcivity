@@ -127,8 +127,8 @@ def handle(query, skip_enrichment=False, region='north_america'):
         # Step 3: Feed to LLM with enhanced prompt
         if region == 'global':
             state_field_desc = (
-                '- state: Use standard country abbreviations: "UK", "CHN", "IND", "CAN", "GER", '
-                '"FRA", "JPN", "KOR", "TWN", "SGP", "AUS", "BRA", "MEX". '
+                '- state: Use common country names: "UK", "China", "India", "Canada", "Germany", '
+                '"France", "Japan", "Korea", "Taiwan", "Singapore", "Australia", "Brazil", "Mexico". '
                 'For US suppliers, use the specific state abbreviation (e.g. "CA", "TX"). '
                 'If unknown, use the country name.'
             )
@@ -215,6 +215,14 @@ STRICT RULES:
 
         search_id = str(uuid.uuid4())[:8]
 
+        # Normalize fields that will be updated in background: show blank rather than
+        # an ambiguous placeholder that visibly changes on the next render.
+        for s in suppliers:
+            if s.get('state', '') in ('', 'US', 'USA'):
+                s['state'] = ''
+            if s.get('certifications', '') in ('N/A', '', None):
+                s['certifications'] = ''
+
         # Strip emails in demo mode; set _enriching spinner on all suppliers
         if skip_enrichment:
             for s in suppliers:
@@ -241,15 +249,11 @@ def _regenerate_match_reasons(suppliers, query):
     # Build a compact profile for each supplier
     profiles = []
     for s in suppliers:
-        profile = {
-            "name": s.get("name", ""),
-            "products": s.get("products", ""),
-            "certifications": s.get("certifications", "N/A"),
-            "yearsInBusiness": s.get("yearsInBusiness", ""),
-            "employees": s.get("employees", ""),
-            "revenue": s.get("revenue", ""),
-            "state": s.get("state", ""),
-        }
+        profile = {"name": s.get("name", ""), "products": s.get("products", "")}
+        for field in ("certifications", "yearsInBusiness", "employees", "revenue", "state"):
+            val = s.get(field, "")
+            if val and val not in ("N/A", ""):
+                profile[field] = val
         profiles.append(profile)
 
     system = """You are a critical industrial procurement analyst evaluating supplier matches.
@@ -259,20 +263,20 @@ Given the buyer's search query and enriched supplier profiles, write a BLUNT, SP
 A strong match has CONCRETE evidence such as:
 - Certifications directly relevant to the query (e.g. AS9100 for aerospace parts, ISO 13485 for medical)
 - Specific product lines that directly address what the buyer needs (not vague "industrial supplier")
-- Proven scale: adequate employee count and revenue for the likely order size
-- Track record: years in business in the relevant industry
+- Proven scale: employee count and revenue that fit the likely order size (only if data is present)
+- Track record: years in business in the relevant industry (only if data is present)
 
 A weak match has:
 - No relevant certifications (or only generic ISO 9001)
 - Vague product descriptions that don't clearly cover the query
-- Unknown or very small scale with no track record info
 - The company appears to be a general distributor rather than a specialist
 
 RULES:
-1. Be honest. If evidence is thin, say so: "Limited info — no certs or track record found"
-2. Cite specific data points: "AS9100-certified with 200+ employees and 40 yrs in aerospace fasteners"
-3. Flag red flags: "No certifications listed", "Very small scale", "Unclear if they actually manufacture this"
-4. Do NOT pad weak matches with filler praise. Short and blunt is fine.
+1. Only cite data that is actually present in the profile. Empty fields mean the data wasn't found — treat them as unknown, NOT as evidence of a weak match.
+2. Cite specific data points when available: "AS9100-certified with 200+ employees and 40 yrs in aerospace fasteners"
+3. Flag red flags based on what IS known: "No relevant certifications", "Appears to be a general distributor"
+4. Do NOT say "no track record found" or "unknown scale" — omit those dimensions entirely when data is missing.
+5. Do NOT pad weak matches with filler praise. Short and blunt is fine.
 5. Max 1-2 sentences per supplier.
 
 Return ONLY a JSON array of objects: [{"name": "...", "matchReason": "..."}]
@@ -350,15 +354,12 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
             match_future = pool.submit(_do_match_reasons)
             scrape_future = pool.submit(_do_scraping)
 
-            # Match reasons typically finish first (~2-3s LLM call)
+            # Collect match reasons but do NOT publish yet — they will only be
+            # applied in the final publish so matchReason never visibly changes.
+            reason_map = {}
             try:
                 matched = match_future.result()
                 reason_map = {s.get("name"): s.get("matchReason") for s in matched if s.get("matchReason")}
-                for s in current_suppliers:
-                    reason = reason_map.get(s.get("name"))
-                    if reason:
-                        s["matchReason"] = reason
-                _searches[search_id] = {"suppliers": list(current_suppliers), "status": "enriching", "blocked": [], "query": query, "ts": time.time()}
             except Exception as e:
                 print(f"[search] Match reason error: {e}")
 
@@ -366,18 +367,19 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
             try:
                 enriched = scrape_future.result()
                 blocked = [] if skip_emails else scraper.get_blocked_sites()
-                # Final merge: use enriched list but keep match reasons from above
                 for s in enriched:
                     s.pop("_enriching", None)
-                    name = s.get("name")
-                    for cs in current_suppliers:
-                        if cs.get("name") == name and cs.get("matchReason"):
-                            s["matchReason"] = cs["matchReason"]
-                            break
 
-                # Re-run match reasons only if scraping found new certs
+                # Apply match reasons from the parallel LLM call
+                for s in enriched:
+                    reason = reason_map.get(s.get("name"))
+                    if reason:
+                        s["matchReason"] = reason
+
+                # Re-run match reasons if scraping surfaced new certs (matchReason
+                # hasn't been shown yet so this is still a first-time render)
                 has_new_certs = any(
-                    s.get("certifications", "N/A") not in ("N/A", "", None)
+                    s.get("certifications", "") not in ("", None)
                     and s.get("certifications") != next((orig.get("certifications") for orig in suppliers if orig.get("name") == s.get("name")), None)
                     for s in enriched
                 )
@@ -389,6 +391,9 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                 print(f"[search] Website scraping error: {e}")
                 for s in current_suppliers:
                     s.pop("_enriching", None)
+                    reason = reason_map.get(s.get("name"))
+                    if reason:
+                        s["matchReason"] = reason
                 _searches[search_id] = {"suppliers": current_suppliers, "status": "done", "blocked": [], "query": query, "ts": time.time()}
 
     except Exception as e:
@@ -417,7 +422,7 @@ def _cleanup_old_searches():
 
 def _enrich_reputation(suppliers):
     """Second-pass: search Brave for each supplier's company facts (founded, employees, revenue, certs)."""
-    needs_enrichment = [s for s in suppliers if not s.get("yearsInBusiness") or not s.get("employees") or s.get("certifications", "N/A") in ("N/A", "", None)]
+    needs_enrichment = [s for s in suppliers if not s.get("yearsInBusiness") or not s.get("employees")]
     if not needs_enrichment:
         return suppliers
 
@@ -467,25 +472,6 @@ def _enrich_reputation(suppliers):
                         rev_match = re.search(r'\$([\d.]+)\s*(B|M|K|billion|million)', attr_val, re.I)
                         if rev_match:
                             facts["revenue"] = f"${rev_match.group(1)}{rev_match.group(2)[0].upper()}"
-                # Use infobox long_desc for location/state
-                desc = infobox.get("long_desc", "")
-                if desc and supplier.get("state") in ("US", "USA", ""):
-                    # Try ZIP pattern first
-                    zip_m = re.search(r'([A-Z]{2})\s+\d{5}', desc)
-                    if zip_m and zip_m.group(1) in _US_STATE_ABBRS:
-                        facts["state"] = zip_m.group(1)
-                    else:
-                        state_match = re.search(r',\s*([A-Z]{2})\b', desc)
-                        if state_match and state_match.group(1) in _US_STATE_ABBRS:
-                            facts["state"] = state_match.group(1)
-
-            # Extract certs from extra_snippets if current is N/A or empty
-            if supplier.get("certifications", "N/A") in ("N/A", "", None):
-                all_text = " ".join(r.get("description", "") + " " + " ".join(r.get("extra_snippets", [])) for r in results)
-                cert_patterns = re.findall(r'(?:ISO\s*\d{4,5}(?::\d{4})?|AS\s*9100[A-Z]?|ITAR|NADCAP|AMS\s*\d+|ASTM\s*[A-Z]\d+|QPL|Mil-Spec|FDA|RoHS|CE\s+mark)', all_text, re.I)
-                if cert_patterns:
-                    unique_certs = list(dict.fromkeys(c.strip() for c in cert_patterns))
-                    facts["certifications"] = ", ".join(unique_certs[:5])
 
             return supplier["name"], facts
         except Exception:
@@ -499,14 +485,17 @@ def _enrich_reputation(suppliers):
             name, facts = f.result()
             fact_map[name] = facts
 
-    # Merge facts back
+    # Merge facts back — only fills yearsInBusiness, employees, revenue.
+    # state and certifications are intentionally excluded here: the website
+    # scraper (Render 4) is the ground truth for both and they must not change
+    # after that render.
+    _SKIP_IN_REPUTATION = {'state', 'certifications'}
     for s in suppliers:
         facts = fact_map.get(s["name"], {})
         for key, val in facts.items():
+            if key in _SKIP_IN_REPUTATION:
+                continue
             if val and not s.get(key):
-                s[key] = val
-            # Override N/A or empty certs
-            if key == "certifications" and val and s.get(key) in ("N/A", "", None):
                 s[key] = val
 
     return suppliers

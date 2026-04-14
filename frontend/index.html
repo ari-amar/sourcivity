@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0f1117">
   <script>window.DEMO_MODE = false;</script>
   <title>Sourcivity</title>
   <link rel="icon" type="image/png" href="sourcivity-logo.png">
@@ -11,7 +13,7 @@
   <meta property="og:description" content="AI-powered supplier search and procurement">
   <meta property="og:image" content="sourcivity-logo.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="style.css?v=111">
+  <link rel="stylesheet" href="style.css?v=112">
 </head>
 <body>
   <header>
@@ -34,20 +36,20 @@
 
     <!-- SUPPLIER SEARCH TAB -->
     <section id="tab-search" class="tab active">
-      <div class="region-toggle" id="region-toggle">
-        <span class="region-emoji" id="region-emoji-na">🇺🇸</span>
-        <input type="checkbox" id="region-switch-input" class="region-input">
-        <label for="region-switch-input" class="region-track">
-          <span class="region-knob"></span>
-        </label>
-        <span class="region-emoji" id="region-emoji-global">🌍</span>
-      </div>
       <div class="search-bar">
         <input type="text" id="search-input" placeholder="Search for a supplier or service...">
         <button id="search-btn">Search</button>
       </div>
       <div id="suggestions" class="suggestions">
         <div id="suggestion-chips" class="suggestion-chips"></div>
+        <div class="region-toggle" id="region-toggle">
+          <span class="region-emoji" id="region-emoji-na">🇺🇸</span>
+          <input type="checkbox" id="region-switch-input" class="region-input">
+          <label for="region-switch-input" class="region-track">
+            <span class="region-knob"></span>
+          </label>
+          <span class="region-emoji" id="region-emoji-global">🌍</span>
+        </div>
       </div>
       <div id="search-status" class="status-msg hidden"></div>
       <div id="search-results" class="results-container">
@@ -113,7 +115,7 @@
     </div>
 
     <!-- CHECKOUT MODAL -->
-    <div id="checkout-modal" class="modal hidden">
+    <div id="checkout-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Batch RFQ Checkout">
       <div class="modal-content checkout-modal-content">
         <div class="modal-header">
           <h2>Batch RFQ Checkout</h2>
@@ -138,7 +140,7 @@
     </div>
 
     <!-- RFQ MODAL -->
-    <div id="rfq-modal" class="modal hidden">
+    <div id="rfq-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Send RFQ">
       <div class="modal-content">
         <div class="modal-header">
           <h2>Send RFQ</h2>

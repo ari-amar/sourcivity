@@ -234,6 +234,27 @@ def _extract_contact_url(html, base_url):
     return urllib.parse.urljoin(base_url, best)
 
 
+CERT_HREF_RE = re.compile(
+    r'href=["\']([^"\']*(?:quality|certif|iso|as9100|nadcap|itar|compliance|standard|accredit)[^"\']*)["\']',
+    re.IGNORECASE
+)
+
+def _find_cert_page_url(html, base_url):
+    """Scan homepage links for a cert/quality page URL, mirroring _extract_contact_url."""
+    matches = CERT_HREF_RE.findall(html)
+    if not matches:
+        return ''
+    for href in matches:
+        if href.startswith('#') or href.startswith('javascript:') or href.startswith('mailto:'):
+            continue
+        if href.startswith('http'):
+            return href
+        if not base_url.startswith('http'):
+            base_url = 'https://' + base_url
+        return urllib.parse.urljoin(base_url, href)
+    return ''
+
+
 def _pick_best_email(emails):
     for prefix in ('sales@', 'info@', 'contact@', 'inquiry@', 'inquiries@', 'quotes@', 'rfq@'):
         for e in emails:
@@ -276,18 +297,18 @@ US_STATE_ABBRS = set(US_STATES.values())
 
 NON_US_INDICATORS = {
     'united kingdom': 'UK', 'england': 'UK', 'u.k.': 'UK', 'uk ': 'UK', 'london': 'UK', 'manchester': 'UK', 'birmingham uk': 'UK',
-    'china': 'CHN', 'shanghai': 'CHN', 'beijing': 'CHN', 'shenzhen': 'CHN', 'guangzhou': 'CHN', 'dongguan': 'CHN',
-    'india': 'IND', 'mumbai': 'IND', 'delhi': 'IND', 'bangalore': 'IND', 'chennai': 'IND', 'hyderabad': 'IND', 'pune': 'IND',
-    'canada': 'CAN', 'toronto': 'CAN', 'vancouver': 'CAN', 'montreal': 'CAN', 'ontario': 'CAN', 'alberta': 'CAN',
-    'germany': 'GER', 'deutschland': 'GER', 'munich': 'GER', 'berlin': 'GER', 'stuttgart': 'GER',
-    'france': 'FRA', 'paris': 'FRA', 'lyon': 'FRA',
-    'japan': 'JPN', 'tokyo': 'JPN', 'osaka': 'JPN',
-    'korea': 'KOR', 'seoul': 'KOR',
-    'taiwan': 'TWN', 'taipei': 'TWN',
-    'singapore': 'SGP',
-    'australia': 'AUS', 'sydney': 'AUS', 'melbourne': 'AUS',
-    'brazil': 'BRA',
-    'mexico': 'MEX',
+    'china': 'China', 'shanghai': 'China', 'beijing': 'China', 'shenzhen': 'China', 'guangzhou': 'China', 'dongguan': 'China',
+    'india': 'India', 'mumbai': 'India', 'delhi': 'India', 'bangalore': 'India', 'chennai': 'India', 'hyderabad': 'India', 'pune': 'India',
+    'canada': 'Canada', 'toronto': 'Canada', 'vancouver': 'Canada', 'montreal': 'Canada', 'ontario': 'Canada', 'alberta': 'Canada',
+    'germany': 'Germany', 'deutschland': 'Germany', 'munich': 'Germany', 'berlin': 'Germany', 'stuttgart': 'Germany',
+    'france': 'France', 'paris': 'France', 'lyon': 'France',
+    'japan': 'Japan', 'tokyo': 'Japan', 'osaka': 'Japan',
+    'korea': 'Korea', 'seoul': 'Korea',
+    'taiwan': 'Taiwan', 'taipei': 'Taiwan',
+    'singapore': 'Singapore',
+    'australia': 'Australia', 'sydney': 'Australia', 'melbourne': 'Australia',
+    'brazil': 'Brazil',
+    'mexico': 'Mexico',
 }
 
 
@@ -327,8 +348,12 @@ def _extract_certifications(html):
     """Extract quality certifications from HTML. Returns list of unique cert strings or empty list."""
     if not html:
         return []
-    # Strip HTML tags for cleaner matching, but keep original for case-sensitive patterns
-    text = re.sub(r'<[^>]+>', ' ', html)
+    # Pull alt and title attribute values before stripping tags — cert badges are
+    # almost always <img> elements whose text content disappears after tag removal.
+    attr_text = ' '.join(re.findall(r'(?:alt|title)=["\']([^"\']+)["\']', html, re.IGNORECASE))
+    # Strip HTML tags for the main body text
+    body_text = re.sub(r'<[^>]+>', ' ', html)
+    text = attr_text + ' ' + body_text
     matches = CERT_PATTERNS.findall(text)
     if not matches:
         return []
@@ -346,54 +371,49 @@ def _extract_certifications(html):
 def _extract_location(html):
     """Extract location from HTML. Returns US state abbr, country code, or None.
 
-    Priority: US state (from address/ZIP) > US state (from text) > non-US country code.
-    If both US state and non-US indicators are found, prefer the US state.
+    Priority order (most to least semantically specific):
+      1. Schema.org addressRegion — author explicitly declared it
+      2. "headquartered/located/based in ..., ST" — unambiguous company statement
+      3. ", ST ZIP[-4]" — address-formatted with ZIP (contextual anchor)
+      4. "ST United States/USA" — state anchored to country name
+      5. Full state name in page text — lowest precision, last resort
+    The bare ", XX" pattern is intentionally omitted — too many false positives
+    (e.g. "Type, CA" or "Page, OR") on full-page scans.
     """
     import re
     text = re.sub(r'<[^>]+>', ' ', html).lower()
 
-    # --- Try to find a US state first (multiple patterns) ---
-
-    # Pattern 1: "City, ST ZIP" (e.g. "Houston, TX 77001") — most reliable
-    zip_match = re.search(r'([A-Z]{2})\s+\d{5}', html)
-    if zip_match and zip_match.group(1) in US_STATE_ABBRS:
-        return zip_match.group(1)
-
-    # Pattern 2: ", ST ZIP" with optional dash extension
-    zip_match2 = re.search(r',\s*([A-Z]{2})\s+\d{5}(?:-\d{4})?', html)
-    if zip_match2 and zip_match2.group(1) in US_STATE_ABBRS:
-        return zip_match2.group(1)
-
-    # Pattern 3: Full state name (e.g. "California", "New York")
     us_state_found = None
-    for state_name, abbr in US_STATES.items():
-        if state_name in text:
-            us_state_found = abbr
-            break
 
-    # Pattern 4: ", XX" where XX is a state abbreviation (in original HTML to preserve case)
+    # Pattern 1: Schema.org / JSON-LD addressRegion — most authoritative
+    region_match = re.search(r'"addressRegion"\s*:\s*"([A-Z]{2})"', html)
+    if region_match and region_match.group(1) in US_STATE_ABBRS:
+        us_state_found = region_match.group(1)
+
+    # Pattern 2: "headquartered/located/based in ..., ST"
     if not us_state_found:
-        state_re = re.search(r',\s*([A-Z]{2})\b', html)
-        if state_re and state_re.group(1) in US_STATE_ABBRS:
-            us_state_found = state_re.group(1)
+        meta_match = re.search(r'(?:headquartered|located|based)\s+in\s+[\w\s]+,\s*([A-Z]{2})\b', html)
+        if meta_match and meta_match.group(1) in US_STATE_ABBRS:
+            us_state_found = meta_match.group(1)
 
-    # Pattern 5: "XX United States" or "XX, US" or standalone state abbr near address-like context
+    # Pattern 3: ", ST ZIP[-4]" — address-formatted (comma anchors the state)
+    if not us_state_found:
+        zip_match = re.search(r',\s*([A-Z]{2})\s+\d{5}(?:-\d{4})?', html)
+        if zip_match and zip_match.group(1) in US_STATE_ABBRS:
+            us_state_found = zip_match.group(1)
+
+    # Pattern 4: "ST United States" / "ST, USA" — state anchored to country name
     if not us_state_found:
         addr_match = re.search(r'([A-Z]{2})\s*,?\s*(?:United States|USA|U\.S\.A\.)', html)
         if addr_match and addr_match.group(1) in US_STATE_ABBRS:
             us_state_found = addr_match.group(1)
 
-    # Pattern 6: Look in structured data (JSON-LD, schema.org addressRegion)
+    # Pattern 5: Full state name anywhere in page text — last resort, low precision
     if not us_state_found:
-        region_match = re.search(r'"addressRegion"\s*:\s*"([A-Z]{2})"', html)
-        if region_match and region_match.group(1) in US_STATE_ABBRS:
-            us_state_found = region_match.group(1)
-
-    # Pattern 7: meta/title tags with state info
-    if not us_state_found:
-        meta_match = re.search(r'(?:headquartered|located|based)\s+in\s+[\w\s]+,\s*([A-Z]{2})\b', html)
-        if meta_match and meta_match.group(1) in US_STATE_ABBRS:
-            us_state_found = meta_match.group(1)
+        for state_name, abbr in US_STATES.items():
+            if state_name in text:
+                us_state_found = abbr
+                break
 
     # If we found a US state, always prefer it (even if non-US indicators exist)
     if us_state_found:
@@ -468,6 +488,9 @@ def _enrich_single(supplier, skip_email=False):
     homepage_html = _fetch_page(base_url, timeout=5)
     _check_html(homepage_html)
 
+    # Discover cert page URL from homepage links before guessing paths
+    discovered_cert_url = _find_cert_page_url(homepage_html, base_url) if homepage_html else ''
+
     for path in ['/contact', '/contact-us', '/about', '/about-us']:
         # Stop when email (if needed) and state are both resolved
         if (skip_email or _has_valid_email()) and supplier.get('state', '') not in ('', 'US', 'USA'):
@@ -475,15 +498,24 @@ def _enrich_single(supplier, skip_email=False):
         page_html = _fetch_page(base_url.rstrip('/') + path, timeout=5)
         _check_html(page_html)
 
-    # Cert pages — always checked regardless of email/state status
-    if needs_certs and not all_certs:
+    # Cert pages — always fetched when certs are needed, regardless of earlier hits.
+    # Earlier pages (homepage, contact, about) may match cert names in customer
+    # requirements or blog text; dedicated pages are ground truth.
+    if needs_certs:
+        # Try the discovered cert URL first, then fall back to guessed paths
+        cert_urls_to_try = []
+        if discovered_cert_url:
+            cert_urls_to_try.append(discovered_cert_url)
         for path in ['/quality', '/certifications', '/capabilities']:
-            page_html = _fetch_page(base_url.rstrip('/') + path, timeout=5)
+            url = base_url.rstrip('/') + path
+            if url != discovered_cert_url:
+                cert_urls_to_try.append(url)
+        for url in cert_urls_to_try:
+            page_html = _fetch_page(url, timeout=5)
             if page_html:
                 certs = _extract_certifications(page_html)
                 if certs:
                     all_certs.extend(certs)
-                    break
 
     # Merge collected certs
     if all_certs:
