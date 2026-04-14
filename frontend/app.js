@@ -40,6 +40,7 @@ let activeFilter = 'all';
 let selectedSupplier = null;
 let suggestionInterval = null;
 let rfqCart = [];
+let searchRegion = 'north_america';
 
 // === DOM REFS ===
 const navBtns = document.querySelectorAll('.nav-btn');
@@ -124,6 +125,13 @@ searchInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') doSearch();
 });
 
+document.querySelectorAll('.region-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    searchRegion = btn.dataset.region;
+    document.querySelectorAll('.region-btn').forEach(b => b.classList.toggle('active', b === btn));
+  });
+});
+
 let _pollInterval = null;
 let _searchPending = false;
 
@@ -145,7 +153,7 @@ async function doSearch() {
     const res = await fetch(API_URL + '/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: query.slice(0, 500) })
+      body: JSON.stringify({ query: query.slice(0, 500), region: searchRegion })
     });
 
     let data;

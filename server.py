@@ -164,6 +164,9 @@ class AppHandler(SimpleHTTPRequestHandler):
             if not query:
                 _send_json(self, {"error": "Missing query"}, 400)
                 return
+            region = data.get("region", "north_america")
+            if region not in ("north_america", "global"):
+                region = "north_america"
 
             # Demo rate limiting
             if DEMO_MODE:
@@ -180,9 +183,9 @@ class AppHandler(SimpleHTTPRequestHandler):
                 _demo_rate[ip] = hits
 
             ip = _get_real_ip(self)
-            result = search.handle(query, skip_enrichment=DEMO_MODE)
+            result = search.handle(query, skip_enrichment=DEMO_MODE, region=region)
             count = len(result.get("suppliers", [])) if isinstance(result, dict) else 0
-            log_activity("search", query, ip, _get_referrer(self), _get_device(self), f"results:{count}")
+            log_activity("search", query, ip, _get_referrer(self), _get_device(self), f"results:{count},region:{region}")
             _send_json(self, result)
 
         elif self.path == "/api/enrich":

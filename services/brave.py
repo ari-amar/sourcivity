@@ -12,14 +12,15 @@ def _strip_html(text):
     return re.sub(r'<[^>]+>', '', text) if text else ''
 
 
-def search(query, count=10):
+def search(query, count=10, region='north_america'):
     """Search Brave and return (results, faq, infobox).
 
     results: list of {title, url, description, extra_snippets, page_age, profile_name}
     faq: list of {question, answer, url} — company facts (founded, employees, revenue)
     infobox: dict with {title, description, long_desc, attributes} or None
     """
-    params = urllib.parse.urlencode({"q": query[:500], "count": count, "country": "us", "search_lang": "en"})
+    country = 'us' if region == 'north_america' else 'all'
+    params = urllib.parse.urlencode({"q": query[:500], "count": count, "country": country, "search_lang": "en"})
     url = f"https://api.search.brave.com/res/v1/web/search?{params}"
     req = urllib.request.Request(url, headers={
         "Accept": "application/json",

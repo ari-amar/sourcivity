@@ -19,8 +19,14 @@ _US_STATE_ABBRS = {
 }
 
 
-def _build_queries(query):
+def _build_queries(query, region='north_america'):
     """Generate 3 search variations for broader coverage."""
+    if region == 'global':
+        return [
+            f"{query} supplier manufacturer",
+            f"{query} distributor vendor",
+            f"{query} company buy purchase",
+        ]
     return [
         f"{query} supplier manufacturer USA",
         f"{query} distributor vendor United States",
@@ -28,7 +34,7 @@ def _build_queries(query):
     ]
 
 
-def handle(query, skip_enrichment=False):
+def handle(query, skip_enrichment=False, region='north_america'):
     """Search for US suppliers using parallel Brave queries. Returns enriched supplier list."""
     try:
         # Step 1: Run Brave searches in parallel
@@ -38,7 +44,7 @@ def handle(query, skip_enrichment=False):
         seen_urls = set()
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
-            futures = [pool.submit(brave.search, q, 10) for q in _build_queries(query)]
+            futures = [pool.submit(brave.search, q, 10, region) for q in _build_queries(query, region)]
             for f in concurrent.futures.as_completed(futures):
                 try:
                     results, faq, infobox = f.result()
@@ -53,17 +59,19 @@ def handle(query, skip_enrichment=False):
                     pass
 
         # Filter out aggregator sites
-        AGGREGATORS = ('thomasnet.com', 'alibaba.com', 'amazon.com', 'globalspec.com',
-                       'made-in-china.com', 'indiamart.com', 'ebay.com', 'grainger.com',
-                       'mcmaster.com', 'aliexpress.com', 'dhgate.com', 'tradekey.com',
-                       'ec21.com', 'tradeindia.com', 'kompass.com', 'europages.com',
-                       'directindustry.com', 'go4worldbusiness.com', 'exportersindia.com')
+        AGGREGATORS_ALWAYS = ('amazon.com', 'ebay.com', 'aliexpress.com', 'dhgate.com',
+                              'grainger.com', 'mcmaster.com')
+        AGGREGATORS_NA_ONLY = ('thomasnet.com', 'alibaba.com', 'globalspec.com',
+                               'made-in-china.com', 'indiamart.com', 'tradekey.com',
+                               'ec21.com', 'tradeindia.com', 'kompass.com', 'europages.com',
+                               'directindustry.com', 'go4worldbusiness.com', 'exportersindia.com')
+        active_aggregators = AGGREGATORS_ALWAYS + (AGGREGATORS_NA_ONLY if region == 'north_america' else ())
 
         filtered_results = []
         for r in all_results:
             url_lower = r["url"].lower()
             # Skip aggregators
-            if any(agg in url_lower for agg in AGGREGATORS):
+            if any(agg in url_lower for agg in active_aggregators):
                 continue
             filtered_results.append(r)
 
@@ -108,11 +116,46 @@ def handle(query, skip_enrichment=False):
             user_msg = user_msg[:12000] + "\n... (truncated)"
 
         # Step 3: Feed to LLM with enhanced prompt
-        system = """You are an industrial supplier researcher. Given web search results (with extra snippets and FAQ data), extract real supplier companies.
+        if region == 'global':
+            state_field_desc = (
+                '- state: Use standard country abbreviations: "UK", "CHN", "IND", "CAN", "GER", '
+                '"FRA", "JPN", "KOR", "TWN", "SGP", "AUS", "BRA", "MEX". '
+                'For US suppliers, use the specific state abbreviation (e.g. "CA", "TX"). '
+                'If unknown, use the country name.'
+            )
+            rule_1 = (
+                '1. Include suppliers from any country worldwide. '
+                'For US suppliers, use the specific state. For all others, use standard country abbreviations.'
+            )
+            rule_2 = (
+                '2. Skip consumer e-commerce sites: Amazon, eBay, AliExpress, DHgate, '
+                'Grainger catalog pages, McMaster-Carr catalog pages.'
+            )
+        else:
+            state_field_desc = (
+                '- state: For US suppliers, you MUST find the specific US state abbreviation '
+                '(e.g. "CA", "TX", "OH"). Look carefully at addresses, city/state mentions, ZIP codes, '
+                '"headquartered in", "located in", "based in" text in descriptions, snippets, profile info, '
+                'FAQ data, and URL patterns. NEVER return just "US" — dig deeper to find the actual state. '
+                'For non-US suppliers, use standard country abbreviations: "UK", "CHN", "IND", "CAN", "GER", '
+                '"FRA", "JPN", "KOR", "TWN", "SGP", "AUS", "BRA", "MEX". '
+                'If a company has both US and international locations, always use the US state abbreviation.'
+            )
+            rule_1 = (
+                '1. Include suppliers from any country. For US suppliers, always determine the specific state '
+                '— never leave it as just "US". For non-US suppliers, use standard abbreviations '
+                '(UK, CHN, IND, CAN, GER, FRA, JPN, KOR, TWN, SGP, AUS, BRA, MEX).'
+            )
+            rule_2 = (
+                '2. Skip aggregator/marketplace sites: ThomasNet, Alibaba, Amazon, GlobalSpec, '
+                'Made-in-China, IndiaMART, eBay, Grainger catalog pages, McMaster-Carr catalog pages.'
+            )
+
+        system = f"""You are an industrial supplier researcher. Given web search results (with extra snippets and FAQ data), extract real supplier companies.
 
 Return ONLY a JSON array inside ```json fences. Each supplier object must have these fields:
 - name: company name
-- state: For US suppliers, you MUST find the specific US state abbreviation (e.g. "CA", "TX", "OH"). Look carefully at addresses, city/state mentions, ZIP codes, "headquartered in", "located in", "based in" text in descriptions, snippets, profile info, FAQ data, and URL patterns. NEVER return just "US" — dig deeper to find the actual state. For non-US suppliers, use standard country abbreviations: "UK", "CHN", "IND", "CAN", "GER", "FRA", "JPN", "KOR", "TWN", "SGP", "AUS", "BRA", "MEX". If a company has both US and international locations, always use the US state abbreviation.
+{state_field_desc}
 - products: what they make/sell relevant to the query (use Title Case, e.g. "Ceramic Hybrid Angular Contact Bearings")
 - certifications: quality certs found ANYWHERE in descriptions, extra_snippets, or FAQ. Look for: ISO 9001, ISO 13485, AS9100, ITAR, NADCAP, AMS, ASTM, QPL, Mil-Spec, FDA, CE, UL, RoHS. Also look for phrases like "certified", "accredited", "registered", "compliant". If truly none found, "N/A"
 - website: company website URL (root domain only, e.g. "https://example.com")
@@ -121,8 +164,8 @@ Return ONLY a JSON array inside ```json fences. Each supplier object must have t
 - employees: Look in FAQ for "employees", "size", "staff". Also check extra_snippets. Format: "60" or "500+" or "10K+". If unknown, ""
 - revenue: Look in FAQ for "revenue". Format: "$10M" or "$20.5B". If unknown, ""
 STRICT RULES:
-1. Include suppliers from any country. For US suppliers, always determine the specific state — never leave it as just "US". For non-US suppliers, use standard abbreviations (UK, CHN, IND, CAN, GER, FRA, JPN, KOR, TWN, SGP, AUS, BRA, MEX).
-2. Skip aggregator/marketplace sites: ThomasNet, Alibaba, Amazon, GlobalSpec, Made-in-China, IndiaMART, eBay, Grainger catalog pages, McMaster-Carr catalog pages.
+{rule_1}
+{rule_2}
 3. Only include actual manufacturers, distributors, or service providers — not news articles, blog posts, or comparison pages.
 4. Extract 5-8 suppliers maximum.
 5. READ ALL extra_snippets carefully — they often contain certifications, founding year, and employee data that the main description misses."""
@@ -165,7 +208,7 @@ STRICT RULES:
         for s in suppliers:
             if not s.get("email"):
                 s["_enriching"] = True
-        _searches[search_id] = {"suppliers": list(suppliers), "status": "enriching", "blocked": [], "query": query, "ts": time.time()}
+        _searches[search_id] = {"suppliers": list(suppliers), "status": "enriching", "blocked": [], "query": query, "region": region, "ts": time.time()}
 
         thread = threading.Thread(target=_background_enrich, args=(search_id, suppliers, skip_enrichment), daemon=True)
         thread.start()

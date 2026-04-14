@@ -190,6 +190,30 @@ main {
   cursor: not-allowed;
 }
 
+/* REGION TOGGLE */
+.region-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 12px;
+}
+.region-btn {
+  padding: 6px 18px;
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #8b949e;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.region-btn:first-child { border-radius: 6px 0 0 6px; }
+.region-btn:last-child  { border-radius: 0 6px 6px 0; border-left: none; }
+.region-btn.active {
+  background: #1f6feb;
+  color: #fff;
+  border-color: #1f6feb;
+}
+
 /* SUGGESTION CHIPS */
 .suggestions {
   display: flex;
