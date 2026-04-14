@@ -34,14 +34,14 @@
 
     <!-- SUPPLIER SEARCH TAB -->
     <section id="tab-search" class="tab active">
-      <div class="region-toggle-row" id="region-toggle">
-        <span class="region-label region-label-active" id="region-label-na">🇺🇸 North America</span>
-        <label class="region-switch">
-          <input type="checkbox" id="region-switch-input">
-          <span class="region-slider"></span>
-        </label>
-        <span class="region-label" id="region-label-global">🌍 Global</span>
-      </div>
+      <label class="region-switch" id="region-toggle">
+        <input type="checkbox" id="region-switch-input">
+        <span class="region-track">
+          <span class="region-emoji-na">🇺🇸</span>
+          <span class="region-knob"></span>
+          <span class="region-emoji-global">🌍</span>
+        </span>
+      </label>
       <div class="search-bar">
         <input type="text" id="search-input" placeholder="Search for a supplier or service...">
         <button id="search-btn">Search</button>

@@ -129,8 +129,6 @@ const regionSwitchInput = document.getElementById('region-switch-input');
 if (regionSwitchInput) {
   regionSwitchInput.addEventListener('change', () => {
     searchRegion = regionSwitchInput.checked ? 'global' : 'north_america';
-    document.getElementById('region-label-na').classList.toggle('region-label-active', !regionSwitchInput.checked);
-    document.getElementById('region-label-global').classList.toggle('region-label-active', regionSwitchInput.checked);
   });
 }
 

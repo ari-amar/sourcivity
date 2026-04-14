@@ -191,60 +191,62 @@ main {
 }
 
 /* REGION TOGGLE */
-.region-toggle-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-.region-label {
-  font-size: 13px;
-  color: #484f58;
-  transition: color 0.15s;
-  user-select: none;
-}
-.region-label-active {
-  color: #e1e4e8;
-  font-weight: 500;
-}
 .region-switch {
-  position: relative;
   display: inline-block;
-  width: 36px;
-  height: 20px;
-  flex-shrink: 0;
+  cursor: pointer;
+  margin-bottom: 6px;
 }
 .region-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-  position: absolute;
+  display: none;
 }
-.region-slider {
-  position: absolute;
-  inset: 0;
-  background: #30363d;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: background 0.2s;
+.region-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 72px;
+  height: 34px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 17px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
 }
-.region-slider::before {
-  content: '';
+.region-switch:hover .region-track {
+  border-color: #484f58;
+}
+.region-emoji-na,
+.region-emoji-global {
+  font-size: 17px;
+  line-height: 1;
+  position: relative;
+  z-index: 1;
+  transition: opacity 0.2s;
+}
+.region-emoji-global {
+  opacity: 0.3;
+}
+.region-knob {
   position: absolute;
-  width: 14px;
-  height: 14px;
   left: 3px;
   top: 3px;
-  background: #8b949e;
-  border-radius: 50%;
-  transition: transform 0.2s, background 0.2s;
+  width: 32px;
+  height: 26px;
+  background: #21262d;
+  border: 1px solid #484f58;
+  border-radius: 13px;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 0;
 }
-.region-switch input:checked + .region-slider {
-  background: #1f6feb33;
+.region-switch input:checked ~ .region-track .region-knob {
+  transform: translateX(34px);
 }
-.region-switch input:checked + .region-slider::before {
-  transform: translateX(16px);
-  background: #1f6feb;
+.region-switch input:checked ~ .region-track .region-emoji-na {
+  opacity: 0.3;
+}
+.region-switch input:checked ~ .region-track .region-emoji-global {
+  opacity: 1;
 }
 
 /* SUGGESTION CHIPS */
