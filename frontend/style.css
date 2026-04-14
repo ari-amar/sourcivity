@@ -206,7 +206,6 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
 }
 .region-emoji {
   font-size: 20px;
@@ -245,11 +244,12 @@ main {
 
 /* SUGGESTION CHIPS */
 .suggestions {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
   margin-bottom: 20px;
+  min-height: 32px;
 }
 
 .suggestion-chips {
@@ -257,6 +257,15 @@ main {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
+  padding-right: 90px; /* keep chips from overlapping the right-pinned toggle */
+}
+
+/* REGION TOGGLE — pinned to right edge of the suggestions row */
+.region-toggle {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .suggestion-chip {
