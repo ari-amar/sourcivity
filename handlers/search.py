@@ -81,6 +81,36 @@ def _extract_geo_hint(query):
     return None
 
 
+# Country-specific TLDs — reliable signals for a company's actual location.
+# Multi-part TLDs must come before single-part (e.g. .co.in before .in).
+_TLD_COUNTRY_MAP = [
+    ('.co.in', 'India'), ('.in', 'India'),
+    ('.co.uk', 'UK'), ('.uk', 'UK'),
+    ('.com.au', 'Australia'), ('.au', 'Australia'),
+    ('.com.br', 'Brazil'), ('.br', 'Brazil'),
+    ('.com.mx', 'Mexico'), ('.mx', 'Mexico'),
+    ('.de', 'Germany'), ('.at', 'Austria'), ('.ch', 'Switzerland'),
+    ('.fr', 'France'), ('.it', 'Italy'), ('.es', 'Spain'),
+    ('.nl', 'Netherlands'), ('.be', 'Belgium'), ('.pt', 'Portugal'),
+    ('.se', 'Sweden'), ('.dk', 'Denmark'), ('.fi', 'Finland'), ('.no', 'Norway'),
+    ('.pl', 'Poland'), ('.cz', 'Czechia'), ('.hu', 'Hungary'),
+    ('.ro', 'Romania'), ('.gr', 'Greece'), ('.ua', 'Ukraine'),
+    ('.tr', 'Turkey'), ('.cn', 'China'), ('.jp', 'Japan'),
+    ('.kr', 'Korea'), ('.tw', 'Taiwan'), ('.sg', 'Singapore'),
+]
+
+
+def _country_from_tld(website):
+    """Return the country implied by the website's TLD, or None for generic TLDs (.com etc.)."""
+    if not website:
+        return None
+    url = website.lower().rstrip('/').split('?')[0]
+    for tld, country in _TLD_COUNTRY_MAP:
+        if url.endswith(tld):
+            return country
+    return None
+
+
 def _build_queries(query, region='north_america'):
     """Generate 3 search variations for broader coverage."""
     if region == 'global':
@@ -207,8 +237,9 @@ def handle(query, skip_enrichment=False, region='north_america'):
             if geo_hint:
                 rule_1 = (
                     f'1. The buyer specified a geographic preference: "{geo_hint}". '
-                    f'ONLY include suppliers located in or near that region. '
-                    f'Exclude suppliers from unrelated regions (e.g. if buyer wants Europe, exclude China, India, Americas). '
+                    f'ONLY include suppliers whose HEADQUARTERS or primary manufacturing operations are in or near that region. '
+                    f'Do NOT include a supplier just because they export to, mention, or serve that region — physical location only. '
+                    f'Exclude suppliers from unrelated regions entirely (e.g. if buyer wants Europe, exclude China, India, Americas). '
                     f'For US suppliers, use the specific state. For all others, use the full country name.'
                 )
             else:
@@ -298,6 +329,25 @@ STRICT RULES:
                 if not _is_us_supplier(s) and s.get('certifications'):
                     cleaned = re.sub(r'\bITAR\b[\s,;]*', '', s['certifications'], flags=re.IGNORECASE).strip(' ,;')
                     s['certifications'] = cleaned if cleaned else ''
+
+        # Correct location using website TLD — overrides LLM guesses caused by
+        # geo keywords in the query (e.g. "supplier in austria" → LLM assigns Austria
+        # to an Indian company because their site mentions exporting to Austria).
+        for s in suppliers:
+            tld_country = _country_from_tld(s.get('website', ''))
+            if tld_country:
+                current = (s.get('state') or '').strip()
+                if current.lower() != tld_country.lower():
+                    s['state'] = tld_country
+
+        # Normalize and dedup certifications from LLM output.
+        # Re-runs the cert string through the scraper's extractor which normalizes
+        # case and removes prefix duplicates (e.g. ISO 9001:2015 + ISO 9001 → ISO 9001:2015).
+        for s in suppliers:
+            certs = (s.get('certifications') or '').strip()
+            if certs and certs not in ('N/A',):
+                extracted = scraper._extract_certifications(certs)
+                s['certifications'] = ', '.join(extracted) if extracted else ''
 
         # Title-case products field
         _LOWERCASE_WORDS = {'and', 'or', 'the', 'a', 'an', 'of', 'for', 'in', 'on', 'with', 'to', 'by', 'at'}
