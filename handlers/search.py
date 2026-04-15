@@ -292,6 +292,13 @@ STRICT RULES:
                 if country and not _is_us_supplier(s):
                     s['state'] = country
 
+            # Strip ITAR from non-US suppliers — ITAR is a US-only export regulation;
+            # a non-US company cannot be ITAR-registered (LLM frequently hallucinates this).
+            for s in suppliers:
+                if not _is_us_supplier(s) and s.get('certifications'):
+                    cleaned = re.sub(r'\bITAR\b[\s,;]*', '', s['certifications'], flags=re.IGNORECASE).strip(' ,;')
+                    s['certifications'] = cleaned if cleaned else ''
+
         # Title-case products field
         _LOWERCASE_WORDS = {'and', 'or', 'the', 'a', 'an', 'of', 'for', 'in', 'on', 'with', 'to', 'by', 'at'}
         for s in suppliers:
