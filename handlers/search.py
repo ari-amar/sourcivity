@@ -244,6 +244,10 @@ STRICT RULES:
                 s['state'] = ''
             if s.get('certifications', '') in ('N/A', '', None):
                 s['certifications'] = ''
+            # Ensure revenue always has a $ prefix (LLM occasionally omits it)
+            rev = s.get('revenue', '')
+            if rev and not rev.startswith('$'):
+                s['revenue'] = '$' + rev
 
         # Strip emails in demo mode; set _enriching spinner on all suppliers
         if skip_enrichment:
@@ -524,6 +528,8 @@ def _enrich_reputation(suppliers):
             if key in _SKIP_IN_REPUTATION:
                 continue
             if val and not s.get(key):
+                if key == 'revenue' and not val.startswith('$'):
+                    val = '$' + val
                 s[key] = val
 
     return suppliers

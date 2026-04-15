@@ -444,15 +444,29 @@ def _extract_certifications(html):
     matches = CERT_PATTERNS.findall(text)
     if not matches:
         return []
-    # Normalize and dedupe
+    # Normalize to uppercase and dedupe
     seen = set()
     unique = []
     for cert in matches:
-        normalized = cert.strip().upper().replace('  ', ' ')
+        normalized = re.sub(r'\s+', ' ', cert.strip().upper())
         if normalized not in seen:
             seen.add(normalized)
-            unique.append(cert.strip())
-    return unique[:8]  # Cap at 8 certs
+            unique.append(normalized)  # store normalized form, not original case
+
+    # Remove bare prefix entries when a more specific variant exists.
+    # e.g. drop "ASME" if "ASME B16.20" or "ASME RTJ" is already present.
+    _SUBSUMABLE = {'ASME', 'ISO', 'AS', 'AMS', 'ASTM', 'SAE', 'AWS', 'API'}
+    filtered = []
+    for cert in unique:
+        base = cert.split()[0] if cert.split() else cert
+        if base in _SUBSUMABLE and len(cert.split()) == 1:
+            # Only keep the bare form if no more-specific variant exists
+            if not any(c != cert and c.startswith(cert) for c in unique):
+                filtered.append(cert)
+        else:
+            filtered.append(cert)
+
+    return filtered[:8]  # Cap at 8 certs
 
 
 def _extract_location(html):
