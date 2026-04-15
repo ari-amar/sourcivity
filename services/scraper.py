@@ -414,7 +414,7 @@ CERT_PATTERNS = re.compile(
     r'|FDA\s*(?:registered|cleared|approved|compliant)?'
     r'|RoHS(?:\s*compliant)?'
     r'|CE\s+mark(?:ed|ing)?'
-    r'|UL\s*(?:listed|certified|\d+)?'
+    r'|UL\s*(?:listed|certified|approved|\d{3,})'
     r'|NIST\s*(?:800|SP)'
     r'|SOC\s*[12]'
     r'|CMMC'

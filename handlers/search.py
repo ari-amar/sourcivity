@@ -187,11 +187,11 @@ Return ONLY a JSON array inside ```json fences. Each supplier object must have t
 - name: company name
 {state_field_desc}
 - products: what they make/sell relevant to the query (use Title Case, e.g. "Ceramic Hybrid Angular Contact Bearings")
-- certifications: quality certs found ANYWHERE in descriptions, extra_snippets, or FAQ. Look for: ISO 9001, ISO 13485, AS9100, ITAR, NADCAP, AMS, ASTM, QPL, Mil-Spec, FDA, CE, UL, RoHS. Also look for phrases like "certified", "accredited", "registered", "compliant". If truly none found, "N/A"
+- certifications: quality certifications the SUPPLIER HOLDS, found in descriptions, extra_snippets, or FAQ. Look for: ISO 9001, ISO 13485, AS9100, ITAR, NADCAP, AMS, ASTM, QPL, Mil-Spec, FDA, RoHS, CE mark, UL listed/certified. IMPORTANT: only include certs the supplier is certified to — not certs their customers require, and not product-level safety marks on components they sell. If truly none found, "N/A"
 - website: company website URL (root domain only, e.g. "https://example.com")
 - email: contact email if found, or ""
-- yearsInBusiness: Look in FAQ for "founded" or "established". Also check extra_snippets for "est.", "since", "founded in", "established in". Format: "37 yrs (est. 1988)". If unknown, ""
-- employees: Look in FAQ for "employees", "size", "staff". Also check extra_snippets. Format: "60" or "500+" or "10K+". If unknown, ""
+- yearsInBusiness: Only use years explicitly tied to when the COMPANY was founded or established — not product release years, patent dates, or customer since-dates. Look for "founded in", "established in", "est.", "since [year]" referring to the company itself. Format: "37 yrs (est. 1988)". If unknown, ""
+- employees: Only use headcount that refers to THIS company's own workforce — not client sizes or "serving X employees". Format: "60" or "500+" or "10K+". If unknown, ""
 - revenue: Look in FAQ for "revenue". Format: "$10M" or "$20.5B". If unknown, ""
 STRICT RULES:
 {rule_1}
@@ -456,19 +456,25 @@ def _enrich_reputation(suppliers):
             results, faq, infobox = brave.search(f"{name} company founded employees", 3)
             facts = {}
 
+            def _parse_year(text):
+                """Extract a plausible founding year (1850–2024) from text."""
+                for m in re.finditer(r'\b(\d{4})\b', text):
+                    y = int(m.group(1))
+                    if 1850 <= y <= 2024:
+                        return y
+                return None
+
             # Extract from FAQ
             for f in faq:
                 q = f["question"].lower()
                 a = f["answer"]
                 if "founded" in q or "established" in q:
-                    # Extract year
-                    year_match = re.search(r'(\d{4})', a)
-                    if year_match:
-                        year = int(year_match.group(1))
-                        age = 2026 - year
-                        facts["yearsInBusiness"] = f"{age} yrs (est. {year})"
+                    year = _parse_year(a)
+                    if year:
+                        facts["yearsInBusiness"] = f"{2026 - year} yrs (est. {year})"
                 if ("employee" in q or "size" in q or "staff" in q) and "key employee" not in q:
-                    emp_match = re.search(r'([\d,]+K?\+?)\s*(?:total\s+)?(?:employees|staff|people|workers)', a, re.I)
+                    # Require the number to precede "employees" — avoids matching client headcounts
+                    emp_match = re.search(r'\b([\d,]+K?\+?)\s*(?:total\s+)?(?:employees|staff|workers)\b', a, re.I)
                     if emp_match:
                         facts["employees"] = emp_match.group(1).replace(",", "")
                 if "revenue" in q and "key employee" not in q:
@@ -483,9 +489,8 @@ def _enrich_reputation(suppliers):
                 for attr_name, attr_val in infobox.get("attributes", []):
                     attr_lower = attr_name.lower()
                     if "founded" in attr_lower and not facts.get("yearsInBusiness"):
-                        year_match = re.search(r'(\d{4})', attr_val)
-                        if year_match:
-                            year = int(year_match.group(1))
+                        year = _parse_year(attr_val)
+                        if year:
                             facts["yearsInBusiness"] = f"{2026 - year} yrs (est. {year})"
                     if "employee" in attr_lower and not facts.get("employees"):
                         emp_match = re.search(r'([\d,]+K?\+?)', attr_val)
