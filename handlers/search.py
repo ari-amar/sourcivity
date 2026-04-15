@@ -41,9 +41,41 @@ def _is_us_supplier(supplier):
     return state.upper() in _US_STATE_ABBRS or state.upper() in ('', 'US', 'USA')
 
 
+_GEO_KEYWORDS = {
+    # Countries
+    'austria', 'germany', 'france', 'italy', 'spain', 'netherlands', 'belgium',
+    'switzerland', 'czech republic', 'czechia', 'slovakia', 'hungary', 'poland',
+    'sweden', 'denmark', 'finland', 'norway', 'portugal', 'uk', 'united kingdom',
+    'china', 'japan', 'korea', 'taiwan', 'india', 'singapore', 'australia',
+    'canada', 'brazil', 'mexico', 'turkey', 'ukraine',
+    # Regions
+    'europe', 'asia', 'central europe', 'eastern europe', 'western europe',
+    'scandinavia', 'balkans', 'dach',
+    # Cities commonly used as proxies
+    'vienna', 'munich', 'zurich', 'prague', 'budapest', 'warsaw',
+}
+
+def _extract_geo_hint(query):
+    """Return the first geographic keyword found in the query, or None."""
+    q = query.lower()
+    # Multi-word first
+    for kw in sorted(_GEO_KEYWORDS, key=len, reverse=True):
+        if kw in q:
+            return kw
+    return None
+
+
 def _build_queries(query, region='north_america'):
     """Generate 3 search variations for broader coverage."""
     if region == 'global':
+        geo = _extract_geo_hint(query)
+        if geo:
+            # User specified a geography — anchor all three queries to it
+            return [
+                f"{query} supplier manufacturer",
+                f"{query} distributor {geo}",
+                f"{query} company {geo} supplier",
+            ]
         return [
             f"{query} supplier manufacturer international",
             f"{query} manufacturer supplier Europe Asia",
@@ -151,11 +183,20 @@ def handle(query, skip_enrichment=False, region='north_america'):
                 'For US suppliers, use the specific state abbreviation (e.g. "CA", "TX"). '
                 'If unknown, use the country name.'
             )
-            rule_1 = (
-                '1. PRIORITIZE non-US international suppliers — aim for at most 1-2 US results out of 5-8 total. '
-                'Actively seek out suppliers from Europe, Asia, and other regions. '
-                'For US suppliers, use the specific state. For all others, use the full country name.'
-            )
+            geo_hint = _extract_geo_hint(safe_query)
+            if geo_hint:
+                rule_1 = (
+                    f'1. The buyer specified a geographic preference: "{geo_hint}". '
+                    f'ONLY include suppliers located in or near that region. '
+                    f'Exclude suppliers from unrelated regions (e.g. if buyer wants Europe, exclude China, India, Americas). '
+                    f'For US suppliers, use the specific state. For all others, use the full country name.'
+                )
+            else:
+                rule_1 = (
+                    '1. PRIORITIZE non-US international suppliers — aim for at most 1-2 US results out of 5-8 total. '
+                    'Actively seek out suppliers from Europe, Asia, and other regions. '
+                    'For US suppliers, use the specific state. For all others, use the full country name.'
+                )
             rule_2 = (
                 '2. Skip consumer e-commerce sites: Amazon, eBay, AliExpress, DHgate, '
                 'Grainger catalog pages, McMaster-Carr catalog pages.'
