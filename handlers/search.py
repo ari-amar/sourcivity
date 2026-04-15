@@ -230,8 +230,8 @@ def handle(query, skip_enrichment=False, region='north_america'):
                 '"UAE" (UAE), "SA" (Saudi Arabia), "HK" (Hong Kong), "NZ" (New Zealand), '
                 '"ZA" (South Africa), "AR" (Argentina), "CO" (Colombia), "CL" (Chile), '
                 '"EG" (Egypt), "MA" (Morocco), "PK" (Pakistan), "BD" (Bangladesh). '
-                'For US suppliers, use the specific US state abbreviation (e.g. "CA", "TX"). '
-                'If unknown, use the 2-letter code.'
+                'For US suppliers, prefix with "US-" followed by the state abbreviation (e.g. "US-CA", "US-TX", "US-IN" for Indiana). '
+                'This avoids ambiguity with country codes. If unknown, use the 2-letter country code.'
             )
             geo_hint = _extract_geo_hint(safe_query)
             if geo_hint:
@@ -314,13 +314,16 @@ STRICT RULES:
             if not suppliers:
                 return {"suppliers": [], "error": "No US suppliers found. Try a different search term."}
 
-        # Global mode: remap ISO 2-letter codes that collide with US state abbreviations
-        # so the frontend flag logic doesn't mistake e.g. "IN" (India) for Indiana.
+        # Global mode: remap ISO 2-letter codes that collide with US state abbreviations.
+        # The LLM prompt now uses "US-XX" for US states, so any bare collision code
+        # (IN, DE, IL, etc.) is unambiguously a country code — remap unconditionally.
         if region == 'global':
             for s in suppliers:
                 state = (s.get('state') or '').strip()
+                if state.upper().startswith('US-'):
+                    continue  # legitimate US state — leave as-is for normalizer
                 country = _ISO_COLLISION_TO_COUNTRY.get(state.upper())
-                if country and not _is_us_supplier(s):
+                if country:
                     s['state'] = country
 
             # Strip ITAR from non-US suppliers — ITAR is a US-only export regulation;
