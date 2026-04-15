@@ -27,7 +27,7 @@ else:
 _demo_rate = {}  # { ip: [timestamps] }
 DEMO_RATE_LIMIT = 5
 DEMO_RATE_WINDOW = 3600
-DEMO_RATE_WHITELIST = ("2607:fb91:", "2607:fb90:e917:83c3:", "2607:fb90:62b7:8869:", "172.56.")  # IP prefixes exempt from rate limiting
+DEMO_RATE_WHITELIST = ("2607:fb91:", "2607:fb90:e917:83c3:", "2607:fb90:62b7:8869:", "172.56.", "172.56.217.130")  # IP prefixes exempt from rate limiting
 ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "").split(",")  # comma-separated allowed origins
 
 # --- Activity logging ---
