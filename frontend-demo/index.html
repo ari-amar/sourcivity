@@ -11,7 +11,7 @@
   <meta property="og:description" content="AI-powered supplier search and procurement — try it live">
   <meta property="og:image" content="sourcivity-logo.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="style.css?v=111">
+  <link rel="stylesheet" href="style.css?v=115">
   <style>
     .demo-banner {
       background: linear-gradient(90deg, #1c2333 0%, #162230 100%);
@@ -200,20 +200,20 @@
 
     <!-- SUPPLIER SEARCH TAB -->
     <section id="tab-search" class="tab active">
-      <div class="region-toggle" id="region-toggle">
-        <span class="region-emoji" id="region-emoji-na">🇺🇸</span>
-        <input type="checkbox" id="region-switch-input" class="region-input">
-        <label for="region-switch-input" class="region-track">
-          <span class="region-knob"></span>
-        </label>
-        <span class="region-emoji" id="region-emoji-global">🌍</span>
-      </div>
       <div class="search-bar">
         <input type="text" id="search-input" placeholder="Search for a supplier or service...">
         <button id="search-btn">Search</button>
       </div>
       <div id="suggestions" class="suggestions">
         <div id="suggestion-chips" class="suggestion-chips"></div>
+        <div class="region-toggle" id="region-toggle">
+          <span class="region-emoji" id="region-emoji-na">🇺🇸</span>
+          <input type="checkbox" id="region-switch-input" class="region-input">
+          <label for="region-switch-input" class="region-track">
+            <span class="region-knob"></span>
+          </label>
+          <span class="region-emoji" id="region-emoji-global">🌍</span>
+        </div>
       </div>
       <div id="search-status" class="status-msg hidden"></div>
       <div id="search-results" class="results-container">
