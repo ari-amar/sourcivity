@@ -48,9 +48,14 @@ def log_activity(action, detail="", ip="", referrer="", device="", extra=""):
 
 
 def _get_real_ip(handler):
-    """Get real client IP — only trust CF-Connecting-IP (set by Cloudflare, not spoofable by clients)."""
-    return (handler.headers.get("CF-Connecting-IP")
-            or handler.client_address[0])
+    """Get real client IP. Trust forwarded headers only when request comes from local tunnel proxy."""
+    socket_ip = handler.client_address[0]
+    if socket_ip in ("127.0.0.1", "::1"):
+        # Request is from Cloudflare tunnel — trust forwarded headers
+        return (handler.headers.get("CF-Connecting-IP")
+                or handler.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+                or socket_ip)
+    return socket_ip
 
 
 def _get_referrer(handler):
