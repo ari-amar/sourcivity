@@ -172,16 +172,20 @@ def handle(query, skip_enrichment=False, region='north_america'):
         # Step 3: Feed to LLM with enhanced prompt
         if region == 'global':
             state_field_desc = (
-                '- state: Use the common country name (e.g. "UK", "China", "India", "Canada", "Germany", '
-                '"France", "Japan", "Korea", "Taiwan", "Singapore", "Australia", "Brazil", "Mexico", '
-                '"Italy", "Spain", "Netherlands", "Switzerland", "Sweden", "Poland", "Czechia", '
-                '"Turkey", "Belgium", "Austria", "Portugal", "Denmark", "Finland", "Norway", '
-                '"Ireland", "Hungary", "Romania", "Greece", "Vietnam", "Thailand", "Malaysia", '
-                '"Indonesia", "Philippines", "Israel", "UAE", "Saudi Arabia", "Hong Kong", '
-                '"New Zealand", "South Africa", "Argentina", "Colombia", "Chile", "Egypt", '
-                '"Morocco", "Ukraine", "Pakistan", "Bangladesh"). '
-                'For US suppliers, use the specific state abbreviation (e.g. "CA", "TX"). '
-                'If unknown, use the country name.'
+                '- state: Use the 2-letter country code. Examples: '
+                '"UK" (Britain), "CN" (China), "IN" (India), "CA" (Canada), "DE" (Germany), '
+                '"FR" (France), "JP" (Japan), "KR" (Korea), "TW" (Taiwan), "SG" (Singapore), '
+                '"AU" (Australia), "BR" (Brazil), "MX" (Mexico), "IT" (Italy), "ES" (Spain), '
+                '"NL" (Netherlands), "CH" (Switzerland), "SE" (Sweden), "PL" (Poland), '
+                '"CZ" (Czechia), "TR" (Turkey), "BE" (Belgium), "AT" (Austria), "PT" (Portugal), '
+                '"DK" (Denmark), "FI" (Finland), "NO" (Norway), "IE" (Ireland), "HU" (Hungary), '
+                '"RO" (Romania), "GR" (Greece), "UA" (Ukraine), "VN" (Vietnam), "TH" (Thailand), '
+                '"MY" (Malaysia), "ID" (Indonesia), "PH" (Philippines), "IL" (Israel), '
+                '"UAE" (UAE), "SA" (Saudi Arabia), "HK" (Hong Kong), "NZ" (New Zealand), '
+                '"ZA" (South Africa), "AR" (Argentina), "CO" (Colombia), "CL" (Chile), '
+                '"EG" (Egypt), "MA" (Morocco), "PK" (Pakistan), "BD" (Bangladesh). '
+                'For US suppliers, use the specific US state abbreviation (e.g. "CA", "TX"). '
+                'If unknown, use the 2-letter code.'
             )
             geo_hint = _extract_geo_hint(safe_query)
             if geo_hint:

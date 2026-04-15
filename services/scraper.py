@@ -299,103 +299,103 @@ NON_US_INDICATORS = {
     # UK
     'united kingdom': 'UK', 'england': 'UK', 'u.k.': 'UK', 'uk ': 'UK', 'london': 'UK', 'manchester': 'UK', 'birmingham uk': 'UK', 'leeds': 'UK', 'glasgow': 'UK', 'sheffield': 'UK', 'bristol': 'UK',
     # China
-    'china': 'China', 'shanghai': 'China', 'beijing': 'China', 'shenzhen': 'China', 'guangzhou': 'China', 'dongguan': 'China', 'chengdu': 'China', 'wuhan': 'China', 'tianjin': 'China', 'ningbo': 'China', 'suzhou': 'China',
+    'china': 'CN', 'shanghai': 'CN', 'beijing': 'CN', 'shenzhen': 'CN', 'guangzhou': 'CN', 'dongguan': 'CN', 'chengdu': 'CN', 'wuhan': 'CN', 'tianjin': 'CN', 'ningbo': 'CN', 'suzhou': 'CN',
     # India
-    'india': 'India', 'mumbai': 'India', 'delhi': 'India', 'bangalore': 'India', 'chennai': 'India', 'hyderabad': 'India', 'pune': 'India', 'ahmedabad': 'India', 'kolkata': 'India', 'coimbatore': 'India',
+    'india': 'IN', 'mumbai': 'IN', 'delhi': 'IN', 'bangalore': 'IN', 'chennai': 'IN', 'hyderabad': 'IN', 'pune': 'IN', 'ahmedabad': 'IN', 'kolkata': 'IN', 'coimbatore': 'IN',
     # Canada
-    'canada': 'Canada', 'toronto': 'Canada', 'vancouver': 'Canada', 'montreal': 'Canada', 'ontario': 'Canada', 'alberta': 'Canada', 'calgary': 'Canada', 'edmonton': 'Canada', 'ottawa': 'Canada', 'winnipeg': 'Canada',
+    'canada': 'CA', 'toronto': 'CA', 'vancouver': 'CA', 'montreal': 'CA', 'ontario': 'CA', 'alberta': 'CA', 'calgary': 'CA', 'edmonton': 'CA', 'ottawa': 'CA', 'winnipeg': 'CA',
     # Germany
-    'germany': 'Germany', 'deutschland': 'Germany', 'munich': 'Germany', 'berlin': 'Germany', 'stuttgart': 'Germany', 'hamburg': 'Germany', 'frankfurt': 'Germany', 'düsseldorf': 'Germany', 'cologne': 'Germany',
+    'germany': 'DE', 'deutschland': 'DE', 'munich': 'DE', 'berlin': 'DE', 'stuttgart': 'DE', 'hamburg': 'DE', 'frankfurt': 'DE', 'düsseldorf': 'DE', 'cologne': 'DE',
     # France
-    'france': 'France', 'paris': 'France', 'lyon': 'France', 'marseille': 'France', 'toulouse': 'France', 'bordeaux': 'France',
+    'france': 'FR', 'paris': 'FR', 'lyon': 'FR', 'marseille': 'FR', 'toulouse': 'FR', 'bordeaux': 'FR',
     # Japan
-    'japan': 'Japan', 'tokyo': 'Japan', 'osaka': 'Japan', 'nagoya': 'Japan', 'yokohama': 'Japan', 'kyoto': 'Japan', 'hiroshima': 'Japan',
+    'japan': 'JP', 'tokyo': 'JP', 'osaka': 'JP', 'nagoya': 'JP', 'yokohama': 'JP', 'kyoto': 'JP', 'hiroshima': 'JP',
     # South Korea
-    'korea': 'Korea', 'south korea': 'Korea', 'seoul': 'Korea', 'busan': 'Korea', 'incheon': 'Korea',
+    'korea': 'KR', 'south korea': 'KR', 'seoul': 'KR', 'busan': 'KR', 'incheon': 'KR',
     # Taiwan
-    'taiwan': 'Taiwan', 'taipei': 'Taiwan', 'taichung': 'Taiwan', 'kaohsiung': 'Taiwan',
+    'taiwan': 'TW', 'taipei': 'TW', 'taichung': 'TW', 'kaohsiung': 'TW',
     # Singapore
-    'singapore': 'Singapore',
+    'singapore': 'SG',
     # Australia
-    'australia': 'Australia', 'sydney': 'Australia', 'melbourne': 'Australia', 'brisbane': 'Australia', 'perth': 'Australia', 'adelaide': 'Australia',
+    'australia': 'AU', 'sydney': 'AU', 'melbourne': 'AU', 'brisbane': 'AU', 'perth': 'AU', 'adelaide': 'AU',
     # Brazil
-    'brazil': 'Brazil', 'são paulo': 'Brazil', 'sao paulo': 'Brazil', 'rio de janeiro': 'Brazil', 'belo horizonte': 'Brazil',
+    'brazil': 'BR', 'são paulo': 'BR', 'sao paulo': 'BR', 'rio de janeiro': 'BR', 'belo horizonte': 'BR',
     # Mexico
-    'mexico': 'Mexico', 'monterrey': 'Mexico', 'guadalajara': 'Mexico', 'ciudad juárez': 'Mexico',
+    'mexico': 'MX', 'monterrey': 'MX', 'guadalajara': 'MX', 'ciudad juárez': 'MX',
     # Italy
-    'italy': 'Italy', 'milan': 'Italy', 'rome': 'Italy', 'turin': 'Italy', 'bologna': 'Italy', 'florence': 'Italy',
+    'italy': 'IT', 'milan': 'IT', 'rome': 'IT', 'turin': 'IT', 'bologna': 'IT', 'florence': 'IT',
     # Spain
-    'spain': 'Spain', 'madrid': 'Spain', 'barcelona': 'Spain', 'bilbao': 'Spain', 'valencia': 'Spain',
+    'spain': 'ES', 'madrid': 'ES', 'barcelona': 'ES', 'bilbao': 'ES', 'valencia': 'ES',
     # Netherlands
-    'netherlands': 'Netherlands', 'holland': 'Netherlands', 'amsterdam': 'Netherlands', 'rotterdam': 'Netherlands', 'eindhoven': 'Netherlands',
+    'netherlands': 'NL', 'holland': 'NL', 'amsterdam': 'NL', 'rotterdam': 'NL', 'eindhoven': 'NL',
     # Switzerland
-    'switzerland': 'Switzerland', 'zurich': 'Switzerland', 'geneva': 'Switzerland', 'basel': 'Switzerland', 'bern': 'Switzerland',
+    'switzerland': 'CH', 'zurich': 'CH', 'geneva': 'CH', 'basel': 'CH', 'bern': 'CH',
     # Sweden
-    'sweden': 'Sweden', 'stockholm': 'Sweden', 'gothenburg': 'Sweden', 'malmö': 'Sweden',
+    'sweden': 'SE', 'stockholm': 'SE', 'gothenburg': 'SE', 'malmö': 'SE',
     # Poland
-    'poland': 'Poland', 'warsaw': 'Poland', 'kraków': 'Poland', 'krakow': 'Poland', 'wrocław': 'Poland', 'gdańsk': 'Poland',
+    'poland': 'PL', 'warsaw': 'PL', 'kraków': 'PL', 'krakow': 'PL', 'wrocław': 'PL', 'gdańsk': 'PL',
     # Czech Republic
-    'czech republic': 'Czechia', 'czechia': 'Czechia', 'prague': 'Czechia', 'brno': 'Czechia',
+    'czech republic': 'CZ', 'czechia': 'CZ', 'prague': 'CZ', 'brno': 'CZ',
     # Turkey
-    'turkey': 'Turkey', 'türkiye': 'Turkey', 'istanbul': 'Turkey', 'ankara': 'Turkey', 'bursa': 'Turkey', 'izmir': 'Turkey',
+    'turkey': 'TR', 'türkiye': 'TR', 'istanbul': 'TR', 'ankara': 'TR', 'bursa': 'TR', 'izmir': 'TR',
     # Belgium
-    'belgium': 'Belgium', 'brussels': 'Belgium', 'antwerp': 'Belgium', 'ghent': 'Belgium',
+    'belgium': 'BE', 'brussels': 'BE', 'antwerp': 'BE', 'ghent': 'BE',
     # Austria
-    'austria': 'Austria', 'vienna': 'Austria', 'graz': 'Austria', 'linz': 'Austria',
+    'austria': 'AT', 'vienna': 'AT', 'graz': 'AT', 'linz': 'AT',
     # Portugal
-    'portugal': 'Portugal', 'lisbon': 'Portugal', 'porto': 'Portugal',
+    'portugal': 'PT', 'lisbon': 'PT', 'porto': 'PT',
     # Denmark
-    'denmark': 'Denmark', 'copenhagen': 'Denmark', 'aarhus': 'Denmark',
+    'denmark': 'DK', 'copenhagen': 'DK', 'aarhus': 'DK',
     # Finland
-    'finland': 'Finland', 'helsinki': 'Finland', 'tampere': 'Finland',
+    'finland': 'FI', 'helsinki': 'FI', 'tampere': 'FI',
     # Norway
-    'norway': 'Norway', 'oslo': 'Norway', 'bergen': 'Norway',
+    'norway': 'NO', 'oslo': 'NO', 'bergen': 'NO',
     # Ireland
-    'ireland': 'Ireland', 'dublin': 'Ireland', 'cork': 'Ireland',
+    'ireland': 'IE', 'dublin': 'IE', 'cork': 'IE',
     # Hungary
-    'hungary': 'Hungary', 'budapest': 'Hungary',
+    'hungary': 'HU', 'budapest': 'HU',
     # Romania
-    'romania': 'Romania', 'bucharest': 'Romania', 'cluj': 'Romania',
+    'romania': 'RO', 'bucharest': 'RO', 'cluj': 'RO',
     # Greece
-    'greece': 'Greece', 'athens': 'Greece', 'thessaloniki': 'Greece',
+    'greece': 'GR', 'athens': 'GR', 'thessaloniki': 'GR',
     # Vietnam
-    'vietnam': 'Vietnam', 'ho chi minh': 'Vietnam', 'hanoi': 'Vietnam', 'da nang': 'Vietnam',
+    'vietnam': 'VN', 'ho chi minh': 'VN', 'hanoi': 'VN', 'da nang': 'VN',
     # Thailand
-    'thailand': 'Thailand', 'bangkok': 'Thailand', 'chiang mai': 'Thailand',
+    'thailand': 'TH', 'bangkok': 'TH', 'chiang mai': 'TH',
     # Malaysia
-    'malaysia': 'Malaysia', 'kuala lumpur': 'Malaysia', 'penang': 'Malaysia', 'johor': 'Malaysia',
+    'malaysia': 'MY', 'kuala lumpur': 'MY', 'penang': 'MY', 'johor': 'MY',
     # Indonesia
-    'indonesia': 'Indonesia', 'jakarta': 'Indonesia', 'surabaya': 'Indonesia',
+    'indonesia': 'ID', 'jakarta': 'ID', 'surabaya': 'ID',
     # Philippines
-    'philippines': 'Philippines', 'manila': 'Philippines', 'cebu': 'Philippines',
+    'philippines': 'PH', 'manila': 'PH', 'cebu': 'PH',
     # Israel
-    'israel': 'Israel', 'tel aviv': 'Israel', 'haifa': 'Israel',
+    'israel': 'IL', 'tel aviv': 'IL', 'haifa': 'IL',
     # UAE
     'united arab emirates': 'UAE', 'u.a.e.': 'UAE', 'dubai': 'UAE', 'abu dhabi': 'UAE', 'sharjah': 'UAE',
     # Saudi Arabia
-    'saudi arabia': 'Saudi Arabia', 'riyadh': 'Saudi Arabia', 'jeddah': 'Saudi Arabia',
+    'saudi arabia': 'SA', 'riyadh': 'SA', 'jeddah': 'SA',
     # Hong Kong
-    'hong kong': 'Hong Kong',
+    'hong kong': 'HK',
     # New Zealand
-    'new zealand': 'New Zealand', 'auckland': 'New Zealand', 'wellington': 'New Zealand', 'christchurch': 'New Zealand',
+    'new zealand': 'NZ', 'auckland': 'NZ', 'wellington': 'NZ', 'christchurch': 'NZ',
     # South Africa
-    'south africa': 'South Africa', 'johannesburg': 'South Africa', 'cape town': 'South Africa', 'durban': 'South Africa',
+    'south africa': 'ZA', 'johannesburg': 'ZA', 'cape town': 'ZA', 'durban': 'ZA',
     # Argentina
-    'argentina': 'Argentina', 'buenos aires': 'Argentina', 'córdoba': 'Argentina',
+    'argentina': 'AR', 'buenos aires': 'AR', 'córdoba': 'AR',
     # Colombia
-    'colombia': 'Colombia', 'bogotá': 'Colombia', 'medellín': 'Colombia',
+    'colombia': 'CO', 'bogotá': 'CO', 'medellín': 'CO',
     # Chile
-    'chile': 'Chile', 'santiago': 'Chile',
+    'chile': 'CL', 'santiago': 'CL',
     # Egypt
-    'egypt': 'Egypt', 'cairo': 'Egypt', 'alexandria': 'Egypt',
+    'egypt': 'EG', 'cairo': 'EG', 'alexandria': 'EG',
     # Morocco
-    'morocco': 'Morocco', 'casablanca': 'Morocco', 'rabat': 'Morocco',
+    'morocco': 'MA', 'casablanca': 'MA', 'rabat': 'MA',
     # Ukraine
-    'ukraine': 'Ukraine', 'kyiv': 'Ukraine', 'kharkiv': 'Ukraine', 'lviv': 'Ukraine',
+    'ukraine': 'UA', 'kyiv': 'UA', 'kharkiv': 'UA', 'lviv': 'UA',
     # Pakistan
-    'pakistan': 'Pakistan', 'karachi': 'Pakistan', 'lahore': 'Pakistan',
+    'pakistan': 'PK', 'karachi': 'PK', 'lahore': 'PK',
     # Bangladesh
-    'bangladesh': 'Bangladesh', 'dhaka': 'Bangladesh', 'chittagong': 'Bangladesh',
+    'bangladesh': 'BD', 'dhaka': 'BD', 'chittagong': 'BD',
 }
 
 

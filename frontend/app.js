@@ -274,22 +274,10 @@ function renderSearchResults(results) {
     const isUS = !stateVal || stateVal === 'US' || US_STATES.has(stateVal) || US_STATES.has(normalizedState);
     // Display the clean value — never show raw "US-XX" or bare "US"
     const displayVal = isUS ? (normalizedState === 'US' || normalizedState === '' ? '' : normalizedState) : stateVal;
-    // Map common country names → ISO 2-letter for flag emoji
+            // Map country codes → ISO 2-letter for flag emoji
+    // 2-letter codes resolve automatically; only exceptions (UK→GB, UAE→AE) need explicit entries
     const COUNTRY_FLAG_MAP = {
-      'UK':'GB','UNITED KINGDOM':'GB',
-      'CHINA':'CN','INDIA':'IN','CANADA':'CA','GERMANY':'DE',
-      'FRANCE':'FR','JAPAN':'JP','KOREA':'KR','TAIWAN':'TW',
-      'SINGAPORE':'SG','AUSTRALIA':'AU','BRAZIL':'BR','MEXICO':'MX',
-      'ITALY':'IT','SPAIN':'ES','NETHERLANDS':'NL','SWITZERLAND':'CH',
-      'SWEDEN':'SE','POLAND':'PL','CZECHIA':'CZ','CZECH REPUBLIC':'CZ',
-      'TURKEY':'TR','BELGIUM':'BE','AUSTRIA':'AT','PORTUGAL':'PT',
-      'DENMARK':'DK','FINLAND':'FI','NORWAY':'NO','IRELAND':'IE',
-      'HUNGARY':'HU','ROMANIA':'RO','GREECE':'GR','UKRAINE':'UA',
-      'VIETNAM':'VN','THAILAND':'TH','MALAYSIA':'MY','INDONESIA':'ID',
-      'PHILIPPINES':'PH','ISRAEL':'IL','UAE':'AE','SAUDI ARABIA':'SA',
-      'HONG KONG':'HK','NEW ZEALAND':'NZ','SOUTH AFRICA':'ZA',
-      'ARGENTINA':'AR','COLOMBIA':'CO','CHILE':'CL','EGYPT':'EG',
-      'MOROCCO':'MA','PAKISTAN':'PK','BANGLADESH':'BD'
+      'UK':'GB','UAE':'AE'
     };
     const countryFlag = code => {
       const iso2 = COUNTRY_FLAG_MAP[code.toUpperCase()] || (/^[A-Za-z]{2}$/.test(code) ? code.toUpperCase() : null);
