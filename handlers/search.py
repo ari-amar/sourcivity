@@ -21,6 +21,22 @@ _US_STATE_ABBRS = {
 
 _INDIAN_CITY_TOKENS = {'mumbai', 'delhi', 'bangalore', 'chennai', 'hyderabad', 'pune', 'kolkata', 'india'}
 
+# ISO 2-letter country codes that collide with US state abbreviations.
+# Used in global mode to remap to full country names before the frontend sees them,
+# so the frontend US_STATES check doesn't misclassify them as US states.
+_ISO_COLLISION_TO_COUNTRY = {
+    'IN': 'India',
+    'DE': 'Germany',
+    'IL': 'Israel',
+    'CO': 'Colombia',
+    'AR': 'Argentina',
+    'AL': 'Albania',
+    'GA': 'Gabon',
+    'ID': 'Indonesia',
+    'ME': 'Montenegro',
+}
+
+
 def _is_us_supplier(supplier):
     """Return True if the supplier's state field resolves to a US state."""
     state = supplier.get('state', '') or ''
@@ -266,6 +282,15 @@ STRICT RULES:
             suppliers = [s for s in suppliers if _is_us_supplier(s)]
             if not suppliers:
                 return {"suppliers": [], "error": "No US suppliers found. Try a different search term."}
+
+        # Global mode: remap ISO 2-letter codes that collide with US state abbreviations
+        # so the frontend flag logic doesn't mistake e.g. "IN" (India) for Indiana.
+        if region == 'global':
+            for s in suppliers:
+                state = (s.get('state') or '').strip()
+                country = _ISO_COLLISION_TO_COUNTRY.get(state.upper())
+                if country and not _is_us_supplier(s):
+                    s['state'] = country
 
         # Title-case products field
         _LOWERCASE_WORDS = {'and', 'or', 'the', 'a', 'an', 'of', 'for', 'in', 'on', 'with', 'to', 'by', 'at'}
