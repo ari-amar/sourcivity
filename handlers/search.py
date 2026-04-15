@@ -81,6 +81,54 @@ def _extract_geo_hint(query):
     return None
 
 
+# Maps a specific-country geo keyword → accepted state values (code + full name).
+# Only populated for single countries — broad regions (europe, asia, dach) are omitted
+# so we don't over-filter when the user just wants international results generally.
+_GEO_TO_CODES = {
+    'austria':        ('AT', 'Austria'),
+    'vienna':         ('AT', 'Austria'),
+    'germany':        ('DE', 'Germany'),
+    'deutschland':    ('DE', 'Germany'),
+    'munich':         ('DE', 'Germany'),
+    'france':         ('FR', 'France'),
+    'paris':          ('FR', 'France'),
+    'italy':          ('IT', 'Italy'),
+    'spain':          ('ES', 'Spain'),
+    'netherlands':    ('NL', 'Netherlands'),
+    'holland':        ('NL', 'Netherlands'),
+    'switzerland':    ('CH', 'Switzerland'),
+    'zurich':         ('CH', 'Switzerland'),
+    'belgium':        ('BE', 'Belgium'),
+    'portugal':       ('PT', 'Portugal'),
+    'sweden':         ('SE', 'Sweden'),
+    'denmark':        ('DK', 'Denmark'),
+    'finland':        ('FI', 'Finland'),
+    'norway':         ('NO', 'Norway'),
+    'poland':         ('PL', 'Poland'),
+    'warsaw':         ('PL', 'Poland'),
+    'czech republic': ('CZ', 'Czechia'),
+    'czechia':        ('CZ', 'Czechia'),
+    'prague':         ('CZ', 'Czechia'),
+    'hungary':        ('HU', 'Hungary'),
+    'budapest':       ('HU', 'Hungary'),
+    'slovakia':       ('SK', 'Slovakia'),
+    'ukraine':        ('UA', 'Ukraine'),
+    'turkey':         ('TR', 'Turkey'),
+    'uk':             ('UK', 'United Kingdom'),
+    'united kingdom': ('UK', 'United Kingdom'),
+    'china':          ('CN', 'China'),
+    'japan':          ('JP', 'Japan'),
+    'korea':          ('KR', 'Korea'),
+    'taiwan':         ('TW', 'Taiwan'),
+    'india':          ('IN', 'India'),
+    'singapore':      ('SG', 'Singapore'),
+    'australia':      ('AU', 'Australia'),
+    'canada':         ('CA', 'Canada'),
+    'brazil':         ('BR', 'Brazil'),
+    'mexico':         ('MX', 'Mexico'),
+}
+
+
 # Country-specific TLDs — reliable signals for a company's actual location.
 # Multi-part TLDs must come before single-part (e.g. .co.in before .in).
 _TLD_COUNTRY_MAP = [
@@ -342,6 +390,21 @@ STRICT RULES:
                 current = (s.get('state') or '').strip()
                 if current.lower() != tld_country.lower():
                     s['state'] = tld_country
+
+        # Hard geo filter: when user specified a specific country, drop any supplier
+        # the LLM returned that isn't actually from that country.
+        if region == 'global':
+            geo_hint = _extract_geo_hint(safe_query)
+            accepted = _GEO_TO_CODES.get(geo_hint) if geo_hint else None
+            if accepted:
+                accepted_lower = {v.lower() for v in accepted}
+                suppliers = [
+                    s for s in suppliers
+                    if (s.get('state') or '').strip().lower() in accepted_lower
+                ]
+                if not suppliers:
+                    geo_label = accepted[0]  # e.g. "AT"
+                    return {"suppliers": [], "error": f"No {geo_hint.title()} suppliers found for this query. Try broadening your search terms."}
 
         # Normalize and dedup certifications from LLM output.
         # Re-runs the cert string through the scraper's extractor which normalizes
