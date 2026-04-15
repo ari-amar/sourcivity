@@ -279,7 +279,17 @@ function renderSearchResults(results) {
       'UK':'GB','UNITED KINGDOM':'GB',
       'CHINA':'CN','INDIA':'IN','CANADA':'CA','GERMANY':'DE',
       'FRANCE':'FR','JAPAN':'JP','KOREA':'KR','TAIWAN':'TW',
-      'SINGAPORE':'SG','AUSTRALIA':'AU','BRAZIL':'BR','MEXICO':'MX'
+      'SINGAPORE':'SG','AUSTRALIA':'AU','BRAZIL':'BR','MEXICO':'MX',
+      'ITALY':'IT','SPAIN':'ES','NETHERLANDS':'NL','SWITZERLAND':'CH',
+      'SWEDEN':'SE','POLAND':'PL','CZECHIA':'CZ','CZECH REPUBLIC':'CZ',
+      'TURKEY':'TR','BELGIUM':'BE','AUSTRIA':'AT','PORTUGAL':'PT',
+      'DENMARK':'DK','FINLAND':'FI','NORWAY':'NO','IRELAND':'IE',
+      'HUNGARY':'HU','ROMANIA':'RO','GREECE':'GR','UKRAINE':'UA',
+      'VIETNAM':'VN','THAILAND':'TH','MALAYSIA':'MY','INDONESIA':'ID',
+      'PHILIPPINES':'PH','ISRAEL':'IL','UAE':'AE','SAUDI ARABIA':'SA',
+      'HONG KONG':'HK','NEW ZEALAND':'NZ','SOUTH AFRICA':'ZA',
+      'ARGENTINA':'AR','COLOMBIA':'CO','CHILE':'CL','EGYPT':'EG',
+      'MOROCCO':'MA','PAKISTAN':'PK','BANGLADESH':'BD'
     };
     const countryFlag = code => {
       const iso2 = COUNTRY_FLAG_MAP[code.toUpperCase()] || (/^[A-Za-z]{2}$/.test(code) ? code.toUpperCase() : null);

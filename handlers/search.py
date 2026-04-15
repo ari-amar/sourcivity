@@ -140,8 +140,14 @@ def handle(query, skip_enrichment=False, region='north_america'):
         # Step 3: Feed to LLM with enhanced prompt
         if region == 'global':
             state_field_desc = (
-                '- state: Use common country names: "UK", "China", "India", "Canada", "Germany", '
-                '"France", "Japan", "Korea", "Taiwan", "Singapore", "Australia", "Brazil", "Mexico". '
+                '- state: Use the common country name (e.g. "UK", "China", "India", "Canada", "Germany", '
+                '"France", "Japan", "Korea", "Taiwan", "Singapore", "Australia", "Brazil", "Mexico", '
+                '"Italy", "Spain", "Netherlands", "Switzerland", "Sweden", "Poland", "Czechia", '
+                '"Turkey", "Belgium", "Austria", "Portugal", "Denmark", "Finland", "Norway", '
+                '"Ireland", "Hungary", "Romania", "Greece", "Vietnam", "Thailand", "Malaysia", '
+                '"Indonesia", "Philippines", "Israel", "UAE", "Saudi Arabia", "Hong Kong", '
+                '"New Zealand", "South Africa", "Argentina", "Colombia", "Chile", "Egypt", '
+                '"Morocco", "Ukraine", "Pakistan", "Bangladesh"). '
                 'For US suppliers, use the specific state abbreviation (e.g. "CA", "TX"). '
                 'If unknown, use the country name.'
             )
@@ -288,12 +294,13 @@ A weak match has:
 - The company appears to be a general distributor rather than a specialist
 
 RULES:
-1. Only cite data that is actually present in the profile. Empty fields mean the data wasn't found — treat them as unknown, NOT as evidence of a weak match.
-2. Cite specific data points when available: "AS9100-certified with 200+ employees and 40 yrs in aerospace fasteners"
-3. Flag red flags based on what IS known: "No relevant certifications", "Appears to be a general distributor"
-4. Do NOT say "no track record found" or "unknown scale" — omit those dimensions entirely when data is missing.
-5. Do NOT pad weak matches with filler praise. Short and blunt is fine.
-5. Max 1-2 sentences per supplier.
+1. Only cite data that is explicitly present in the profile. Empty fields mean data wasn't found — treat as unknown, NOT weak.
+2. NEVER use your training knowledge to add certifications, employee counts, revenue, or founding years not in the profile. If "AS9100" is not in the certifications field, do not mention it.
+3. Cite specific data points when present: "ISO 9001-certified, 200+ employees, 40 yrs in this space"
+4. Flag red flags based only on what IS known: "No relevant certifications listed", "Appears to be a general distributor"
+5. Do NOT say "no track record found" or "unknown scale" — omit those dimensions when data is missing.
+6. Do NOT pad weak matches with filler praise. Short and blunt is fine.
+7. Max 1-2 sentences per supplier.
 
 Return ONLY a JSON array of objects: [{"name": "...", "matchReason": "..."}]
 Use ```json fences."""

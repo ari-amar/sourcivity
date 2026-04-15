@@ -296,19 +296,106 @@ US_STATES = {
 US_STATE_ABBRS = set(US_STATES.values())
 
 NON_US_INDICATORS = {
-    'united kingdom': 'UK', 'england': 'UK', 'u.k.': 'UK', 'uk ': 'UK', 'london': 'UK', 'manchester': 'UK', 'birmingham uk': 'UK',
-    'china': 'China', 'shanghai': 'China', 'beijing': 'China', 'shenzhen': 'China', 'guangzhou': 'China', 'dongguan': 'China',
-    'india': 'India', 'mumbai': 'India', 'delhi': 'India', 'bangalore': 'India', 'chennai': 'India', 'hyderabad': 'India', 'pune': 'India',
-    'canada': 'Canada', 'toronto': 'Canada', 'vancouver': 'Canada', 'montreal': 'Canada', 'ontario': 'Canada', 'alberta': 'Canada',
-    'germany': 'Germany', 'deutschland': 'Germany', 'munich': 'Germany', 'berlin': 'Germany', 'stuttgart': 'Germany',
-    'france': 'France', 'paris': 'France', 'lyon': 'France',
-    'japan': 'Japan', 'tokyo': 'Japan', 'osaka': 'Japan',
-    'korea': 'Korea', 'seoul': 'Korea',
-    'taiwan': 'Taiwan', 'taipei': 'Taiwan',
+    # UK
+    'united kingdom': 'UK', 'england': 'UK', 'u.k.': 'UK', 'uk ': 'UK', 'london': 'UK', 'manchester': 'UK', 'birmingham uk': 'UK', 'leeds': 'UK', 'glasgow': 'UK', 'sheffield': 'UK', 'bristol': 'UK',
+    # China
+    'china': 'China', 'shanghai': 'China', 'beijing': 'China', 'shenzhen': 'China', 'guangzhou': 'China', 'dongguan': 'China', 'chengdu': 'China', 'wuhan': 'China', 'tianjin': 'China', 'ningbo': 'China', 'suzhou': 'China',
+    # India
+    'india': 'India', 'mumbai': 'India', 'delhi': 'India', 'bangalore': 'India', 'chennai': 'India', 'hyderabad': 'India', 'pune': 'India', 'ahmedabad': 'India', 'kolkata': 'India', 'coimbatore': 'India',
+    # Canada
+    'canada': 'Canada', 'toronto': 'Canada', 'vancouver': 'Canada', 'montreal': 'Canada', 'ontario': 'Canada', 'alberta': 'Canada', 'calgary': 'Canada', 'edmonton': 'Canada', 'ottawa': 'Canada', 'winnipeg': 'Canada',
+    # Germany
+    'germany': 'Germany', 'deutschland': 'Germany', 'munich': 'Germany', 'berlin': 'Germany', 'stuttgart': 'Germany', 'hamburg': 'Germany', 'frankfurt': 'Germany', 'düsseldorf': 'Germany', 'cologne': 'Germany',
+    # France
+    'france': 'France', 'paris': 'France', 'lyon': 'France', 'marseille': 'France', 'toulouse': 'France', 'bordeaux': 'France',
+    # Japan
+    'japan': 'Japan', 'tokyo': 'Japan', 'osaka': 'Japan', 'nagoya': 'Japan', 'yokohama': 'Japan', 'kyoto': 'Japan', 'hiroshima': 'Japan',
+    # South Korea
+    'korea': 'Korea', 'south korea': 'Korea', 'seoul': 'Korea', 'busan': 'Korea', 'incheon': 'Korea',
+    # Taiwan
+    'taiwan': 'Taiwan', 'taipei': 'Taiwan', 'taichung': 'Taiwan', 'kaohsiung': 'Taiwan',
+    # Singapore
     'singapore': 'Singapore',
-    'australia': 'Australia', 'sydney': 'Australia', 'melbourne': 'Australia',
-    'brazil': 'Brazil',
-    'mexico': 'Mexico',
+    # Australia
+    'australia': 'Australia', 'sydney': 'Australia', 'melbourne': 'Australia', 'brisbane': 'Australia', 'perth': 'Australia', 'adelaide': 'Australia',
+    # Brazil
+    'brazil': 'Brazil', 'são paulo': 'Brazil', 'sao paulo': 'Brazil', 'rio de janeiro': 'Brazil', 'belo horizonte': 'Brazil',
+    # Mexico
+    'mexico': 'Mexico', 'monterrey': 'Mexico', 'guadalajara': 'Mexico', 'ciudad juárez': 'Mexico',
+    # Italy
+    'italy': 'Italy', 'milan': 'Italy', 'rome': 'Italy', 'turin': 'Italy', 'bologna': 'Italy', 'florence': 'Italy',
+    # Spain
+    'spain': 'Spain', 'madrid': 'Spain', 'barcelona': 'Spain', 'bilbao': 'Spain', 'valencia': 'Spain',
+    # Netherlands
+    'netherlands': 'Netherlands', 'holland': 'Netherlands', 'amsterdam': 'Netherlands', 'rotterdam': 'Netherlands', 'eindhoven': 'Netherlands',
+    # Switzerland
+    'switzerland': 'Switzerland', 'zurich': 'Switzerland', 'geneva': 'Switzerland', 'basel': 'Switzerland', 'bern': 'Switzerland',
+    # Sweden
+    'sweden': 'Sweden', 'stockholm': 'Sweden', 'gothenburg': 'Sweden', 'malmö': 'Sweden',
+    # Poland
+    'poland': 'Poland', 'warsaw': 'Poland', 'kraków': 'Poland', 'krakow': 'Poland', 'wrocław': 'Poland', 'gdańsk': 'Poland',
+    # Czech Republic
+    'czech republic': 'Czechia', 'czechia': 'Czechia', 'prague': 'Czechia', 'brno': 'Czechia',
+    # Turkey
+    'turkey': 'Turkey', 'türkiye': 'Turkey', 'istanbul': 'Turkey', 'ankara': 'Turkey', 'bursa': 'Turkey', 'izmir': 'Turkey',
+    # Belgium
+    'belgium': 'Belgium', 'brussels': 'Belgium', 'antwerp': 'Belgium', 'ghent': 'Belgium',
+    # Austria
+    'austria': 'Austria', 'vienna': 'Austria', 'graz': 'Austria', 'linz': 'Austria',
+    # Portugal
+    'portugal': 'Portugal', 'lisbon': 'Portugal', 'porto': 'Portugal',
+    # Denmark
+    'denmark': 'Denmark', 'copenhagen': 'Denmark', 'aarhus': 'Denmark',
+    # Finland
+    'finland': 'Finland', 'helsinki': 'Finland', 'tampere': 'Finland',
+    # Norway
+    'norway': 'Norway', 'oslo': 'Norway', 'bergen': 'Norway',
+    # Ireland
+    'ireland': 'Ireland', 'dublin': 'Ireland', 'cork': 'Ireland',
+    # Hungary
+    'hungary': 'Hungary', 'budapest': 'Hungary',
+    # Romania
+    'romania': 'Romania', 'bucharest': 'Romania', 'cluj': 'Romania',
+    # Greece
+    'greece': 'Greece', 'athens': 'Greece', 'thessaloniki': 'Greece',
+    # Vietnam
+    'vietnam': 'Vietnam', 'ho chi minh': 'Vietnam', 'hanoi': 'Vietnam', 'da nang': 'Vietnam',
+    # Thailand
+    'thailand': 'Thailand', 'bangkok': 'Thailand', 'chiang mai': 'Thailand',
+    # Malaysia
+    'malaysia': 'Malaysia', 'kuala lumpur': 'Malaysia', 'penang': 'Malaysia', 'johor': 'Malaysia',
+    # Indonesia
+    'indonesia': 'Indonesia', 'jakarta': 'Indonesia', 'surabaya': 'Indonesia',
+    # Philippines
+    'philippines': 'Philippines', 'manila': 'Philippines', 'cebu': 'Philippines',
+    # Israel
+    'israel': 'Israel', 'tel aviv': 'Israel', 'haifa': 'Israel',
+    # UAE
+    'united arab emirates': 'UAE', 'u.a.e.': 'UAE', 'dubai': 'UAE', 'abu dhabi': 'UAE', 'sharjah': 'UAE',
+    # Saudi Arabia
+    'saudi arabia': 'Saudi Arabia', 'riyadh': 'Saudi Arabia', 'jeddah': 'Saudi Arabia',
+    # Hong Kong
+    'hong kong': 'Hong Kong',
+    # New Zealand
+    'new zealand': 'New Zealand', 'auckland': 'New Zealand', 'wellington': 'New Zealand', 'christchurch': 'New Zealand',
+    # South Africa
+    'south africa': 'South Africa', 'johannesburg': 'South Africa', 'cape town': 'South Africa', 'durban': 'South Africa',
+    # Argentina
+    'argentina': 'Argentina', 'buenos aires': 'Argentina', 'córdoba': 'Argentina',
+    # Colombia
+    'colombia': 'Colombia', 'bogotá': 'Colombia', 'medellín': 'Colombia',
+    # Chile
+    'chile': 'Chile', 'santiago': 'Chile',
+    # Egypt
+    'egypt': 'Egypt', 'cairo': 'Egypt', 'alexandria': 'Egypt',
+    # Morocco
+    'morocco': 'Morocco', 'casablanca': 'Morocco', 'rabat': 'Morocco',
+    # Ukraine
+    'ukraine': 'Ukraine', 'kyiv': 'Ukraine', 'kharkiv': 'Ukraine', 'lviv': 'Ukraine',
+    # Pakistan
+    'pakistan': 'Pakistan', 'karachi': 'Pakistan', 'lahore': 'Pakistan',
+    # Bangladesh
+    'bangladesh': 'Bangladesh', 'dhaka': 'Bangladesh', 'chittagong': 'Bangladesh',
 }
 
 
