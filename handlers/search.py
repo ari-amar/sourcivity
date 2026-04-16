@@ -288,7 +288,7 @@ def handle(query, skip_enrichment=False, region='north_america'):
                     f'ONLY include suppliers whose HEADQUARTERS or primary manufacturing operations are in or near that region. '
                     f'Do NOT include a supplier just because they export to, mention, or serve that region — physical location only. '
                     f'Exclude suppliers from unrelated regions entirely (e.g. if buyer wants Europe, exclude China, India, Americas). '
-                    f'For US suppliers, use the specific state. For all others, use the full country name.'
+                    f'For US suppliers, use "US-XX" format (e.g. "US-CA", "US-TX"). For all others, use the 2-letter ISO country code (e.g. "DE", "FR", "CN").'
                 )
             else:
                 rule_1 = (

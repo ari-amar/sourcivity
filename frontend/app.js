@@ -272,6 +272,8 @@ function renderSearchResults(results) {
     // Normalize ISO 3166-2 format (e.g. "US-PA" → "PA")
     const normalizedState = stateVal.startsWith('US-') ? stateVal.slice(3) : stateVal;
     const isUS = !stateVal || stateVal === 'US' || US_STATES.has(stateVal) || US_STATES.has(normalizedState);
+    // Strip parenthetical suffixes e.g. "Korea (South)" → "Korea", "China (PRC)" → "China"
+    const cleanStateVal = stateVal.replace(/\s*\(.*?\)\s*$/, '').trim();
     // Map full country names → ISO 2-letter code (for cases where backend returns the full name)
     const COUNTRY_NAME_TO_ISO2 = {
       'India':'IN','Germany':'DE','Israel':'IL','Colombia':'CO','Argentina':'AR',
@@ -279,13 +281,26 @@ function renderSearchResults(results) {
       'Austria':'AT','France':'FR','Italy':'IT','Spain':'ES','Netherlands':'NL',
       'Switzerland':'CH','Belgium':'BE','Portugal':'PT','Sweden':'SE','Denmark':'DK',
       'Finland':'FI','Norway':'NO','Poland':'PL','Czechia':'CZ','Czech Republic':'CZ',
-      'Hungary':'HU','Romania':'RO','Greece':'GR','Ukraine':'UA','Turkey':'TR',
-      'China':'CN','Japan':'JP','Korea':'KR','Taiwan':'TW','Singapore':'SG',
-      'Australia':'AU','Canada':'CA','Brazil':'BR','Mexico':'MX',
-      'United Kingdom':'GB','UK':'GB','UAE':'AE','Saudi Arabia':'SA',
-      'South Africa':'ZA','New Zealand':'NZ','Hong Kong':'HK','Vietnam':'VN',
-      'Thailand':'TH','Malaysia':'MY','Philippines':'PH','Pakistan':'PK',
-      'Bangladesh':'BD','Egypt':'EG','Morocco':'MA','Chile':'CL',
+      'Slovakia':'SK','Hungary':'HU','Romania':'RO','Bulgaria':'BG','Greece':'GR',
+      'Ukraine':'UA','Turkey':'TR','Russia':'RU','Belarus':'BY','Moldova':'MD',
+      'Serbia':'RS','Croatia':'HR','Slovenia':'SI','Bosnia':'BA','Bosnia and Herzegovina':'BA',
+      'North Macedonia':'MK','Kosovo':'XK','Cyprus':'CY','Malta':'MT','Iceland':'IS',
+      'Ireland':'IE','Luxembourg':'LU','Lithuania':'LT','Latvia':'LV','Estonia':'EE',
+      'China':'CN','Japan':'JP','Korea':'KR','South Korea':'KR','North Korea':'KP',
+      'Taiwan':'TW','Singapore':'SG','Vietnam':'VN','Thailand':'TH','Malaysia':'MY',
+      'Philippines':'PH','Indonesia':'ID','Myanmar':'MM','Cambodia':'KH','Laos':'LA',
+      'Australia':'AU','New Zealand':'NZ','Canada':'CA','Brazil':'BR','Mexico':'MX',
+      'Chile':'CL','Peru':'PE','Colombia':'CO','Argentina':'AR','Venezuela':'VE',
+      'Ecuador':'EC','Bolivia':'BO','Paraguay':'PY','Uruguay':'UY',
+      'United Kingdom':'GB','UK':'GB','UAE':'AE','United Arab Emirates':'AE',
+      'Saudi Arabia':'SA','Qatar':'QA','Kuwait':'KW','Bahrain':'BH','Oman':'OM',
+      'Jordan':'JO','Iraq':'IQ','Iran':'IR','Lebanon':'LB','Syria':'SY',
+      'Egypt':'EG','Morocco':'MA','Algeria':'DZ','Tunisia':'TN','Libya':'LY',
+      'South Africa':'ZA','Nigeria':'NG','Kenya':'KE','Ghana':'GH','Ethiopia':'ET',
+      'Tanzania':'TZ','Uganda':'UG','Zimbabwe':'ZW','Mozambique':'MZ',
+      'Hong Kong':'HK','Pakistan':'PK','Bangladesh':'BD','Sri Lanka':'LK',
+      'Nepal':'NP','Kazakhstan':'KZ','Azerbaijan':'AZ','Georgia':'GE','Armenia':'AM',
+      'Israel':'IL','Palestine':'PS','Cyprus':'CY',
     };
     // Map country codes → ISO 2-letter for flag emoji
     // 2-letter codes resolve automatically; only exceptions (UK→GB, UAE→AE) need explicit entries
@@ -294,13 +309,16 @@ function renderSearchResults(results) {
       const iso2 = COUNTRY_FLAG_MAP[code.toUpperCase()] || (/^[A-Za-z]{2}$/.test(code) ? code.toUpperCase() : null);
       return iso2 ? [...iso2].map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('') : '';
     };
-    // Resolve full country name to ISO2 code for display + flag
-    const resolvedISO2 = COUNTRY_NAME_TO_ISO2[stateVal] || null;
-    const flagEmoji = isUS ? '🇺🇸' : countryFlag(resolvedISO2 || stateVal);
-    // Show ISO2 abbreviation for international, state abbr for US
+    // Resolve full country name (cleaned) to ISO2 code for display + flag
+    const resolvedISO2 = COUNTRY_NAME_TO_ISO2[cleanStateVal] || COUNTRY_NAME_TO_ISO2[stateVal] || null;
+    // For 2-letter codes already returned by the backend, use them directly
+    const rawIs2Letter = !isUS && /^[A-Za-z]{2}$/.test(cleanStateVal);
+    const effectiveCode = resolvedISO2 || (rawIs2Letter ? cleanStateVal.toUpperCase() : null);
+    const flagEmoji = isUS ? '🇺🇸' : countryFlag(effectiveCode || cleanStateVal);
+    // Show ISO2 abbreviation for international, state abbr for US; never show full country name
     const displayVal = isUS
       ? (normalizedState === 'US' || normalizedState === '' ? '' : normalizedState)
-      : (resolvedISO2 || stateVal);
+      : (effectiveCode || '');
     const stateCell = s._enriching ? pendingCell
       : (stateVal ? '<span class="info-pill state-pill">' + flagEmoji + (displayVal ? ' ' + esc(displayVal) : '') + '</span>' : '—');
 
