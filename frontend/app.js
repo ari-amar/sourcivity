@@ -272,18 +272,35 @@ function renderSearchResults(results) {
     // Normalize ISO 3166-2 format (e.g. "US-PA" → "PA")
     const normalizedState = stateVal.startsWith('US-') ? stateVal.slice(3) : stateVal;
     const isUS = !stateVal || stateVal === 'US' || US_STATES.has(stateVal) || US_STATES.has(normalizedState);
-    // Display the clean value — never show raw "US-XX" or bare "US"
-    const displayVal = isUS ? (normalizedState === 'US' || normalizedState === '' ? '' : normalizedState) : stateVal;
-            // Map country codes → ISO 2-letter for flag emoji
-    // 2-letter codes resolve automatically; only exceptions (UK→GB, UAE→AE) need explicit entries
-    const COUNTRY_FLAG_MAP = {
-      'UK':'GB','UAE':'AE'
+    // Map full country names → ISO 2-letter code (for cases where backend returns the full name)
+    const COUNTRY_NAME_TO_ISO2 = {
+      'India':'IN','Germany':'DE','Israel':'IL','Colombia':'CO','Argentina':'AR',
+      'Albania':'AL','Gabon':'GA','Indonesia':'ID','Montenegro':'ME',
+      'Austria':'AT','France':'FR','Italy':'IT','Spain':'ES','Netherlands':'NL',
+      'Switzerland':'CH','Belgium':'BE','Portugal':'PT','Sweden':'SE','Denmark':'DK',
+      'Finland':'FI','Norway':'NO','Poland':'PL','Czechia':'CZ','Czech Republic':'CZ',
+      'Hungary':'HU','Romania':'RO','Greece':'GR','Ukraine':'UA','Turkey':'TR',
+      'China':'CN','Japan':'JP','Korea':'KR','Taiwan':'TW','Singapore':'SG',
+      'Australia':'AU','Canada':'CA','Brazil':'BR','Mexico':'MX',
+      'United Kingdom':'GB','UK':'GB','UAE':'AE','Saudi Arabia':'SA',
+      'South Africa':'ZA','New Zealand':'NZ','Hong Kong':'HK','Vietnam':'VN',
+      'Thailand':'TH','Malaysia':'MY','Philippines':'PH','Pakistan':'PK',
+      'Bangladesh':'BD','Egypt':'EG','Morocco':'MA','Chile':'CL',
     };
+    // Map country codes → ISO 2-letter for flag emoji
+    // 2-letter codes resolve automatically; only exceptions (UK→GB, UAE→AE) need explicit entries
+    const COUNTRY_FLAG_MAP = {'UK':'GB','UAE':'AE'};
     const countryFlag = code => {
       const iso2 = COUNTRY_FLAG_MAP[code.toUpperCase()] || (/^[A-Za-z]{2}$/.test(code) ? code.toUpperCase() : null);
       return iso2 ? [...iso2].map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('') : '';
     };
-    const flagEmoji = isUS ? '🇺🇸' : countryFlag(stateVal);
+    // Resolve full country name to ISO2 code for display + flag
+    const resolvedISO2 = COUNTRY_NAME_TO_ISO2[stateVal] || null;
+    const flagEmoji = isUS ? '🇺🇸' : countryFlag(resolvedISO2 || stateVal);
+    // Show ISO2 abbreviation for international, state abbr for US
+    const displayVal = isUS
+      ? (normalizedState === 'US' || normalizedState === '' ? '' : normalizedState)
+      : (resolvedISO2 || stateVal);
     const stateCell = s._enriching ? pendingCell
       : (stateVal ? '<span class="info-pill state-pill">' + flagEmoji + (displayVal ? ' ' + esc(displayVal) : '') + '</span>' : '—');
 
