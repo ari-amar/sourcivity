@@ -292,9 +292,10 @@ def handle(query, skip_enrichment=False, region='north_america'):
                 )
             else:
                 rule_1 = (
-                    '1. PRIORITIZE non-US international suppliers — aim for at most 1-2 US results out of 5-8 total. '
-                    'Actively seek out suppliers from Europe, Asia, and other regions. '
-                    'For US suppliers, use the specific state. For all others, use the full country name.'
+                    '1. ONLY include non-US international suppliers. '
+                    'Do NOT include any suppliers headquartered in the United States under any circumstances. '
+                    'Seek out suppliers from Europe, Asia, and other regions exclusively. '
+                    'For all suppliers, use the 2-letter country code or full country name — never a US state.'
                 )
             rule_2 = (
                 '2. Skip consumer e-commerce sites: Amazon, eBay, AliExpress, DHgate, '
@@ -390,6 +391,14 @@ STRICT RULES:
                 current = (s.get('state') or '').strip()
                 if current.lower() != tld_country.lower():
                     s['state'] = tld_country
+
+        # Hard filter: in global mode, drop any US suppliers the LLM returned.
+        # Runs after ISO remapping + TLD correction so India/Germany/etc. are
+        # no longer misidentified as US states before this check.
+        if region == 'global':
+            suppliers = [s for s in suppliers if not _is_us_supplier(s)]
+            if not suppliers:
+                return {"suppliers": [], "error": "No international suppliers found. Try a different search term."}
 
         # Hard geo filter: when user specified a specific country, drop any supplier
         # the LLM returned that isn't actually from that country.

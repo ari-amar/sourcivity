@@ -69,11 +69,78 @@
       .stats { grid-template-columns: repeat(2, 1fr); }
       .container { padding: 0 12px; }
       header { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
-      #tab-customers, #tab-activity { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      table { min-width: 600px; font-size: 12px; }
-      th, td { padding: 8px 8px; white-space: nowrap; }
       .tabs { flex-wrap: wrap; gap: 4px; }
       .login-box { width: 90vw; }
+
+      /* Customers table — card layout */
+      #tab-customers table { border: none; background: transparent; }
+      #tab-customers thead { display: none; }
+      #tab-customers tbody tr {
+        display: block;
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        padding: 10px 12px;
+      }
+      #tab-customers tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        border: none;
+        padding: 4px 0;
+        font-size: 13px;
+        border-bottom: 1px solid #21262d;
+      }
+      #tab-customers tbody td:last-child { border-bottom: none; }
+      #tab-customers tbody td::before {
+        content: attr(data-label);
+        font-size: 11px;
+        font-weight: 600;
+        color: #8b949e;
+        text-transform: uppercase;
+        white-space: nowrap;
+        flex-shrink: 0;
+        min-width: 80px;
+      }
+
+      /* Activity table — card layout */
+      #tab-activity table { border: none; background: transparent; }
+      #tab-activity thead { display: none; }
+      #tab-activity tbody tr {
+        display: block;
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        padding: 10px 12px;
+      }
+      #tab-activity tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+        border: none;
+        padding: 3px 0;
+        font-size: 12px;
+        border-bottom: 1px solid #21262d;
+        max-width: 100%;
+      }
+      #tab-activity tbody td:last-child { border-bottom: none; }
+      #tab-activity tbody td::before {
+        content: attr(data-label);
+        font-size: 11px;
+        font-weight: 600;
+        color: #8b949e;
+        text-transform: uppercase;
+        white-space: nowrap;
+        flex-shrink: 0;
+        min-width: 70px;
+      }
+      /* Truncate long fields gracefully */
+      #tab-activity tbody td > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+      #tab-activity tbody td > code { max-width: 180px; }
     }
   </style>
 </head>
@@ -177,15 +244,15 @@
 
       // Customers table
       $('customers-body').innerHTML = customers.length ? customers.map(c => `<tr>
-        <td><strong>${c.customer_full_name || c.customer_name || c.slug}</strong></td>
-        <td>${c.customer_company || '-'}</td>
-        <td>${c.customer_state || '-'}</td>
-        <td>${c.serve_port || '-'}</td>
-        <td>${c.searches || 0}</td>
-        <td>${c.rfqs_sent || 0}</td>
-        <td>${c.quotes || 0}</td>
-        <td>${c.last_active === 'never' ? '<span class="badge badge-gray">never</span>' : c.last_active}</td>
-        <td>${c.running ? '<span class="badge badge-green">running</span>' : '<span class="badge badge-red">stopped</span>'}</td>
+        <td data-label="Customer"><strong>${c.customer_full_name || c.customer_name || c.slug}</strong></td>
+        <td data-label="Company">${c.customer_company || '-'}</td>
+        <td data-label="State">${c.customer_state || '-'}</td>
+        <td data-label="Port">${c.serve_port || '-'}</td>
+        <td data-label="Searches">${c.searches || 0}</td>
+        <td data-label="RFQs Sent">${c.rfqs_sent || 0}</td>
+        <td data-label="Quotes">${c.quotes || 0}</td>
+        <td data-label="Last Active">${c.last_active === 'never' ? '<span class="badge badge-gray">never</span>' : c.last_active}</td>
+        <td data-label="Status">${c.running ? '<span class="badge badge-green">running</span>' : '<span class="badge badge-red">stopped</span>'}</td>
       </tr>`).join('') : '<tr><td colspan="9" class="empty-msg">No customers deployed yet</td></tr>';
 
       // Activity table
@@ -206,15 +273,15 @@
       }) : activity;
       const deviceIcon = d => d === 'mobile' ? '📱' : d === 'tablet' ? '🖥' : d === 'desktop' ? '💻' : '';
       $('activity-body').innerHTML = filtered.length ? filtered.slice(0, 200).map(a => `<tr>
-        <td>${a.timestamp || ''}</td>
-        <td><span class="badge badge-blue">${a.customer || ''}</span></td>
-        <td><span class="action-label action-${a.action || ''}">${a.action || ''}</span></td>
-        <td>${a.detail || ''}</td>
-        <td style="color:#8b949e;font-size:12px">${a.extra || ''}</td>
-        <td style="font-size:14px" title="${a.device || ''}">${deviceIcon(a.device)}</td>
-        <td style="color:#8b949e;font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${a.referrer || ''}">${a.referrer || ''}</td>
-        <td><code style="color:#8b949e;font-size:12px">${(a.ip && a.ip !== 'None') ? a.ip : ''}</code></td>
-        <td style="color:#8b949e;font-size:12px">${a.location || ''}</td>
+        <td data-label="Time">${a.timestamp || ''}</td>
+        <td data-label="Customer"><span class="badge badge-blue">${a.customer || ''}</span></td>
+        <td data-label="Action"><span class="action-label action-${a.action || ''}">${a.action || ''}</span></td>
+        <td data-label="Detail">${a.detail || ''}</td>
+        <td data-label="Extra" style="color:#8b949e;font-size:12px">${a.extra || ''}</td>
+        <td data-label="Device" style="font-size:14px" title="${a.device || ''}">${deviceIcon(a.device)}</td>
+        <td data-label="Referrer" style="color:#8b949e;font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${a.referrer || ''}">${a.referrer || ''}</td>
+        <td data-label="IP"><code style="color:#8b949e;font-size:12px">${(a.ip && a.ip !== 'None') ? a.ip : ''}</code></td>
+        <td data-label="Location" style="color:#8b949e;font-size:12px">${a.location || ''}</td>
       </tr>`).join('') : '<tr><td colspan="9" class="empty-msg">' + (filter ? 'No activity matching filter' : 'No activity recorded yet') + '</td></tr>';
     }
 

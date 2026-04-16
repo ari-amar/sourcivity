@@ -423,17 +423,17 @@ function renderQuotes(quotes) {
       tr.dataset.cat = groupId;
       tr.classList.add('hidden');
       tr.innerHTML = `
-        <td>${fmtDate(q.date)}</td>
-        <td><strong>${esc(q.supplier || '')}</strong></td>
-        <td>${esc(q.partService || '')}</td>
-        <td>${esc(q.quotedPrice || '')}</td>
-        <td>${esc(q.unit || '')}</td>
-        <td>${esc(q.leadTime || '')}</td>
-        <td>${esc(q.moq || '')}</td>
-        <td>${esc(q.paymentTerms || '')}</td>
-        <td>${fmtDate(q.validUntil)}</td>
-        <td>${statusBadge(q.status)}</td>
-        <td class="notes-cell">${esc(q.notes || '')}</td>
+        <td data-label="Date">${fmtDate(q.date)}</td>
+        <td data-label="Supplier"><strong>${esc(q.supplier || '')}</strong></td>
+        <td data-label="Part / Service">${esc(q.partService || '')}</td>
+        <td data-label="Quoted Price">${esc(q.quotedPrice || '')}</td>
+        <td data-label="Unit">${esc(q.unit || '')}</td>
+        <td data-label="Lead Time">${esc(q.leadTime || '')}</td>
+        <td data-label="MOQ">${esc(q.moq || '')}</td>
+        <td data-label="Payment Terms">${esc(q.paymentTerms || '')}</td>
+        <td data-label="Valid Until">${fmtDate(q.validUntil)}</td>
+        <td data-label="Status">${statusBadge(q.status)}</td>
+        <td data-label="Latest" class="notes-cell">${esc(q.notes || '')}</td>
       `;
       quotesBody.appendChild(tr);
     });
