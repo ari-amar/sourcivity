@@ -508,7 +508,7 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
 if (!DEMO_MODE && rfqModal) {
   function openRfqModal(supplier) {
     if (!emailConfigured) {
-      alert('Email is not configured yet. Please contact ari@sourcivity.io with your Gmail address and app password to enable RFQ sending.');
+      alert('Email is not configured yet. Please contact ari@sourcivity.io with your email address (Gmail or Outlook) and app password to enable RFQ sending.');
       return;
     }
     selectedSupplier = supplier;
@@ -727,7 +727,7 @@ if (!DEMO_MODE) {
 
   function openCheckoutModal() {
     if (!emailConfigured) {
-      alert('Email is not configured yet. Please contact ari@sourcivity.io with your Gmail address and app password to enable RFQ sending.');
+      alert('Email is not configured yet. Please contact ari@sourcivity.io with your email address (Gmail or Outlook) and app password to enable RFQ sending.');
       return;
     }
     if (rfqCart.length === 0) return;

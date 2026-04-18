@@ -19,10 +19,14 @@ COMMS_DIR = os.path.join(WORKSPACE_DIR, "comms")
 CREDENTIALS_DIR = os.path.join(WORKSPACE_DIR, "credentials")
 SYNC_SCRIPT = os.path.join(WORKSPACE_DIR, "sync_to_sheets.py")
 
-# --- Email (via Himalaya CLI) ---
+# --- Email (via Himalaya CLI — supports Gmail, Outlook/M365, any IMAP/SMTP) ---
 HIMALAYA_BIN = os.environ.get("HIMALAYA_BIN", "/tmp/himalaya")
-EMAIL_ADDRESS = os.environ["GMAIL_ADDRESS"]
-EMAIL_DISPLAY_NAME = os.environ.get("GMAIL_DISPLAY_NAME", "Procurement")
+EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS") or os.environ["GMAIL_ADDRESS"]
+EMAIL_DISPLAY_NAME = (
+    os.environ.get("EMAIL_DISPLAY_NAME")
+    or os.environ.get("GMAIL_DISPLAY_NAME")
+    or "Procurement"
+)
 
 # --- Customer Identity ---
 CUSTOMER_NAME = os.environ.get("CUSTOMER_NAME", "Buyer")
