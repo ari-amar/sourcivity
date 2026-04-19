@@ -193,6 +193,28 @@
 
     const $ = id => document.getElementById(id);
 
+    // Timestamps from the server are UTC strings like "YYYY-MM-DD HH:MM:SS".
+    // Render everything in America/New_York (ET) with a readable format.
+    const ET = 'America/New_York';
+    function parseUtc(ts) {
+      if (!ts || ts === 'never') return null;
+      const iso = ts.includes('T') ? ts : ts.replace(' ', 'T') + 'Z';
+      const d = new Date(iso);
+      return isNaN(d) ? null : d;
+    }
+    function fmtTime(ts) {
+      const d = parseUtc(ts);
+      if (!d) return ts || '';
+      return d.toLocaleString('en-US', {
+        timeZone: ET,
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit'
+      });
+    }
+    function easternDateStr(d) {
+      return d.toLocaleDateString('en-CA', { timeZone: ET }); // YYYY-MM-DD
+    }
+
     async function api(path) {
       const res = await fetch(path, { headers: { 'X-Admin-Password': pw } });
       if (res.status === 401) { logout(); throw new Error('Unauthorized'); }
@@ -234,7 +256,11 @@
       // Stats
       const totalSearches = customers.reduce((s, c) => s + (c.searches || 0), 0);
       const totalRfqs = customers.reduce((s, c) => s + (c.rfqs_sent || 0), 0);
-      const activeToday = customers.filter(c => c.last_active && c.last_active.startsWith(new Date().toISOString().slice(0, 10))).length;
+      const todayET = easternDateStr(new Date());
+      const activeToday = customers.filter(c => {
+        const d = parseUtc(c.last_active);
+        return d && easternDateStr(d) === todayET;
+      }).length;
       $('stats').innerHTML = `
         <div class="stat-card"><div class="label">Customers</div><div class="value">${customers.length}</div></div>
         <div class="stat-card"><div class="label">Total Searches</div><div class="value">${totalSearches}</div></div>
@@ -251,7 +277,7 @@
         <td data-label="Searches">${c.searches || 0}</td>
         <td data-label="RFQs Sent">${c.rfqs_sent || 0}</td>
         <td data-label="Quotes">${c.quotes || 0}</td>
-        <td data-label="Last Active">${c.last_active === 'never' ? '<span class="badge badge-gray">never</span>' : c.last_active}</td>
+        <td data-label="Last Active">${(!c.last_active || c.last_active === 'never') ? '<span class="badge badge-gray">never</span>' : fmtTime(c.last_active)}</td>
         <td data-label="Status">${c.running ? '<span class="badge badge-green">running</span>' : '<span class="badge badge-red">stopped</span>'}</td>
       </tr>`).join('') : '<tr><td colspan="9" class="empty-msg">No customers deployed yet</td></tr>';
 
@@ -273,7 +299,7 @@
       }) : activity;
       const deviceIcon = d => d === 'mobile' ? '📱' : d === 'tablet' ? '🖥' : d === 'desktop' ? '💻' : '';
       $('activity-body').innerHTML = filtered.length ? filtered.slice(0, 200).map(a => `<tr>
-        <td data-label="Time">${a.timestamp || ''}</td>
+        <td data-label="Time">${fmtTime(a.timestamp)}</td>
         <td data-label="Customer"><span class="badge badge-blue">${a.customer || ''}</span></td>
         <td data-label="Action"><span class="action-label action-${a.action || ''}">${a.action || ''}</span></td>
         <td data-label="Detail">${a.detail || ''}</td>
@@ -329,7 +355,10 @@
         const activity = data.activity || [];
         if (!activity.length) return alert('No activity to export.');
         const headers = ['timestamp','customer','action','detail','extra','device','referrer','ip','location'];
-        const rows = activity.map(a => headers.map(h => '"' + ((a[h] || '').toString().replace(/"/g, '""')) + '"').join(','));
+        const rows = activity.map(a => headers.map(h => {
+          const v = h === 'timestamp' ? fmtTime(a.timestamp) : (a[h] || '');
+          return '"' + v.toString().replace(/"/g, '""') + '"';
+        }).join(','));
         const csv = [headers.join(','), ...rows].join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
         const a = document.createElement('a');
