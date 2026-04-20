@@ -285,6 +285,19 @@
       renderActivity();
     }
 
+    function fmtTime(ts) {
+      if (!ts) return '';
+      // Timestamps are stored as UTC "YYYY-MM-DD HH:MM:SS"
+      const d = new Date(ts.replace(' ', 'T') + 'Z');
+      if (isNaN(d)) return ts;
+      return d.toLocaleString('en-US', {
+        timeZone: 'America/New_York',
+        month: 'numeric', day: 'numeric',
+        hour: 'numeric', minute: '2-digit',
+        hour12: true
+      });
+    }
+
     function renderActivity() {
       let activity = window._allActivity || [];
       if (myIpActive) {
