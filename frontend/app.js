@@ -359,133 +359,152 @@ const ICON_LINK    = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 const ICON_SPIN    = '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>';
 const ICON_CHECK   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
+function computeCardSections(s, i) {
+  const titleHtml = s.website
+    ? '<a class="card-title" href="' + ensureHttp(esc(s.website)) + '" target="_blank" rel="noopener noreferrer">' + esc(s.name || '—') + '</a>'
+    : '<span class="card-title">' + esc(s.name || '—') + '</span>';
+
+  const stateVal = s._enriching ? '' : (s.state || s.location || '');
+  const { flag, label } = resolveLocationTag(stateVal);
+  const flagHtml = flag ? '<span class="card-flag" title="' + esc(stateVal || '') + '">' + flag + '</span>' : '';
+  const locationPillHtml = label ? '<span class="card-pill">' + esc(label) + '</span>' : '';
+  const tagRowHtml = flagHtml + locationPillHtml;
+
+  const rawCerts = s.certifications || s.certs || '';
+  let certsHtml;
+  if (s._enriching) {
+    certsHtml = '<span class="finding-email"><span class="dot-pulse"></span>Loading…</span>';
+  } else if (rawCerts && rawCerts !== 'N/A') {
+    certsHtml = rawCerts.split(/[,;]/).map(c => '<span class="info-pill cert-pill">' + esc(fixCertCase(c.trim())) + '</span>').join(' ');
+  } else {
+    certsHtml = '—';
+  }
+
+  const repParts = [];
+  if (s.yearsInBusiness) repParts.push(esc(s.yearsInBusiness));
+  if (s.employees) repParts.push(esc(s.employees) + ' emp');
+  if (s.revenue) repParts.push(esc(s.revenue));
+  const repHtml = s._enriching
+    ? '<span class="finding-email"><span class="dot-pulse"></span>Loading…</span>'
+    : (repParts.length ? repParts.join(' · ') : '—');
+
+  const productsHtml = esc(s.products || '—');
+  const matchHtml = esc(s.matchReason || '—');
+  const indexHtml = '#' + (i + 1);
+
+  const inCart = rfqCart.some(c => c.name === s.name);
+  let actionHtml;
+  if (DEMO_MODE) {
+    actionHtml = '<button class="rfq-add-btn' + (inCart ? ' added' : '') +
+      '" data-index="' + i + '" title="Select for RFQ" type="button">' +
+      (inCart ? ICON_CHECK + ' Added' : '+ RFQ') + '</button>';
+  } else {
+    const contactType = getContactType(s);
+    if (contactType === 'email') {
+      actionHtml = '<button class="action-icon action-email' + (inCart ? ' selected' : '') +
+        '" data-index="' + i + '" title="Send RFQ" type="button">' + ICON_EMAIL + '</button>';
+    } else if (s._enriching) {
+      actionHtml = '<span class="action-icon action-spin" title="Finding email...">' + ICON_SPIN + '</span>';
+    } else {
+      const contactUrl = s.website ? ensureHttp(esc(s.website)) + '/contact' : '#';
+      actionHtml = '<a href="' + contactUrl + '" target="_blank" rel="noopener noreferrer" class="action-icon action-link" title="Visit Website">' + ICON_LINK + '</a>';
+    }
+  }
+
+  const footerLeftHtml = s._enriching
+    ? '<span class="finding-email"><span class="dot-pulse"></span>Finding email…</span>'
+    : '';
+
+  return { titleHtml, tagRowHtml, productsHtml, certsHtml, repHtml, matchHtml, actionHtml, footerLeftHtml, indexHtml };
+}
+
+function buildCardHTML(p) {
+  return (
+    '<div class="card-header">' +
+      '<div class="card-title-group">' +
+        '<div class="card-index" data-role="index">' + p.indexHtml + '</div>' +
+        '<div class="card-title-wrap" data-role="title">' + p.titleHtml + '</div>' +
+      '</div>' +
+      '<div class="card-tag-row" data-role="tag-row">' + p.tagRowHtml + '</div>' +
+    '</div>' +
+    '<div class="card-specs">' +
+      '<div class="card-spec">' +
+        '<div class="card-spec-label">Products / Services</div>' +
+        '<div class="card-spec-value" data-role="products">' + p.productsHtml + '</div>' +
+      '</div>' +
+      '<div class="card-spec">' +
+        '<div class="card-spec-label">Certifications</div>' +
+        '<div class="card-spec-value" data-role="certs">' + p.certsHtml + '</div>' +
+      '</div>' +
+      '<div class="card-spec">' +
+        '<div class="card-spec-label">Reputation</div>' +
+        '<div class="card-spec-value" data-role="rep">' + p.repHtml + '</div>' +
+      '</div>' +
+      '<div class="card-spec full-width">' +
+        '<div class="card-spec-label">Match</div>' +
+        '<div class="card-spec-value" data-role="match">' + p.matchHtml + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="card-footer">' +
+      '<div class="card-footer-meta" data-role="footer-meta">' + p.footerLeftHtml + '</div>' +
+      '<div class="card-action-wrap" data-role="action">' + p.actionHtml + '</div>' +
+    '</div>'
+  );
+}
+
+function patchCardInPlace(card, p) {
+  const roles = ['index','title','tag-row','products','certs','rep','match','action','footer-meta'];
+  const values = {
+    'index': p.indexHtml, 'title': p.titleHtml, 'tag-row': p.tagRowHtml,
+    'products': p.productsHtml, 'certs': p.certsHtml, 'rep': p.repHtml,
+    'match': p.matchHtml, 'action': p.actionHtml, 'footer-meta': p.footerLeftHtml,
+  };
+  for (const role of roles) {
+    const el = card.querySelector('[data-role="' + role + '"]');
+    if (!el) continue;
+    const next = values[role];
+    if (el.innerHTML !== next) el.innerHTML = next;
+  }
+}
+
 function renderSearchResults(results) {
-  resultsGrid.innerHTML = '';
+  const existing = Array.from(resultsGrid.children);
+  const sameShape = existing.length === results.length &&
+    existing.every((c, i) => c.dataset.supplierName === (results[i].name || ''));
 
-  results.forEach((s, i) => {
-    const card = document.createElement('div');
-    card.className = 'supplier-card';
+  if (!sameShape) {
+    resultsGrid.innerHTML = '';
+    results.forEach((s, i) => {
+      const card = document.createElement('div');
+      card.className = 'supplier-card';
+      card.dataset.supplierName = s.name || '';
+      card.innerHTML = buildCardHTML(computeCardSections(s, i));
+      resultsGrid.appendChild(card);
+    });
+  } else {
+    results.forEach((s, i) => patchCardInPlace(existing[i], computeCardSections(s, i)));
+  }
 
-    // Title: linked to website when available
-    const titleHtml = s.website
-      ? '<a class="card-title" href="' + ensureHttp(esc(s.website)) + '" target="_blank" rel="noopener noreferrer">' + esc(s.name || '—') + '</a>'
-      : '<span class="card-title">' + esc(s.name || '—') + '</span>';
-
-    // Location pill + flag
-    const stateVal = s._enriching ? '' : (s.state || s.location || '');
-    const { flag, label } = resolveLocationTag(stateVal);
-    const flagHtml = flag ? '<span class="card-flag" title="' + esc(stateVal || '') + '">' + flag + '</span>' : '';
-    const locationPillHtml = label
-      ? '<span class="card-pill">' + esc(label) + '</span>'
-      : '';
-
-    // Spec grid: Products/Services, Certifications, Reputation, Match
-    const products = s.products || '';
-    const rawCerts = s.certifications || s.certs || '';
-    let certsHtml;
-    if (s._enriching) {
-      certsHtml = '<span class="finding-email"><span class="dot-pulse"></span>Loading…</span>';
-    } else if (rawCerts && rawCerts !== 'N/A') {
-      certsHtml = rawCerts.split(/[,;]/).map(c => '<span class="info-pill cert-pill">' + esc(fixCertCase(c.trim())) + '</span>').join(' ');
-    } else {
-      certsHtml = '—';
-    }
-
-    const repParts = [];
-    if (s.yearsInBusiness) repParts.push(esc(s.yearsInBusiness));
-    if (s.employees) repParts.push(esc(s.employees) + ' emp');
-    if (s.revenue) repParts.push(esc(s.revenue));
-    const repHtml = s._enriching
-      ? '<span class="finding-email"><span class="dot-pulse"></span>Loading…</span>'
-      : (repParts.length ? repParts.join(' · ') : '—');
-
-    const matchHtml = esc(s.matchReason || '—');
-
-    // Footer: left = enrichment hint (if any); right = action (RFQ / email / visit)
-    const inCart = rfqCart.some(c => c.name === s.name);
-
-    let actionHtml;
-    if (DEMO_MODE) {
-      // Demo: add-to-cart button (styled like + RFQ)
-      actionHtml = '<button class="rfq-add-btn' + (inCart ? ' added' : '') +
-        '" data-index="' + i + '" title="Select for RFQ" type="button">' +
-        (inCart ? ICON_CHECK + ' Added' : '+ RFQ') + '</button>';
-    } else {
-      const contactType = getContactType(s);
-      if (contactType === 'email') {
-        actionHtml = '<button class="action-icon action-email' + (inCart ? ' selected' : '') +
-          '" data-index="' + i + '" title="Send RFQ" type="button">' + ICON_EMAIL + '</button>';
-      } else if (s._enriching) {
-        actionHtml = '<span class="action-icon action-spin" title="Finding email...">' + ICON_SPIN + '</span>';
-      } else {
-        const contactUrl = s.website ? ensureHttp(esc(s.website)) + '/contact' : '#';
-        actionHtml = '<a href="' + contactUrl + '" target="_blank" rel="noopener noreferrer" class="action-icon action-link" title="Visit Website">' + ICON_LINK + '</a>';
-      }
-    }
-
-    const footerLeftHtml = s._enriching
-      ? '<span class="finding-email"><span class="dot-pulse"></span>Finding email…</span>'
-      : '';
-
-    card.innerHTML =
-      '<div class="card-header">' +
-        '<div class="card-title-group">' +
-          '<div class="card-index">#' + (i + 1) + '</div>' +
-          titleHtml +
-        '</div>' +
-        '<div class="card-tag-row">' +
-          flagHtml +
-          locationPillHtml +
-        '</div>' +
-      '</div>' +
-      '<div class="card-specs">' +
-        '<div class="card-spec">' +
-          '<div class="card-spec-label">Products / Services</div>' +
-          '<div class="card-spec-value">' + esc(products || '—') + '</div>' +
-        '</div>' +
-        '<div class="card-spec">' +
-          '<div class="card-spec-label">Certifications</div>' +
-          '<div class="card-spec-value">' + certsHtml + '</div>' +
-        '</div>' +
-        '<div class="card-spec">' +
-          '<div class="card-spec-label">Reputation</div>' +
-          '<div class="card-spec-value">' + repHtml + '</div>' +
-        '</div>' +
-        '<div class="card-spec full-width">' +
-          '<div class="card-spec-label">Match</div>' +
-          '<div class="card-spec-value">' + matchHtml + '</div>' +
-        '</div>' +
-      '</div>' +
-      '<div class="card-footer">' +
-        '<div class="card-footer-meta">' + footerLeftHtml + '</div>' +
-        actionHtml +
-      '</div>';
-
-    resultsGrid.appendChild(card);
-  });
-
-  // Meta row
   resultsMetaCount.innerHTML = '<strong>' + results.length + '</strong> supplier' + (results.length === 1 ? '' : 's') + ' found';
   resultsMeta.classList.toggle('hidden', results.length === 0);
   resultsGrid.classList.toggle('hidden', results.length === 0);
 
-  // Wire up action buttons in the new cards
-  const handleAction = (btn) => {
-    const supplier = searchResults[parseInt(btn.dataset.index, 10)];
-    if (!supplier) return;
-    if (DEMO_MODE) {
-      toggleCartSupplier(supplier);
-    } else {
-      if (getContactType(supplier) === 'email') {
+  if (!resultsGrid._actionDelegated) {
+    resultsGrid.addEventListener('click', (e) => {
+      const btn = e.target.closest('.action-email[data-index], .rfq-add-btn[data-index]');
+      if (!btn || !resultsGrid.contains(btn)) return;
+      const supplier = searchResults[parseInt(btn.dataset.index, 10)];
+      if (!supplier) return;
+      if (DEMO_MODE) {
+        toggleCartSupplier(supplier);
+      } else if (getContactType(supplier) === 'email') {
         openRfqModal(supplier);
       } else {
         toggleCartSupplier(supplier);
       }
-    }
-  };
-  resultsGrid.querySelectorAll('.action-email[data-index], .rfq-add-btn[data-index]').forEach(btn => {
-    btn.addEventListener('click', () => handleAction(btn));
-  });
+    });
+    resultsGrid._actionDelegated = true;
+  }
 }
 
 // === CTA POPUP (demo only — shown instead of actual RFQ sending) ===
