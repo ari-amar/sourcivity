@@ -373,8 +373,13 @@ main {
   flex-direction: column;
   gap: 12px;
   transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
-  animation: cardFadeUp 0.35s ease both;
 }
+.supplier-card.fresh { animation: cardFadeUp 0.35s ease both; }
+
+.supplier-cards-grid { align-items: start; }
+
+.card-spec-value > * { animation: specFadeIn 0.18s ease both; }
+@keyframes specFadeIn { from { opacity: 0.5; } to { opacity: 1; } }
 .supplier-card:hover {
   border-color: var(--primary-border);
   transform: translateY(-3px);
