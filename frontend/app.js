@@ -463,7 +463,9 @@ function patchCardInPlace(card, p) {
     const el = card.querySelector('[data-role="' + role + '"]');
     if (!el) continue;
     const next = values[role];
-    if (el.innerHTML !== next) el.innerHTML = next;
+    if (el._lastHtml === next) continue;
+    el._lastHtml = next;
+    el.innerHTML = next;
   }
 }
 
