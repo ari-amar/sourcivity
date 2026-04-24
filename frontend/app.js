@@ -477,10 +477,19 @@ function renderSearchResults(results) {
   if (!sameShape) {
     resultsGrid.innerHTML = '';
     results.forEach((s, i) => {
+      const p = computeCardSections(s, i);
       const card = document.createElement('div');
       card.className = 'supplier-card';
       card.dataset.supplierName = s.name || '';
-      card.innerHTML = buildCardHTML(computeCardSections(s, i));
+      card.innerHTML = buildCardHTML(p);
+      const roleMap = {
+        'index': p.indexHtml, 'title': p.titleHtml, 'tag-row': p.tagRowHtml,
+        'products': p.productsHtml, 'certs': p.certsHtml, 'rep': p.repHtml,
+        'match': p.matchHtml, 'action': p.actionHtml, 'footer-meta': p.footerLeftHtml,
+      };
+      card.querySelectorAll('[data-role]').forEach(el => {
+        el._lastHtml = roleMap[el.dataset.role];
+      });
       resultsGrid.appendChild(card);
     });
   } else {

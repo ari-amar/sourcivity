@@ -455,7 +455,9 @@ main {
   color: var(--muted);
   line-height: 1.4;
   word-break: break-word;
+  min-height: 22px;
 }
+.card-action-wrap { display: inline-flex; align-items: center; }
 .card-spec.full-width { grid-column: 1 / -1; }
 
 .card-footer {
