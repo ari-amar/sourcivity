@@ -373,7 +373,9 @@ function computeCardSections(s, i) {
   const rawCerts = s.certifications || s.certs || '';
   let certsHtml;
   if (s._enriching) {
-    certsHtml = '<span class="finding-email"><span class="dot-pulse"></span>Loading…</span>';
+    certsHtml = '<span class="skeleton skeleton-pill" style="width:48px"></span>' +
+                '<span class="skeleton skeleton-pill" style="width:68px"></span>' +
+                '<span class="skeleton skeleton-pill" style="width:40px"></span>';
   } else if (rawCerts && rawCerts !== 'N/A') {
     certsHtml = rawCerts.split(/[,;]/).map(c => '<span class="info-pill cert-pill">' + esc(fixCertCase(c.trim())) + '</span>').join(' ');
   } else {
@@ -385,7 +387,7 @@ function computeCardSections(s, i) {
   if (s.employees) repParts.push(esc(s.employees) + ' emp');
   if (s.revenue) repParts.push(esc(s.revenue));
   const repHtml = s._enriching
-    ? '<span class="finding-email"><span class="dot-pulse"></span>Loading…</span>'
+    ? '<span class="skeleton skeleton-line" style="width:140px"></span>'
     : (repParts.length ? repParts.join(' · ') : '—');
 
   const productsHtml = esc(s.products || '—');

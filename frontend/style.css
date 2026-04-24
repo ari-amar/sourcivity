@@ -456,8 +456,27 @@ main {
   line-height: 1.4;
   word-break: break-word;
   min-height: 22px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
 }
+.card-spec.full-width .card-spec-value { display: block; min-height: 0; }
 .card-action-wrap { display: inline-flex; align-items: center; }
+
+.skeleton {
+  display: inline-block;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+.skeleton-pill { height: 18px; border-radius: 10px; }
+.skeleton-line { height: 14px; }
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 .card-spec.full-width { grid-column: 1 / -1; }
 
 .card-footer {
