@@ -45,11 +45,11 @@ DEMO_MODE = os.environ.get("DEMO_MODE", "").lower() in ("true", "1", "yes")
 # --- CSV Schema ---
 CSV_COLUMNS = [
     "Category", "Date", "Supplier", "Part/Service", "Quoted Price", "Unit",
-    "Lead Time", "MOQ", "Payment Terms", "Valid Until", "Status", "Latest"
+    "Lead Time", "MOQ", "Payment Terms", "Valid Until", "Status", "Latest", "Email"
 ]
 CSV_KEYS = [
     "category", "date", "supplier", "partService", "quotedPrice", "unit",
-    "leadTime", "moq", "paymentTerms", "validUntil", "status", "notes"
+    "leadTime", "moq", "paymentTerms", "validUntil", "status", "notes", "email"
 ]
 CATEGORIES = [
     "Flow Measurement & Control",

@@ -127,6 +127,7 @@ def handle_send(supplier, email_text, part, category=""):
         "validUntil": "",
         "status": "📨 Sent",
         "notes": "Awaiting initial response",
+        "email": to_addr,
     }
     csv_store.append_quote(quote)
 
@@ -134,6 +135,78 @@ def handle_send(supplier, email_text, part, category=""):
     threading.Thread(target=sheets.sync, daemon=True).start()
 
     return {"success": True, "message": f"RFQ sent to {supplier_name} at {to_addr}"}
+
+
+def handle_followup(supplier_name):
+    """Send a short follow-up email to a supplier who hasn't responded. Returns status dict."""
+    if not supplier_name:
+        return {"success": False, "error": "Missing supplier"}
+
+    quotes, _ = csv_store.read_quotes()
+    quote = next(
+        (q for q in quotes if q.get("supplier", "").strip().lower() == supplier_name.strip().lower()),
+        None,
+    )
+    if not quote:
+        return {"success": False, "error": "Supplier not found in tracker"}
+
+    email_addr = (quote.get("email") or "").strip()
+    if not email_addr:
+        return {"success": False, "error": "No email on file for this supplier — send a new RFQ instead."}
+
+    part = quote.get("partService", "")
+    sent_date = quote.get("date", "")
+
+    system = f"""You are {CUSTOMER_NAME}, {CUSTOMER_TITLE} at {CUSTOMER_COMPANY}, sending a short, polite follow-up to a supplier who hasn't replied to an earlier RFQ.
+
+STRICT RULES:
+1. PLAIN TEXT ONLY. No markdown, no bullets, no asterisks.
+2. 2-3 sentences maximum. Friendly nudge, not pushy.
+3. Briefly reference the original request.
+4. Ask if they can share ballpark pricing and lead time.
+5. Start with "Hi {supplier_name}," — never "Dear" or "To Whom It May Concern".
+6. End with "{CUSTOMER_NAME}" on its own line, then "{CUSTOMER_COMPANY}" on the next line.
+
+Return ONLY in this exact format:
+Subject: Re: [Part] — quick follow-up
+
+[Body]"""
+
+    message = f"""Draft the follow-up:
+Supplier: {supplier_name}
+Part/Service: {part}
+Original RFQ sent: {sent_date or 'a few days ago'}"""
+
+    try:
+        email_text = llm.call_llm(system, message, max_tokens=400)
+    except Exception as e:
+        return {"success": False, "error": f"Draft failed: {e}"}
+
+    subject = f"Re: {part} — quick follow-up" if part else "Quick follow-up on our request"
+    body_lines = []
+    for line in email_text.split("\n"):
+        stripped = line.strip()
+        if stripped.lower().startswith("subject:"):
+            subject = stripped[8:].strip()
+            continue
+        line = line.replace("**", "").replace("*", "")
+        if line.strip().startswith("- ") or line.strip().startswith("• "):
+            line = line.strip().lstrip("-•").strip()
+        body_lines.append(line)
+    body = "\n".join(body_lines).strip()
+
+    if not email_client.send_email(email_addr, subject, body):
+        return {"success": False, "error": "Email send failed"}
+
+    today = date.today().isoformat()
+    csv_store.update_quote(supplier_name, {
+        "status": "🔔 Follow-up Sent",
+        "notes": f"Follow-up sent {today}",
+    })
+
+    threading.Thread(target=sheets.sync, daemon=True).start()
+
+    return {"success": True, "message": f"Follow-up sent to {supplier_name} at {email_addr}"}
 
 
 def handle_batch_draft(suppliers, part, qty="", notes=""):

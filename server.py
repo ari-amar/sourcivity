@@ -157,6 +157,7 @@ class AppHandler(SimpleHTTPRequestHandler):
         # --- Demo mode: block restricted endpoints ---
         if DEMO_MODE and self.path in ("/api/rfq/draft", "/api/rfq/send",
                                         "/api/rfq/batch-draft", "/api/rfq/batch-send",
+                                        "/api/rfq/followup",
                                         "/api/enrich",
                                         "/api/inbox/check", "/api/browser/detect-forms",
                                         "/api/browser/autofill", "/api/browser/fill-form",
@@ -248,6 +249,19 @@ class AppHandler(SimpleHTTPRequestHandler):
             except Exception as e:
                 print(f"[rfq] Send error: {e}")
                 _send_json(self, {"success": False, "error": "Failed to send RFQ. Please try again."}, 500)
+
+        elif self.path == "/api/rfq/followup":
+            supplier = (data.get("supplier") or "").strip()
+            if not supplier:
+                _send_json(self, {"error": "Missing supplier"}, 400)
+                return
+            try:
+                log_activity("rfq_followup", supplier, _get_real_ip(self), _get_referrer(self), _get_device(self))
+                result = rfq.handle_followup(supplier)
+                _send_json(self, result)
+            except Exception as e:
+                print(f"[rfq] Follow-up error: {e}")
+                _send_json(self, {"success": False, "error": "Follow-up failed. Please try again."}, 500)
 
         elif self.path == "/api/inbox/check":
             result = inbox.handle()

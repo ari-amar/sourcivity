@@ -47,14 +47,24 @@ const navBtns = document.querySelectorAll('.nav-btn');
 const searchInput = document.getElementById('search-input');
 const searchBtn = document.getElementById('search-btn');
 const searchStatus = document.getElementById('search-status');
-const resultsTable = document.getElementById('results-table');
-const resultsBody = document.getElementById('results-body');
+const resultsGrid = document.getElementById('results-grid');
+const resultsMeta = document.getElementById('results-meta');
+const resultsMetaCount = document.getElementById('results-meta-count');
 const quotesBody = document.getElementById('quotes-body');
 const quotesStatus = document.getElementById('quotes-status');
 const refreshQuotesBtn = document.getElementById('refresh-quotes-btn');
-const cartBar = document.getElementById('rfq-cart-bar');
-const cartCount = document.getElementById('rfq-cart-count');
-const cartCheckoutBtn = document.getElementById('rfq-cart-checkout');
+// Floating RFQ cart
+const cartFloat          = document.getElementById('rfq-cart-float');
+const cartPill           = document.getElementById('rfq-cart-pill');
+const cartPillCount      = document.getElementById('rfq-cart-pill-count');
+const cartPanel          = document.getElementById('rfq-cart-panel');
+const cartPanelItems     = document.getElementById('rfq-cart-items');
+const cartPanelHeaderSub = document.getElementById('rfq-cart-header-sub');
+const cartCollapseBtn    = document.getElementById('rfq-cart-collapse');
+const cartClearBtn       = document.getElementById('rfq-cart-clear');
+const cartCheckoutBtn    = document.getElementById('rfq-cart-checkout');
+const cartCheckoutLabel  = document.getElementById('rfq-cart-checkout-label');
+const newSearchBtn       = document.getElementById('new-search-btn');
 
 // RFQ/checkout modal refs — only present in full mode HTML
 const rfqModal        = document.getElementById('rfq-modal');
@@ -69,39 +79,106 @@ const rfqPreviewBtn   = document.getElementById('rfq-preview-btn');
 const rfqSendBtn      = document.getElementById('rfq-send-btn');
 const rfqStatus       = document.getElementById('rfq-status');
 
-// === CART BAR ===
+// === FLOATING RFQ CART ===
+let cartPanelOpen = false;
+
+function setCartPanelOpen(open) {
+  cartPanelOpen = open && rfqCart.length > 0;
+  cartPill.classList.toggle('hidden',  cartPanelOpen);
+  cartPanel.classList.toggle('hidden', !cartPanelOpen);
+}
+
+function renderCartPanelItems() {
+  cartPanelItems.innerHTML = '';
+  rfqCart.forEach((s, i) => {
+    const item = document.createElement('div');
+    item.className = 'rfq-cart-item';
+    const nameHtml = s.website
+      ? '<a class="rfq-cart-item-name" href="' + ensureHttp(esc(s.website)) + '" target="_blank" rel="noopener noreferrer">' + esc(s.name || '—') + '</a>'
+      : '<span class="rfq-cart-item-name">' + esc(s.name || '—') + '</span>';
+    const loc = s.state || s.location || '';
+    const metaBits = [];
+    if (loc) metaBits.push(esc(loc));
+    if (s.email) metaBits.push(esc(s.email));
+    item.innerHTML =
+      nameHtml +
+      '<div class="rfq-cart-item-meta">' + (metaBits.join(' · ') || '&nbsp;') + '</div>' +
+      '<button type="button" class="rfq-cart-item-remove" data-cart-index="' + i + '" aria-label="Remove ' + esc(s.name || '') + '">&times;</button>';
+    cartPanelItems.appendChild(item);
+  });
+  cartPanelItems.querySelectorAll('[data-cart-index]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.cartIndex, 10);
+      if (!isNaN(idx)) {
+        rfqCart.splice(idx, 1);
+        updateCartBar();
+      }
+    });
+  });
+}
+
 function updateCartBar() {
-  if (rfqCart.length > 0) {
-    cartBar.classList.remove('hidden');
-    cartCount.textContent = rfqCart.length + ' supplier' + (rfqCart.length === 1 ? '' : 's') + ' selected';
+  const n = rfqCart.length;
+  if (n > 0) {
+    cartFloat.classList.remove('hidden');
+    cartPillCount.textContent = String(n);
+    if (cartPanelHeaderSub) cartPanelHeaderSub.textContent = n + ' item' + (n === 1 ? '' : 's');
+    if (cartCheckoutLabel) cartCheckoutLabel.textContent = 'Submit RFQ (' + n + ')';
+    if (cartPanelOpen) renderCartPanelItems();
   } else {
-    cartBar.classList.add('hidden');
+    cartFloat.classList.add('hidden');
+    setCartPanelOpen(false);
   }
-  document.querySelectorAll('.action-email[data-index]').forEach(btn => {
-    const idx = parseInt(btn.dataset.index);
+  // Sync selected state on any visible supplier cards
+  document.querySelectorAll('.action-email[data-index], .rfq-add-btn[data-index]').forEach(btn => {
+    const idx = parseInt(btn.dataset.index, 10);
     const supplier = searchResults[idx];
-    if (supplier && rfqCart.some(s => s.name === supplier.name)) {
-      btn.classList.add('selected');
-    } else {
-      btn.classList.remove('selected');
-    }
+    const inCart = supplier && rfqCart.some(s => s.name === supplier.name);
+    btn.classList.toggle('selected', !!inCart);
+    btn.classList.toggle('added', !!inCart && btn.classList.contains('rfq-add-btn'));
   });
 }
 
 function toggleCartSupplier(supplier) {
   const idx = rfqCart.findIndex(s => s.name === supplier.name);
-  if (idx >= 0) {
-    rfqCart.splice(idx, 1);
-  } else {
-    rfqCart.push(supplier);
-  }
+  if (idx >= 0) rfqCart.splice(idx, 1);
+  else rfqCart.push(supplier);
   updateCartBar();
 }
 
+if (cartPill) {
+  cartPill.addEventListener('click', () => {
+    renderCartPanelItems();
+    setCartPanelOpen(true);
+  });
+}
+if (cartCollapseBtn) {
+  cartCollapseBtn.addEventListener('click', () => setCartPanelOpen(false));
+}
+if (cartClearBtn) {
+  cartClearBtn.addEventListener('click', () => {
+    rfqCart = [];
+    updateCartBar();
+  });
+}
+
 cartCheckoutBtn.addEventListener('click', () => {
+  setCartPanelOpen(false);
   if (DEMO_MODE) showCtaPopup();
   else openCheckoutModal();
 });
+
+if (newSearchBtn) {
+  newSearchBtn.addEventListener('click', () => {
+    switchToTab('search');
+    if (searchInput) {
+      searchInput.value = '';
+      searchInput.focus();
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+}
 
 // === TAB NAVIGATION ===
 navBtns.forEach(btn => {
@@ -147,8 +224,9 @@ async function doSearch() {
   searchBtn.disabled = true;
   searchBtn.textContent = 'Searching...';
   showStatus(searchStatus, 'loading', 'Searching for suppliers...');
-  resultsTable.classList.add('hidden');
-  resultsBody.innerHTML = '';
+  resultsGrid.classList.add('hidden');
+  resultsMeta.classList.add('hidden');
+  resultsGrid.innerHTML = '';
   searchResults = [];
 
   try {
@@ -219,145 +297,194 @@ function getContactType(s) {
   return 'none';
 }
 
+// Country/state helpers (hoisted — used by card renderer)
+const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY']);
+const COUNTRY_NAME_TO_ISO2 = {
+  'India':'IN','Germany':'DE','Israel':'IL','Colombia':'CO','Argentina':'AR',
+  'Albania':'AL','Gabon':'GA','Indonesia':'ID','Montenegro':'ME',
+  'Austria':'AT','France':'FR','Italy':'IT','Spain':'ES','Netherlands':'NL',
+  'Switzerland':'CH','Belgium':'BE','Portugal':'PT','Sweden':'SE','Denmark':'DK',
+  'Finland':'FI','Norway':'NO','Poland':'PL','Czechia':'CZ','Czech Republic':'CZ',
+  'Slovakia':'SK','Hungary':'HU','Romania':'RO','Bulgaria':'BG','Greece':'GR',
+  'Ukraine':'UA','Turkey':'TR','Russia':'RU','Belarus':'BY','Moldova':'MD',
+  'Serbia':'RS','Croatia':'HR','Slovenia':'SI','Bosnia':'BA','Bosnia and Herzegovina':'BA',
+  'North Macedonia':'MK','Kosovo':'XK','Cyprus':'CY','Malta':'MT','Iceland':'IS',
+  'Ireland':'IE','Luxembourg':'LU','Lithuania':'LT','Latvia':'LV','Estonia':'EE',
+  'China':'CN','Japan':'JP','Korea':'KR','South Korea':'KR','North Korea':'KP',
+  'Taiwan':'TW','Singapore':'SG','Vietnam':'VN','Thailand':'TH','Malaysia':'MY',
+  'Philippines':'PH','Myanmar':'MM','Cambodia':'KH','Laos':'LA',
+  'Australia':'AU','New Zealand':'NZ','Canada':'CA','Brazil':'BR','Mexico':'MX',
+  'Chile':'CL','Peru':'PE','Venezuela':'VE',
+  'Ecuador':'EC','Bolivia':'BO','Paraguay':'PY','Uruguay':'UY',
+  'United Kingdom':'GB','UK':'GB','UAE':'AE','United Arab Emirates':'AE',
+  'Saudi Arabia':'SA','Qatar':'QA','Kuwait':'KW','Bahrain':'BH','Oman':'OM',
+  'Jordan':'JO','Iraq':'IQ','Iran':'IR','Lebanon':'LB','Syria':'SY',
+  'Egypt':'EG','Morocco':'MA','Algeria':'DZ','Tunisia':'TN','Libya':'LY',
+  'South Africa':'ZA','Nigeria':'NG','Kenya':'KE','Ghana':'GH','Ethiopia':'ET',
+  'Tanzania':'TZ','Uganda':'UG','Zimbabwe':'ZW','Mozambique':'MZ',
+  'Hong Kong':'HK','Pakistan':'PK','Bangladesh':'BD','Sri Lanka':'LK',
+  'Nepal':'NP','Kazakhstan':'KZ','Azerbaijan':'AZ','Georgia':'GE','Armenia':'AM',
+  'Palestine':'PS',
+};
+const COUNTRY_FLAG_MAP = {'UK':'GB','UAE':'AE'};
+
+function countryFlagFromCode(code) {
+  if (!code) return '';
+  const iso2 = COUNTRY_FLAG_MAP[code.toUpperCase()] || (/^[A-Za-z]{2}$/.test(code) ? code.toUpperCase() : null);
+  return iso2 ? [...iso2].map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('') : '';
+}
+
+function resolveLocationTag(rawState) {
+  const stateVal = rawState || '';
+  const normalizedState = stateVal.startsWith('US-') ? stateVal.slice(3) : stateVal;
+  const isUS = !stateVal || stateVal === 'US' || US_STATES.has(stateVal) || US_STATES.has(normalizedState);
+  const cleanStateVal = stateVal.replace(/\s*\(.*?\)\s*$/, '').trim();
+  const resolvedISO2 = COUNTRY_NAME_TO_ISO2[cleanStateVal] || COUNTRY_NAME_TO_ISO2[stateVal] || null;
+  const rawIs2Letter = !isUS && /^[A-Za-z]{2}$/.test(cleanStateVal);
+  const effectiveCode = resolvedISO2 || (rawIs2Letter ? cleanStateVal.toUpperCase() : null);
+  const flag = isUS ? '🇺🇸' : countryFlagFromCode(effectiveCode || cleanStateVal);
+  const label = isUS
+    ? (normalizedState === 'US' || normalizedState === '' ? '' : normalizedState)
+    : (effectiveCode || '');
+  return { flag, label };
+}
+
+function fixCertCase(c) {
+  return c.replace(/\b(iso|as|itar|nadcap|nist|astm|fda|gmp|rohs|ul|ce|sae|iatf|ohsas)\b/gi, m => m.toUpperCase())
+          .replace(/\b(sp)\b/gi, m => m.toUpperCase());
+}
+
+const ICON_EMAIL   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 4L12 13 2 4"/></svg>';
+const ICON_LINK    = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+const ICON_SPIN    = '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>';
+const ICON_CHECK   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+
 function renderSearchResults(results) {
-  resultsBody.innerHTML = '';
+  resultsGrid.innerHTML = '';
+
   results.forEach((s, i) => {
-    const tr = document.createElement('tr');
-    const nameCell = s.website
-      ? '<a href="' + ensureHttp(esc(s.website)) + '" target="_blank">' + esc(s.name || '—') + '</a>'
-      : esc(s.name || '—');
+    const card = document.createElement('div');
+    card.className = 'supplier-card';
 
-    const emailIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 4L12 13 2 4"/></svg>';
-    const linkIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
-    const spinnerIcon = '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>';
+    // Title: linked to website when available
+    const titleHtml = s.website
+      ? '<a class="card-title" href="' + ensureHttp(esc(s.website)) + '" target="_blank" rel="noopener noreferrer">' + esc(s.name || '—') + '</a>'
+      : '<span class="card-title">' + esc(s.name || '—') + '</span>';
 
-    let actionCell;
-    if (DEMO_MODE) {
-      // Demo: always show selectable email icon — clicking adds to cart / shows CTA
-      actionCell = '<button class="action-icon action-email" data-index="' + i + '" title="Select for RFQ">' + emailIcon + '</button>';
+    // Location pill + flag
+    const stateVal = s._enriching ? '' : (s.state || s.location || '');
+    const { flag, label } = resolveLocationTag(stateVal);
+    const flagHtml = flag ? '<span class="card-flag" title="' + esc(stateVal || '') + '">' + flag + '</span>' : '';
+    const locationPillHtml = label
+      ? '<span class="card-pill">' + esc(label) + '</span>'
+      : '';
+
+    // Spec grid: Products/Services, Certifications, Reputation, Match
+    const products = s.products || '';
+    const rawCerts = s.certifications || s.certs || '';
+    let certsHtml;
+    if (s._enriching) {
+      certsHtml = '<span class="finding-email"><span class="dot-pulse"></span>Loading…</span>';
+    } else if (rawCerts && rawCerts !== 'N/A') {
+      certsHtml = rawCerts.split(/[,;]/).map(c => '<span class="info-pill cert-pill">' + esc(fixCertCase(c.trim())) + '</span>').join(' ');
     } else {
-      const contactType = getContactType(s);
-      if (contactType === 'email') {
-        actionCell = '<button class="action-icon action-email" data-index="' + i + '" title="Send RFQ">' + emailIcon + '</button>';
-      } else if (s._enriching) {
-        actionCell = '<span class="action-icon action-spin" title="Finding email...">' + spinnerIcon + '</span>';
-      } else {
-        const contactUrl = s.website ? ensureHttp(esc(s.website)) + '/contact' : '#';
-        actionCell = '<a href="' + contactUrl + '" target="_blank" class="action-icon action-link" title="Visit Website">' + linkIcon + '</a>';
-      }
+      certsHtml = '—';
     }
-
-    const pendingCell = '<span class="action-icon action-spin" style="opacity:0.4">' +
-      '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></span>';
 
     const repParts = [];
     if (s.yearsInBusiness) repParts.push(esc(s.yearsInBusiness));
     if (s.employees) repParts.push(esc(s.employees) + ' emp');
     if (s.revenue) repParts.push(esc(s.revenue));
-    const repCell = s._enriching ? pendingCell
-      : (repParts.length > 0 ? '<span class="rep-text">' + repParts.join(' · ') + '</span>' : '—');
+    const repHtml = s._enriching
+      ? '<span class="finding-email"><span class="dot-pulse"></span>Loading…</span>'
+      : (repParts.length ? repParts.join(' · ') : '—');
 
-    const rawCerts = s.certifications || s.certs || '';
-    const fixCertCase = (c) => {
-      return c.replace(/\b(iso|as|itar|nadcap|nist|astm|fda|gmp|rohs|ul|ce|sae|iatf|ohsas)\b/gi, m => m.toUpperCase())
-              .replace(/\b(sp)\b/gi, m => m.toUpperCase());
-    };
-    const certCell = s._enriching ? pendingCell
-      : (rawCerts && rawCerts !== 'N/A'
-          ? rawCerts.split(/[,;]/).map(c => '<span class="info-pill cert-pill">' + esc(fixCertCase(c.trim())) + '</span>').join(' ')
-          : '—');
+    const matchHtml = esc(s.matchReason || '—');
 
-    const stateVal = s._enriching ? '' : (s.state || s.location || '');
-    const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY']);
-    // Normalize ISO 3166-2 format (e.g. "US-PA" → "PA")
-    const normalizedState = stateVal.startsWith('US-') ? stateVal.slice(3) : stateVal;
-    const isUS = !stateVal || stateVal === 'US' || US_STATES.has(stateVal) || US_STATES.has(normalizedState);
-    // Strip parenthetical suffixes e.g. "Korea (South)" → "Korea", "China (PRC)" → "China"
-    const cleanStateVal = stateVal.replace(/\s*\(.*?\)\s*$/, '').trim();
-    // Map full country names → ISO 2-letter code (for cases where backend returns the full name)
-    const COUNTRY_NAME_TO_ISO2 = {
-      'India':'IN','Germany':'DE','Israel':'IL','Colombia':'CO','Argentina':'AR',
-      'Albania':'AL','Gabon':'GA','Indonesia':'ID','Montenegro':'ME',
-      'Austria':'AT','France':'FR','Italy':'IT','Spain':'ES','Netherlands':'NL',
-      'Switzerland':'CH','Belgium':'BE','Portugal':'PT','Sweden':'SE','Denmark':'DK',
-      'Finland':'FI','Norway':'NO','Poland':'PL','Czechia':'CZ','Czech Republic':'CZ',
-      'Slovakia':'SK','Hungary':'HU','Romania':'RO','Bulgaria':'BG','Greece':'GR',
-      'Ukraine':'UA','Turkey':'TR','Russia':'RU','Belarus':'BY','Moldova':'MD',
-      'Serbia':'RS','Croatia':'HR','Slovenia':'SI','Bosnia':'BA','Bosnia and Herzegovina':'BA',
-      'North Macedonia':'MK','Kosovo':'XK','Cyprus':'CY','Malta':'MT','Iceland':'IS',
-      'Ireland':'IE','Luxembourg':'LU','Lithuania':'LT','Latvia':'LV','Estonia':'EE',
-      'China':'CN','Japan':'JP','Korea':'KR','South Korea':'KR','North Korea':'KP',
-      'Taiwan':'TW','Singapore':'SG','Vietnam':'VN','Thailand':'TH','Malaysia':'MY',
-      'Philippines':'PH','Indonesia':'ID','Myanmar':'MM','Cambodia':'KH','Laos':'LA',
-      'Australia':'AU','New Zealand':'NZ','Canada':'CA','Brazil':'BR','Mexico':'MX',
-      'Chile':'CL','Peru':'PE','Colombia':'CO','Argentina':'AR','Venezuela':'VE',
-      'Ecuador':'EC','Bolivia':'BO','Paraguay':'PY','Uruguay':'UY',
-      'United Kingdom':'GB','UK':'GB','UAE':'AE','United Arab Emirates':'AE',
-      'Saudi Arabia':'SA','Qatar':'QA','Kuwait':'KW','Bahrain':'BH','Oman':'OM',
-      'Jordan':'JO','Iraq':'IQ','Iran':'IR','Lebanon':'LB','Syria':'SY',
-      'Egypt':'EG','Morocco':'MA','Algeria':'DZ','Tunisia':'TN','Libya':'LY',
-      'South Africa':'ZA','Nigeria':'NG','Kenya':'KE','Ghana':'GH','Ethiopia':'ET',
-      'Tanzania':'TZ','Uganda':'UG','Zimbabwe':'ZW','Mozambique':'MZ',
-      'Hong Kong':'HK','Pakistan':'PK','Bangladesh':'BD','Sri Lanka':'LK',
-      'Nepal':'NP','Kazakhstan':'KZ','Azerbaijan':'AZ','Georgia':'GE','Armenia':'AM',
-      'Israel':'IL','Palestine':'PS','Cyprus':'CY',
-    };
-    // Map country codes → ISO 2-letter for flag emoji
-    // 2-letter codes resolve automatically; only exceptions (UK→GB, UAE→AE) need explicit entries
-    const COUNTRY_FLAG_MAP = {'UK':'GB','UAE':'AE'};
-    const countryFlag = code => {
-      const iso2 = COUNTRY_FLAG_MAP[code.toUpperCase()] || (/^[A-Za-z]{2}$/.test(code) ? code.toUpperCase() : null);
-      return iso2 ? [...iso2].map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('') : '';
-    };
-    // Resolve full country name (cleaned) to ISO2 code for display + flag
-    const resolvedISO2 = COUNTRY_NAME_TO_ISO2[cleanStateVal] || COUNTRY_NAME_TO_ISO2[stateVal] || null;
-    // For 2-letter codes already returned by the backend, use them directly
-    const rawIs2Letter = !isUS && /^[A-Za-z]{2}$/.test(cleanStateVal);
-    const effectiveCode = resolvedISO2 || (rawIs2Letter ? cleanStateVal.toUpperCase() : null);
-    const flagEmoji = isUS ? '🇺🇸' : countryFlag(effectiveCode || cleanStateVal);
-    // Show ISO2 abbreviation for international, state abbr for US; never show full country name
-    const displayVal = isUS
-      ? (normalizedState === 'US' || normalizedState === '' ? '' : normalizedState)
-      : (effectiveCode || '');
-    const stateCell = s._enriching ? pendingCell
-      : (stateVal ? '<span class="info-pill state-pill">' + flagEmoji + (displayVal ? ' ' + esc(displayVal) : '') + '</span>' : '—');
+    // Footer: left = enrichment hint (if any); right = action (RFQ / email / visit)
+    const inCart = rfqCart.some(c => c.name === s.name);
 
-    const isInCart = rfqCart.some(c => c.name === s.name);
-
-    tr.innerHTML = `
-      <td>${i + 1}</td>
-      <td><strong>${nameCell}</strong></td>
-      <td>${stateCell}</td>
-      <td>${esc(s.products || '—')}</td>
-      <td>${certCell}</td>
-      <td>${repCell}</td>
-      <td>${esc(s.matchReason || '—')}</td>
-      <td>${actionCell}</td>
-    `;
-
-    if (isInCart) {
-      const emailBtn = tr.querySelector('.action-email[data-index]');
-      if (emailBtn) emailBtn.classList.add('selected');
+    let actionHtml;
+    if (DEMO_MODE) {
+      // Demo: add-to-cart button (styled like + RFQ)
+      actionHtml = '<button class="rfq-add-btn' + (inCart ? ' added' : '') +
+        '" data-index="' + i + '" title="Select for RFQ" type="button">' +
+        (inCart ? ICON_CHECK + ' Added' : '+ RFQ') + '</button>';
+    } else {
+      const contactType = getContactType(s);
+      if (contactType === 'email') {
+        actionHtml = '<button class="action-icon action-email' + (inCart ? ' selected' : '') +
+          '" data-index="' + i + '" title="Send RFQ" type="button">' + ICON_EMAIL + '</button>';
+      } else if (s._enriching) {
+        actionHtml = '<span class="action-icon action-spin" title="Finding email...">' + ICON_SPIN + '</span>';
+      } else {
+        const contactUrl = s.website ? ensureHttp(esc(s.website)) + '/contact' : '#';
+        actionHtml = '<a href="' + contactUrl + '" target="_blank" rel="noopener noreferrer" class="action-icon action-link" title="Visit Website">' + ICON_LINK + '</a>';
+      }
     }
 
-    resultsBody.appendChild(tr);
+    const footerLeftHtml = s._enriching
+      ? '<span class="finding-email"><span class="dot-pulse"></span>Finding email…</span>'
+      : '';
+
+    card.innerHTML =
+      '<div class="card-header">' +
+        '<div class="card-title-group">' +
+          '<div class="card-index">#' + (i + 1) + '</div>' +
+          titleHtml +
+        '</div>' +
+        '<div class="card-tag-row">' +
+          flagHtml +
+          locationPillHtml +
+        '</div>' +
+      '</div>' +
+      '<div class="card-specs">' +
+        '<div class="card-spec">' +
+          '<div class="card-spec-label">Products / Services</div>' +
+          '<div class="card-spec-value">' + esc(products || '—') + '</div>' +
+        '</div>' +
+        '<div class="card-spec">' +
+          '<div class="card-spec-label">Certifications</div>' +
+          '<div class="card-spec-value">' + certsHtml + '</div>' +
+        '</div>' +
+        '<div class="card-spec">' +
+          '<div class="card-spec-label">Reputation</div>' +
+          '<div class="card-spec-value">' + repHtml + '</div>' +
+        '</div>' +
+        '<div class="card-spec full-width">' +
+          '<div class="card-spec-label">Match</div>' +
+          '<div class="card-spec-value">' + matchHtml + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="card-footer">' +
+        '<div class="card-footer-meta">' + footerLeftHtml + '</div>' +
+        actionHtml +
+      '</div>';
+
+    resultsGrid.appendChild(card);
   });
 
-  resultsTable.classList.remove('hidden');
+  // Meta row
+  resultsMetaCount.innerHTML = '<strong>' + results.length + '</strong> supplier' + (results.length === 1 ? '' : 's') + ' found';
+  resultsMeta.classList.toggle('hidden', results.length === 0);
+  resultsGrid.classList.toggle('hidden', results.length === 0);
 
-  document.querySelectorAll('.action-email[data-index]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const supplier = searchResults[parseInt(btn.dataset.index)];
-      if (DEMO_MODE) {
-        toggleCartSupplier(supplier);
+  // Wire up action buttons in the new cards
+  const handleAction = (btn) => {
+    const supplier = searchResults[parseInt(btn.dataset.index, 10)];
+    if (!supplier) return;
+    if (DEMO_MODE) {
+      toggleCartSupplier(supplier);
+    } else {
+      if (getContactType(supplier) === 'email') {
+        openRfqModal(supplier);
       } else {
-        if (getContactType(supplier) === 'email') {
-          openRfqModal(supplier);
-        } else {
-          toggleCartSupplier(supplier);
-        }
+        toggleCartSupplier(supplier);
       }
-    });
+    }
+  };
+  resultsGrid.querySelectorAll('.action-email[data-index], .rfq-add-btn[data-index]').forEach(btn => {
+    btn.addEventListener('click', () => handleAction(btn));
   });
 }
 
@@ -425,7 +552,7 @@ function renderQuotes(quotes) {
   const filtered = quotes.filter(q => matchesFilter(q.status));
 
   if (filtered.length === 0) {
-    quotesBody.innerHTML = '<tr><td colspan="11" class="empty-state"><p>' +
+    quotesBody.innerHTML = '<tr><td colspan="12" class="empty-state"><p>' +
       (quotes.length === 0 ? 'No quotes tracked yet.' : 'No quotes match this filter.') +
       '</p></td></tr>';
     return;
@@ -446,7 +573,7 @@ function renderQuotes(quotes) {
     const headerTr = document.createElement('tr');
     headerTr.className = 'category-header collapsed';
     headerTr.dataset.group = groupId;
-    headerTr.innerHTML = '<td colspan="11"><span class="cat-arrow">&#9660;</span> ' + esc(cat) + ' <span class="cat-count">(' + count + ')</span></td>';
+    headerTr.innerHTML = '<td colspan="12"><span class="cat-arrow">&#9660;</span> ' + esc(cat) + ' <span class="cat-count">(' + count + ')</span></td>';
     headerTr.addEventListener('click', () => {
       const isCollapsed = headerTr.classList.toggle('collapsed');
       document.querySelectorAll('tr[data-cat="' + groupId + '"]').forEach(r => r.classList.toggle('hidden', isCollapsed));
@@ -469,10 +596,20 @@ function renderQuotes(quotes) {
         <td data-label="Valid Until">${fmtDate(q.validUntil)}</td>
         <td data-label="Status">${statusBadge(q.status)}</td>
         <td data-label="Latest" class="notes-cell">${esc(q.notes || '')}</td>
+        <td data-label="Action">${followupButton(q)}</td>
       `;
       quotesBody.appendChild(tr);
     });
   });
+}
+
+function followupButton(q) {
+  if (DEMO_MODE) return '';
+  const s = (q.status || '').toLowerCase();
+  const eligible = s.includes('sent') && !s.includes('bounced') || s.includes('overdue') || s.includes('follow');
+  if (!eligible) return '';
+  if (!q.email) return '<span class="followup-hint" title="No email on file for this supplier">—</span>';
+  return '<button class="btn-followup" data-supplier="' + esc(q.supplier || '') + '">Follow up</button>';
 }
 
 function statusBadge(status) {
@@ -493,6 +630,39 @@ function statusBadge(status) {
 }
 
 refreshQuotesBtn.addEventListener('click', loadQuotes);
+
+// === FOLLOW-UP BUTTON (delegated) ===
+quotesBody.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.btn-followup');
+  if (!btn) return;
+  const supplier = btn.dataset.supplier;
+  if (!supplier) return;
+  if (!confirm('Send a follow-up email to ' + supplier + '?')) return;
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  try {
+    const res = await fetch(API_URL + '/api/rfq/followup', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({supplier})
+    });
+    const data = await res.json();
+    if (data.success) {
+      showStatus(quotesStatus, 'success', data.message || 'Follow-up sent.');
+      setTimeout(() => hideStatus(quotesStatus), 4000);
+      loadQuotes();
+    } else {
+      showStatus(quotesStatus, 'error', data.error || 'Follow-up failed.');
+      btn.disabled = false;
+      btn.textContent = origText;
+    }
+  } catch (err) {
+    showStatus(quotesStatus, 'error', 'Follow-up failed: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
+});
 
 // === STATUS FILTERS ===
 document.querySelectorAll('.filter-btn').forEach(btn => {
