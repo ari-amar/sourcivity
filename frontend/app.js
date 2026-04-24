@@ -251,7 +251,7 @@ async function doSearch() {
       if (searchResults.length === 0) {
         showStatus(searchStatus, 'error', 'No suppliers found. Try a different search term.');
       } else {
-        renderSearchResults(searchResults);
+        renderSearchResults(searchResults, { fresh: true });
         hideStatus(searchStatus);
         if (data.status === 'enriching' && data.searchId) {
           pollForUpdates(data.searchId);
@@ -471,32 +471,36 @@ function patchCardInPlace(card, p) {
   }
 }
 
-function renderSearchResults(results) {
-  const existing = Array.from(resultsGrid.children);
-  const sameShape = existing.length === results.length &&
-    existing.every((c, i) => c.dataset.supplierName === (results[i].name || ''));
+function renderSearchResults(results, opts) {
+  const fresh = opts && opts.fresh;
+  const byName = new Map();
+  Array.from(resultsGrid.children).forEach(c => byName.set(c.dataset.supplierName, c));
 
-  if (!sameShape) {
-    resultsGrid.innerHTML = '';
-    results.forEach((s, i) => {
-      const p = computeCardSections(s, i);
-      const card = document.createElement('div');
-      card.className = 'supplier-card';
-      card.dataset.supplierName = s.name || '';
+  results.forEach((s, i) => {
+    const name = s.name || '';
+    const p = computeCardSections(s, i);
+    let card = byName.get(name);
+    if (!card) {
+      card = document.createElement('div');
+      card.className = 'supplier-card' + (fresh ? ' fresh' : '');
+      card.dataset.supplierName = name;
       card.innerHTML = buildCardHTML(p);
-      const roleMap = {
-        'index': p.indexHtml, 'title': p.titleHtml, 'tag-row': p.tagRowHtml,
-        'products': p.productsHtml, 'certs': p.certsHtml, 'rep': p.repHtml,
-        'match': p.matchHtml, 'action': p.actionHtml, 'footer-meta': p.footerLeftHtml,
-      };
       card.querySelectorAll('[data-role]').forEach(el => {
-        el._lastHtml = roleMap[el.dataset.role];
+        el._lastHtml = ({
+          'index': p.indexHtml, 'title': p.titleHtml, 'tag-row': p.tagRowHtml,
+          'products': p.productsHtml, 'certs': p.certsHtml, 'rep': p.repHtml,
+          'match': p.matchHtml, 'action': p.actionHtml, 'footer-meta': p.footerLeftHtml,
+        })[el.dataset.role];
       });
-      resultsGrid.appendChild(card);
-    });
-  } else {
-    results.forEach((s, i) => patchCardInPlace(existing[i], computeCardSections(s, i)));
-  }
+    } else {
+      patchCardInPlace(card, p);
+      byName.delete(name);
+    }
+    if (resultsGrid.children[i] !== card) {
+      resultsGrid.insertBefore(card, resultsGrid.children[i] || null);
+    }
+  });
+  byName.forEach(c => c.remove());
 
   resultsMetaCount.innerHTML = '<strong>' + results.length + '</strong> supplier' + (results.length === 1 ? '' : 's') + ' found';
   resultsMeta.classList.toggle('hidden', results.length === 0);
