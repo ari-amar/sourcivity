@@ -336,15 +336,17 @@ function countryFlagFromCode(code) {
 
 function resolveLocationTag(rawState) {
   const stateVal = rawState || '';
+  // No state yet (e.g. enriching) — render nothing rather than defaulting to a flag.
+  if (!stateVal) return { flag: '', label: '' };
   const normalizedState = stateVal.startsWith('US-') ? stateVal.slice(3) : stateVal;
-  const isUS = !stateVal || stateVal === 'US' || US_STATES.has(stateVal) || US_STATES.has(normalizedState);
+  const isUS = stateVal === 'US' || US_STATES.has(stateVal) || US_STATES.has(normalizedState);
   const cleanStateVal = stateVal.replace(/\s*\(.*?\)\s*$/, '').trim();
   const resolvedISO2 = COUNTRY_NAME_TO_ISO2[cleanStateVal] || COUNTRY_NAME_TO_ISO2[stateVal] || null;
   const rawIs2Letter = !isUS && /^[A-Za-z]{2}$/.test(cleanStateVal);
   const effectiveCode = resolvedISO2 || (rawIs2Letter ? cleanStateVal.toUpperCase() : null);
   const flag = isUS ? '🇺🇸' : countryFlagFromCode(effectiveCode || cleanStateVal);
   const label = isUS
-    ? (normalizedState === 'US' || normalizedState === '' ? '' : normalizedState)
+    ? (normalizedState === 'US' ? '' : normalizedState)
     : (effectiveCode || '');
   return { flag, label };
 }
