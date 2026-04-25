@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Sourcivity hybrid backend — direct Python + LLM for known workflows, agent fallback for the rest."""
+import base64
 import csv
 import json
 import os
@@ -29,6 +30,28 @@ DEMO_RATE_LIMIT = 5
 DEMO_RATE_WINDOW = 3600
 DEMO_RATE_WHITELIST = ("2607:fb91:", "2607:fb90:e917:83c3:", "2607:fb90:62b7:8869:", "172.56.", "172.56.217.130")  # IP prefixes exempt from rate limiting
 ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "").split(",")  # comma-separated allowed origins
+ACCESS_PASSCODE = os.environ.get("ACCESS_PASSCODE", "")  # if set, require HTTP Basic Auth (any username, this passcode)
+
+
+def _check_passcode(handler):
+    """Return True if passcode auth passes (or not required). Sends 401 + ends response if not."""
+    if not ACCESS_PASSCODE:
+        return True
+    auth = handler.headers.get("Authorization", "")
+    if auth.startswith("Basic "):
+        try:
+            decoded = base64.b64decode(auth[6:]).decode("utf-8", errors="ignore")
+            _, _, pw = decoded.partition(":")
+            if pw == ACCESS_PASSCODE:
+                return True
+        except Exception:
+            pass
+    handler.send_response(401)
+    handler.send_header("WWW-Authenticate", 'Basic realm="Sourcivity"')
+    handler.send_header("Content-Type", "text/plain")
+    handler.end_headers()
+    handler.wfile.write(b"Authentication required")
+    return False
 
 # --- Activity logging ---
 ACTIVITY_CSV = os.path.join(WORKSPACE_DIR, "activity.csv")
@@ -116,6 +139,8 @@ class AppHandler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=FRONTEND_DIR, **kwargs)
 
     def do_GET(self):
+        if not _check_passcode(self):
+            return
         if self.path == "/api/health":
             _send_json(self, {"ok": True, "demo": DEMO_MODE})
             return
@@ -148,6 +173,8 @@ class AppHandler(SimpleHTTPRequestHandler):
             super().do_GET()
 
     def do_POST(self):
+        if not _check_passcode(self):
+            return
         try:
             data = _read_body(self)
         except (json.JSONDecodeError, ValueError):
