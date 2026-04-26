@@ -609,7 +609,7 @@ function renderQuotes(quotes) {
     const count = groupMap[cat].length;
 
     const headerTr = document.createElement('tr');
-    headerTr.className = 'category-header collapsed';
+    headerTr.className = 'category-header';
     headerTr.dataset.group = groupId;
     headerTr.innerHTML = '<td colspan="12"><span class="cat-arrow">&#9660;</span> ' + esc(cat) + ' <span class="cat-count">(' + count + ')</span></td>';
     headerTr.addEventListener('click', () => {
@@ -621,7 +621,6 @@ function renderQuotes(quotes) {
     groupMap[cat].forEach(q => {
       const tr = document.createElement('tr');
       tr.dataset.cat = groupId;
-      tr.classList.add('hidden');
       tr.innerHTML = `
         <td data-label="Date">${fmtDate(q.date)}</td>
         <td data-label="Supplier"><strong>${esc(q.supplier || '')}</strong></td>
