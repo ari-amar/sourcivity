@@ -186,6 +186,66 @@ def test_408_not_retried_post_fix():
     )
 
 
+def test_brave_pool_deadline_bails_on_stuck_query():
+    """If a Brave query hangs past _BRAVE_POOL_DEADLINE, handle() must return
+    promptly with whatever finished — not block until the stuck thread exits."""
+    import threading
+    from services import llm, scraper
+    from handlers import search as search_handler
+
+    # Stub LLM + scraper so we measure pool latency, not full pipeline.
+    def _stub_llm(system, message, model=None, max_tokens=4096):
+        # Empty supplier list → handle() short-circuits with "No suppliers found".
+        return '```json\n[]\n```'
+
+    def _stub_enrich(suppliers, on_each=None, skip_email=False):
+        return suppliers
+
+    llm.call_llm = _stub_llm
+    scraper.enrich_suppliers = _stub_enrich
+    scraper.get_blocked_sites = lambda: []
+    scraper._blocked_sites = []
+
+    # One query returns instantly with no results, the others block on an Event
+    # we never set. This forces the pool to hit the deadline.
+    block = threading.Event()
+    call_order = {"n": 0}
+
+    def slow_brave(query, count=10, region='north_america'):
+        call_order["n"] += 1
+        if call_order["n"] == 1:
+            return [], [], None  # return immediately
+        block.wait(timeout=60)  # hang
+        return [], [], None
+
+    # Temporarily lower the deadline so the test runs in seconds, not 22s.
+    original_deadline = search_handler._BRAVE_POOL_DEADLINE
+    search_handler._BRAVE_POOL_DEADLINE = 2
+
+    from services import brave
+    original_brave = brave.search
+    brave.search = slow_brave
+    # handlers.search imported brave at module load; rebind there too.
+    search_handler.brave.search = slow_brave
+
+    try:
+        t0 = time.perf_counter()
+        result = search_handler.handle("deadline test query", region="north_america")
+        elapsed = time.perf_counter() - t0
+    finally:
+        search_handler._BRAVE_POOL_DEADLINE = original_deadline
+        brave.search = original_brave
+        search_handler.brave.search = original_brave
+        block.set()  # let any leaked thread exit cleanly
+
+    return (
+        _check("pool deadline returns within deadline + small margin",
+               elapsed < 4.0, f"took {elapsed:.2f}s (deadline was 2s)") and
+        _check("returns a result dict (not exception)",
+               isinstance(result, dict))
+    )
+
+
 def main():
     tests = [
         test_429_not_retried,
@@ -196,6 +256,7 @@ def main():
         test_double_429_latency_bounded,
         test_502_503_504_500_all_retried,
         test_408_not_retried_post_fix,
+        test_brave_pool_deadline_bails_on_stuck_query,
     ]
     results = []
     for t in tests:

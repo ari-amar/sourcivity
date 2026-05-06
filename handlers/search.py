@@ -15,6 +15,13 @@ from services import llm, scraper, brave
 _searches = {}
 _searches_lock = threading.Lock()
 _MAX_AGE = 300  # clean up entries older than 5 minutes
+
+# Hard wall-clock cap on the synchronous Brave fan-out. Per-query ceiling in
+# services.brave is ~20.25s (15s + 0.25s sleep + 5s retry). This deadline only
+# fires if a query stalls in a way urlopen's timeout doesn't catch (DNS hang,
+# socket-level oddity). Keeping this < iOS Safari's fetch tolerance prevents
+# the synchronous response from disappearing under the user.
+_BRAVE_POOL_DEADLINE = 22
 _US_STATE_ABBRS = {
     'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
     'KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
@@ -207,20 +214,34 @@ def handle(query, skip_enrichment=False, region='north_america'):
         all_infobox = []
         seen_urls = set()
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+        # Manually manage the pool lifetime: the `with` form would re-block on
+        # __exit__ via shutdown(wait=True), defeating the deadline below.
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=3)
+        timed_out = False
+        try:
             futures = [pool.submit(brave.search, q, 10, region) for q in _build_queries(query, region)]
-            for f in concurrent.futures.as_completed(futures):
-                try:
-                    results, faq, infobox = f.result()
-                    for r in results:
-                        if r["url"] not in seen_urls:
-                            seen_urls.add(r["url"])
-                            all_results.append(r)
-                    all_faq.extend(faq)
-                    if infobox and infobox not in all_infobox:
-                        all_infobox.append(infobox)
-                except Exception:
-                    pass
+            try:
+                for f in concurrent.futures.as_completed(futures, timeout=_BRAVE_POOL_DEADLINE):
+                    try:
+                        results, faq, infobox = f.result()
+                        for r in results:
+                            if r["url"] not in seen_urls:
+                                seen_urls.add(r["url"])
+                                all_results.append(r)
+                        all_faq.extend(faq)
+                        if infobox and infobox not in all_infobox:
+                            all_infobox.append(infobox)
+                    except Exception:
+                        pass
+            except concurrent.futures.TimeoutError:
+                # One or more queries blew past the per-query 20s ceiling — proceed
+                # with whatever finished. Stragglers keep running until their own
+                # urlopen timeout fires; the executor's worker threads are daemon
+                # so they don't block process exit.
+                timed_out = True
+                print(f"[search] Brave pool exceeded {_BRAVE_POOL_DEADLINE}s — proceeding with partial results")
+        finally:
+            pool.shutdown(wait=not timed_out)
 
         # Filter out aggregator sites
         AGGREGATORS_ALWAYS = ('amazon.com', 'ebay.com', 'aliexpress.com', 'dhgate.com',
