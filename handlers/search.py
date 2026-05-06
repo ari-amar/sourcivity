@@ -9,7 +9,11 @@ from services import llm, scraper, brave
 
 # In-memory store for background enrichment results
 # { search_id: { "suppliers": [...], "status": "enriching"|"done", "blocked": [], "ts": time } }
+# Guarded by _searches_lock — background threads write while the request thread
+# may iterate during cleanup. CPython's per-op atomicity isn't enough for the
+# iterate-and-delete pattern in _cleanup_old_searches.
 _searches = {}
+_searches_lock = threading.Lock()
 _MAX_AGE = 300  # clean up entries older than 5 minutes
 _US_STATE_ABBRS = {
     'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
@@ -149,12 +153,24 @@ _TLD_COUNTRY_MAP = [
 
 
 def _country_from_tld(website):
-    """Return the country implied by the website's TLD, or None for generic TLDs (.com etc.)."""
+    """Return the country implied by the website's TLD, or None for generic TLDs (.com etc.).
+
+    Extracts the host (strips scheme, path, query, port, userinfo) before matching
+    so URLs like 'https://example.co.in/about-us' match correctly.
+    """
     if not website:
         return None
-    url = website.lower().rstrip('/').split('?')[0]
+    host = website.lower().strip()
+    if '://' in host:
+        host = host.split('://', 1)[1]
+    host = host.split('/', 1)[0].split('?', 1)[0].split('#', 1)[0]
+    if '@' in host:
+        host = host.split('@', 1)[1]
+    host = host.split(':', 1)[0].rstrip('.')
+    if not host:
+        return None
     for tld, country in _TLD_COUNTRY_MAP:
-        if url.endswith(tld):
+        if host.endswith(tld):
             return country
     return None
 
@@ -357,6 +373,10 @@ STRICT RULES:
         if not suppliers:
             return {"suppliers": [], "error": "No suppliers found. Try a different search term."}
 
+        # Dedup by normalized name — LLMs occasionally repeat the same company
+        # twice (different casing, trailing "Inc.", etc). Keep the first occurrence.
+        suppliers = _dedup_suppliers(suppliers)
+
         # Hard filter: in NA mode, drop any non-US suppliers the LLM returned
         if region == 'north_america':
             suppliers = [s for s in suppliers if _is_us_supplier(s)]
@@ -458,7 +478,8 @@ STRICT RULES:
         for s in suppliers:
             if not s.get("email"):
                 s["_enriching"] = True
-        _searches[search_id] = {"suppliers": list(suppliers), "status": "enriching", "blocked": [], "query": query, "region": region, "ts": time.time()}
+        with _searches_lock:
+            _searches[search_id] = {"suppliers": list(suppliers), "status": "enriching", "blocked": [], "query": query, "region": region, "ts": time.time()}
 
         thread = threading.Thread(target=_background_enrich, args=(search_id, suppliers, skip_enrichment), daemon=True)
         thread.start()
@@ -550,11 +571,13 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
       Render 4 (~5-15s):   location/certs/emails trickle in per-supplier as each finishes
     """
     try:
-        query = _searches.get(search_id, {}).get("query", "")
+        with _searches_lock:
+            query = _searches.get(search_id, {}).get("query", "")
 
         # Phase 1: Reputation enrichment — fills years, employees, revenue, certs gaps (~3-5s)
         suppliers = _enrich_reputation(suppliers)
-        _searches[search_id] = {"suppliers": list(suppliers), "status": "enriching", "blocked": [], "query": query, "ts": time.time()}
+        with _searches_lock:
+            _searches[search_id] = {"suppliers": list(suppliers), "status": "enriching", "blocked": [], "query": query, "ts": time.time()}
 
         # Phase 2: Match reasons + website scraping in parallel
         if not skip_emails:
@@ -565,13 +588,14 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
             """Called as each supplier finishes website scraping — publish immediately."""
             enriched_supplier.pop("_enriching", None)
             current_suppliers[idx] = enriched_supplier
-            _searches[search_id] = {
-                "suppliers": list(current_suppliers),
-                "status": "enriching",
-                "blocked": [] if skip_emails else scraper.get_blocked_sites(),
-                "query": query,
-                "ts": time.time(),
-            }
+            with _searches_lock:
+                _searches[search_id] = {
+                    "suppliers": list(current_suppliers),
+                    "status": "enriching",
+                    "blocked": [] if skip_emails else scraper.get_blocked_sites(),
+                    "query": query,
+                    "ts": time.time(),
+                }
 
         def _do_match_reasons():
             return _regenerate_match_reasons(list(suppliers), query)
@@ -615,7 +639,8 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                 if has_new_certs:
                     enriched = _regenerate_match_reasons(enriched, query)
 
-                _searches[search_id] = {"suppliers": enriched, "status": "done", "blocked": blocked, "query": query, "ts": time.time()}
+                with _searches_lock:
+                    _searches[search_id] = {"suppliers": enriched, "status": "done", "blocked": blocked, "query": query, "ts": time.time()}
             except Exception as e:
                 print(f"[search] Website scraping error: {e}")
                 for s in current_suppliers:
@@ -623,30 +648,35 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                     reason = reason_map.get(s.get("name"))
                     if reason:
                         s["matchReason"] = reason
-                _searches[search_id] = {"suppliers": current_suppliers, "status": "done", "blocked": [], "query": query, "ts": time.time()}
+                with _searches_lock:
+                    _searches[search_id] = {"suppliers": current_suppliers, "status": "done", "blocked": [], "query": query, "ts": time.time()}
 
     except Exception as e:
         for s in suppliers:
             s.pop("_enriching", None)
-        query = _searches.get(search_id, {}).get("query", "")
-        _searches[search_id] = {"suppliers": suppliers, "status": "done", "blocked": [], "query": query, "ts": time.time()}
+        with _searches_lock:
+            query = _searches.get(search_id, {}).get("query", "")
+            _searches[search_id] = {"suppliers": suppliers, "status": "done", "blocked": [], "query": query, "ts": time.time()}
         print(f"[search] Background enrichment error: {e}")
 
 
 def get_status(search_id):
     """Get current status of a background search enrichment."""
-    entry = _searches.get(search_id)
-    if not entry:
-        return {"error": "Search not found", "status": "done", "suppliers": []}
-    return {"suppliers": entry["suppliers"], "status": entry["status"], "blocked": entry.get("blocked", [])}
+    with _searches_lock:
+        entry = _searches.get(search_id)
+        if not entry:
+            return {"error": "Search not found", "status": "done", "suppliers": []}
+        # Snapshot under the lock so the caller iterates a stable list.
+        return {"suppliers": list(entry["suppliers"]), "status": entry["status"], "blocked": list(entry.get("blocked", []))}
 
 
 def _cleanup_old_searches():
     """Remove search entries older than 5 minutes."""
     now = time.time()
-    expired = [sid for sid, data in _searches.items() if now - data.get("ts", 0) > _MAX_AGE]
-    for sid in expired:
-        del _searches[sid]
+    with _searches_lock:
+        expired = [sid for sid, data in _searches.items() if now - data.get("ts", 0) > _MAX_AGE]
+        for sid in expired:
+            del _searches[sid]
 
 
 def _enrich_reputation(suppliers):
@@ -737,22 +767,130 @@ def _enrich_reputation(suppliers):
     return suppliers
 
 
+_NAME_NORMALIZE_RE = re.compile(r'[^a-z0-9]+')
+_NAME_SUFFIXES = (' inc', ' incorporated', ' llc', ' ltd', ' limited', ' corp',
+                  ' corporation', ' co', ' company', ' gmbh', ' ag', ' sa', ' bv')
+
+
+def _normalize_name(name):
+    """Lowercase + strip punctuation + drop common corp suffixes for dedup matching."""
+    n = _NAME_NORMALIZE_RE.sub(' ', (name or '').lower()).strip()
+    for suffix in _NAME_SUFFIXES:
+        if n.endswith(suffix):
+            n = n[: -len(suffix)].strip()
+            break
+    return n
+
+
+def _dedup_suppliers(suppliers):
+    """Drop duplicate suppliers (case-insensitive, ignoring corp suffixes).
+    Keeps the first occurrence — typically the one with richer fields."""
+    seen = set()
+    out = []
+    for s in suppliers:
+        key = _normalize_name(s.get('name', ''))
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(s)
+    return out
+
+
+def _coerce_to_list(result):
+    """Accept a single object or a list — LLM occasionally returns a bare dict."""
+    if isinstance(result, list):
+        return result
+    if isinstance(result, dict):
+        return [result]
+    return []
+
+
+def _recover_truncated_array(text, start):
+    """Salvage complete objects from an unterminated JSON array.
+
+    Walk forward from `start` (an opening '['), collect each top-level '{...}'
+    object as it closes, and return the list. Survives the common failure where
+    max_tokens cuts the response mid-object: prior complete objects are still
+    valid JSON.
+    """
+    objects = []
+    n = len(text)
+    i = start + 1
+    while i < n:
+        ch = text[i]
+        if ch.isspace() or ch == ',':
+            i += 1
+            continue
+        if ch == ']':
+            break
+        if ch != '{':
+            i += 1
+            continue
+        # Walk this object, tracking nesting + string state to find the matching '}'
+        depth = 0
+        in_string = False
+        escape = False
+        obj_start = i
+        while i < n:
+            c = text[i]
+            if in_string:
+                if escape:
+                    escape = False
+                elif c == '\\':
+                    escape = True
+                elif c == '"':
+                    in_string = False
+            else:
+                if c == '"':
+                    in_string = True
+                elif c == '{':
+                    depth += 1
+                elif c == '}':
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            objects.append(json.loads(text[obj_start:i + 1]))
+                        except json.JSONDecodeError:
+                            pass
+                        i += 1
+                        break
+            i += 1
+        else:
+            # Unterminated object — done with this array
+            break
+    return objects
+
+
 def _parse_suppliers(text):
-    """Parse supplier JSON from LLM response."""
+    """Parse supplier JSON from LLM response.
+
+    Forgiving in three ways:
+      1. Accepts ```json fences, ``` fences, or bare JSON.
+      2. Accepts a single object instead of an array (wraps it).
+      3. Recovers complete objects from a truncated array (max_tokens hit
+         mid-response) — common failure mode under tight token budgets.
+    """
     if not text:
         return []
 
-    # Try ```json fences first
-    fence = re.search(r'```json\s*([\s\S]*?)```', text)
-    if fence:
+    # Try fenced blocks first — both ```json and bare ```
+    for fence in re.finditer(r'```(?:json)?\s*([\s\S]*?)```', text):
+        body = fence.group(1).strip()
+        if not body:
+            continue
         try:
-            result = json.loads(fence.group(1).strip())
-            if isinstance(result, list) and result:
+            result = _coerce_to_list(json.loads(body))
+            if result:
                 return result
         except json.JSONDecodeError:
-            pass
+            # Try recovery if this fence contains a partial array
+            arr_start = body.find('[')
+            if arr_start != -1:
+                recovered = _recover_truncated_array(body, arr_start)
+                if recovered:
+                    return recovered
 
-    # Try to find the outermost JSON array by bracket matching
+    # Fall back to scanning the raw text for the outermost array
     start = text.find('[')
     if start != -1:
         depth = 0
@@ -763,11 +901,23 @@ def _parse_suppliers(text):
                 depth -= 1
                 if depth == 0:
                     try:
-                        result = json.loads(text[start:i+1])
-                        if isinstance(result, list) and result:
+                        result = _coerce_to_list(json.loads(text[start:i + 1]))
+                        if result:
                             return result
                     except json.JSONDecodeError:
                         pass
                     break
+        # No closing ']' — array was truncated. Recover what we can.
+        recovered = _recover_truncated_array(text, start)
+        if recovered:
+            return recovered
+
+    # Last resort: a bare object outside any fence
+    obj_start = text.find('{')
+    if obj_start != -1:
+        try:
+            return _coerce_to_list(json.loads(text[obj_start:]))
+        except json.JSONDecodeError:
+            pass
 
     return []
