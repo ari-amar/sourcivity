@@ -14,8 +14,13 @@ def _strip_html(text):
 
 
 # Retry transient failures only (network, timeout, 5xx). 4xx is not retried —
-# auth/quota/rate-limit problems won't resolve in 250ms.
-_TRANSIENT_HTTP_CODES = {500, 502, 503, 504, 408, 429}
+# auth/quota/rate-limit problems won't resolve in 250ms. 429 in particular
+# almost always recurs on the second attempt, so retrying just doubles latency.
+_TRANSIENT_HTTP_CODES = {500, 502, 503, 504}
+
+# Second attempt uses a tighter timeout so a hung connection can't double
+# total wall-clock time (the slowest of 3 parallel queries determines latency).
+_RETRY_TIMEOUT = 5
 
 
 def _fetch(url, headers, timeout, attempt):
@@ -54,7 +59,8 @@ def search(query, count=10, region='north_america'):
 
     raw = None
     for attempt in (1, 2):
-        raw, err = _fetch(url, headers, timeout=15, attempt=attempt)
+        timeout = 15 if attempt == 1 else _RETRY_TIMEOUT
+        raw, err = _fetch(url, headers, timeout=timeout, attempt=attempt)
         if raw is not None:
             break
         if err is False:
