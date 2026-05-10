@@ -331,6 +331,9 @@ def _sanitize_match_reason(supplier):
     if supplier.get("certifications") and re.search(r"(?i)\bno relevant certifications listed\b", reason):
         reason = re.sub(r"(?i)\bno relevant certifications listed,?\s*", "", reason)
 
+    reason = re.sub(r"(?i)\bunknown certification(?:s)?\b,?\s*", "", reason)
+    reason = re.sub(r"(?i)\bcertification(?:s)? unknown\b,?\s*", "", reason)
+
     reason = re.sub(r"\s+", " ", reason).strip(" ,;.-")
     if len(reason) < 25:
         reason = _fallback_match_reason(supplier)
