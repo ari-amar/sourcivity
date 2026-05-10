@@ -276,11 +276,15 @@ function pollForUpdates(searchId) {
     try {
       const res = await fetch(API_URL + '/api/search/status?id=' + searchId);
       const data = await res.json();
-      if (data.suppliers && data.suppliers.length > 0) {
-        searchResults = data.suppliers;
+      const suppliers = Array.isArray(data.suppliers) ? data.suppliers : null;
+      const isDone = data.status === 'done';
+      // Demo enrichment has no email payoff, so render only the stable result.
+      const shouldRender = suppliers && (!DEMO_MODE || isDone);
+      if (shouldRender) {
+        searchResults = suppliers;
         renderSearchResults(searchResults);
       }
-      if (data.status === 'done') {
+      if (isDone) {
         clearInterval(_pollInterval);
         _pollInterval = null;
       }
