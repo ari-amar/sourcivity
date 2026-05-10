@@ -6,10 +6,60 @@ from dotenv import load_dotenv
 env_file = os.environ.get("ENV_FILE", os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 load_dotenv(env_file, override=True)
 
-# --- LLM (Cerebras — OpenAI-compatible) ---
-CEREBRAS_API_KEY = os.environ["CEREBRAS_API_KEY"]
-CEREBRAS_BASE_URL = os.environ.get("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1")
-LLM_MODEL = os.environ.get("LLM_MODEL", "qwen-3-235b-a22b-instruct-2507")
+# --- LLM ---
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+CEREBRAS_API_KEY = os.environ.get("CEREBRAS_API_KEY", "")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "").strip().lower()
+if not LLM_PROVIDER:
+    if ANTHROPIC_API_KEY:
+        LLM_PROVIDER = "anthropic"
+    elif OPENAI_API_KEY:
+        LLM_PROVIDER = "openai"
+    else:
+        LLM_PROVIDER = "cerebras"
+
+_LLM_DEFAULTS = {
+    "anthropic": {
+        "api_key": ANTHROPIC_API_KEY,
+        "base_url": os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
+        "model": "claude-haiku-4-5",
+        "fallback_model": "",
+        "token_param": "max_tokens",
+    },
+    "openai": {
+        "api_key": OPENAI_API_KEY,
+        "base_url": os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        "model": "gpt-5-mini",
+        "fallback_model": "gpt-5-nano",
+        "token_param": "max_completion_tokens",
+    },
+    "cerebras": {
+        "api_key": CEREBRAS_API_KEY,
+        "base_url": os.environ.get("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1"),
+        "model": "qwen-3-235b-a22b-instruct-2507",
+        "fallback_model": "llama3.1-8b",
+        "token_param": "max_tokens",
+    },
+}
+if LLM_PROVIDER not in _LLM_DEFAULTS:
+    raise RuntimeError(f"Unsupported LLM_PROVIDER: {LLM_PROVIDER}")
+_llm_defaults = _LLM_DEFAULTS[LLM_PROVIDER]
+
+LLM_API_KEY = os.environ.get("LLM_API_KEY") or _llm_defaults["api_key"]
+if not LLM_API_KEY:
+    raise RuntimeError(
+        "Missing LLM API key. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or LLM_API_KEY plus LLM_BASE_URL."
+    )
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL") or _llm_defaults["base_url"]
+LLM_MODEL = os.environ.get("LLM_MODEL") or _llm_defaults["model"]
+_fallback_model = os.environ.get("LLM_FALLBACK_MODEL")
+LLM_FALLBACK_MODEL = _llm_defaults["fallback_model"] if _fallback_model is None else _fallback_model.strip()
+LLM_TOKEN_PARAM = os.environ.get("LLM_TOKEN_PARAM") or _llm_defaults["token_param"]
+LLM_TIMEOUT = float(os.environ.get("LLM_TIMEOUT", "30"))
+LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "0"))
+LLM_PRIMARY_COOLDOWN_SECONDS = int(os.environ.get("LLM_PRIMARY_COOLDOWN_SECONDS", "300"))
 
 # --- Paths ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

@@ -1,52 +1,110 @@
-"""Cerebras LLM wrapper (OpenAI-compatible API) with automatic fallback."""
+"""LLM wrapper with Anthropic and OpenAI-compatible provider support."""
 import json
+import time
+import urllib.error
+import urllib.request
 from openai import OpenAI
-from config import CEREBRAS_API_KEY, CEREBRAS_BASE_URL, LLM_MODEL
-
-FALLBACK_MODEL = "llama3.1-8b"
+from config import (
+    LLM_API_KEY,
+    LLM_BASE_URL,
+    LLM_FALLBACK_MODEL,
+    LLM_MAX_RETRIES,
+    LLM_MODEL,
+    LLM_PRIMARY_COOLDOWN_SECONDS,
+    LLM_PROVIDER,
+    LLM_TIMEOUT,
+    LLM_TOKEN_PARAM,
+)
 
 _client = None
+_primary_fallback_until = 0
 
 
 def _get_client():
     global _client
+    if LLM_PROVIDER == "anthropic":
+        return None
     if _client is None:
-        _client = OpenAI(base_url=CEREBRAS_BASE_URL, api_key=CEREBRAS_API_KEY, timeout=30)
+        _client = OpenAI(
+            base_url=LLM_BASE_URL,
+            api_key=LLM_API_KEY,
+            timeout=LLM_TIMEOUT,
+            max_retries=LLM_MAX_RETRIES,
+        )
     return _client
 
 
-def call_llm(system, message, model=None, max_tokens=4096):
-    """Call Cerebras API with automatic fallback to smaller model on errors."""
-    client = _get_client()
-    model = model or LLM_MODEL
+def _openai_compatible_completion(client, model, system, message, max_tokens):
+    params = {
+        "model": model,
+        LLM_TOKEN_PARAM: max_tokens,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": message},
+        ],
+    }
+    response = client.chat.completions.create(**params)
+    return response.choices[0].message.content or ""
+
+
+def _anthropic_completion(model, system, message, max_tokens):
+    body = json.dumps({
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": system,
+        "messages": [{"role": "user", "content": message}],
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        LLM_BASE_URL.rstrip("/") + "/v1/messages",
+        data=body,
+        headers={
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+            "x-api-key": LLM_API_KEY,
+        },
+        method="POST",
+    )
     try:
-        response = client.chat.completions.create(
-            model=model,
-            max_tokens=max_tokens,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": message},
-            ],
-        )
-        return response.choices[0].message.content or ""
+        with urllib.request.urlopen(req, timeout=LLM_TIMEOUT) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(f"Anthropic API HTTP {e.code}: {detail[:300]}") from e
+
+    return "".join(
+        block.get("text", "")
+        for block in data.get("content", [])
+        if block.get("type") == "text"
+    )
+
+
+def _call_model(client, model, system, message, max_tokens):
+    if LLM_PROVIDER == "anthropic":
+        return _anthropic_completion(model, system, message, max_tokens)
+    return _openai_compatible_completion(client, model, system, message, max_tokens)
+
+
+def call_llm(system, message, model=None, max_tokens=4096):
+    """Call the configured LLM provider with optional fallback on retriable errors."""
+    global _primary_fallback_until
+    client = _get_client()
+    requested_model = model or LLM_MODEL
+    model = requested_model
+    if LLM_FALLBACK_MODEL and requested_model != LLM_FALLBACK_MODEL and time.time() < _primary_fallback_until:
+        model = LLM_FALLBACK_MODEL
+    try:
+        return _call_model(client, model, system, message, max_tokens)
     except Exception as e:
         err = str(e)
         # Retry with fallback on quota, rate limit, context length, or server errors
         retriable = ("429" in err or "quota" in err.lower() or "too_many" in err.lower()
                      or "context_length" in err.lower() or "8192" in err
                      or "500" in err or "502" in err or "503" in err)
-        if retriable and model != FALLBACK_MODEL:
-            print(f"[llm] {model} error ({err[:80]}), falling back to {FALLBACK_MODEL}")
+        if retriable and LLM_FALLBACK_MODEL and model != LLM_FALLBACK_MODEL:
+            _primary_fallback_until = time.time() + LLM_PRIMARY_COOLDOWN_SECONDS
+            print(f"[llm] {LLM_PROVIDER}:{model} error ({err[:80]}), falling back to {LLM_FALLBACK_MODEL}")
             try:
-                response = client.chat.completions.create(
-                    model=FALLBACK_MODEL,
-                    max_tokens=max_tokens,
-                    messages=[
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": message},
-                    ],
-                )
-                return response.choices[0].message.content or ""
+                return _call_model(client, LLM_FALLBACK_MODEL, system, message, max_tokens)
             except Exception as e2:
                 print(f"[llm] Fallback also failed: {e2}")
                 return ""
