@@ -394,24 +394,6 @@ function computeCardSections(s, i) {
 
   const productsHtml = esc(s.products || '—');
   const matchHtml = esc(s.matchReason || '—');
-  const primarySource = (Array.isArray(s.sourceEvidence) && s.sourceEvidence[0])
-    ? s.sourceEvidence[0]
-    : (s.sourceUrl ? { url: s.sourceUrl, title: s.sourceTitle || s.sourceUrl, rank: s.sourceRank } : null);
-  let sourceHtml = '—';
-  if (primarySource && primarySource.url) {
-    const relationship = s.sourceRelationship === 'catalog_or_distributor_source'
-      ? 'catalog/distributor'
-      : 'direct';
-    const rank = primarySource.rank ? 'Rank ' + esc(String(primarySource.rank)) : 'Source';
-    sourceHtml =
-      '<a href="' + ensureHttp(esc(primarySource.url)) + '" target="_blank" rel="noopener noreferrer">' +
-        esc(primarySource.title || primarySource.url) +
-      '</a>' +
-      '<span class="source-meta"> · ' + rank + ' · ' + relationship + '</span>';
-  }
-  if (Array.isArray(s.validationWarnings) && s.validationWarnings.length) {
-    sourceHtml += '<div class="source-warning">' + esc(s.validationWarnings[0]) + '</div>';
-  }
   const indexHtml = '#' + (i + 1);
 
   const inCart = rfqCart.some(c => c.name === s.name);
@@ -437,7 +419,7 @@ function computeCardSections(s, i) {
     ? '<span class="finding-email"><span class="dot-pulse"></span>Finding email…</span>'
     : '';
 
-  return { titleHtml, tagRowHtml, productsHtml, certsHtml, repHtml, matchHtml, sourceHtml, actionHtml, footerLeftHtml, indexHtml };
+  return { titleHtml, tagRowHtml, productsHtml, certsHtml, repHtml, matchHtml, actionHtml, footerLeftHtml, indexHtml };
 }
 
 function buildCardHTML(p) {
@@ -466,10 +448,6 @@ function buildCardHTML(p) {
         '<div class="card-spec-label">Match</div>' +
         '<div class="card-spec-value" data-role="match">' + p.matchHtml + '</div>' +
       '</div>' +
-      '<div class="card-spec full-width">' +
-        '<div class="card-spec-label">Source</div>' +
-        '<div class="card-spec-value" data-role="source">' + p.sourceHtml + '</div>' +
-      '</div>' +
     '</div>' +
     '<div class="card-footer">' +
       '<div class="card-footer-meta" data-role="footer-meta">' + p.footerLeftHtml + '</div>' +
@@ -479,11 +457,11 @@ function buildCardHTML(p) {
 }
 
 function patchCardInPlace(card, p) {
-  const roles = ['index','title','tag-row','products','certs','rep','match','source','action','footer-meta'];
+  const roles = ['index','title','tag-row','products','certs','rep','match','action','footer-meta'];
   const values = {
     'index': p.indexHtml, 'title': p.titleHtml, 'tag-row': p.tagRowHtml,
     'products': p.productsHtml, 'certs': p.certsHtml, 'rep': p.repHtml,
-    'match': p.matchHtml, 'source': p.sourceHtml, 'action': p.actionHtml, 'footer-meta': p.footerLeftHtml,
+    'match': p.matchHtml, 'action': p.actionHtml, 'footer-meta': p.footerLeftHtml,
   };
   for (const role of roles) {
     const el = card.querySelector('[data-role="' + role + '"]');
