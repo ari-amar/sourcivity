@@ -32,16 +32,16 @@ def search(query, count=10, region='north_america'):
             raw = resp.read()
     except urllib.error.HTTPError as e:
         print(f"[brave] HTTP {e.code} from Brave API")
-        return [], [], None
+        raise RuntimeError(f"Brave API HTTP {e.code}") from e
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         print(f"[brave] Network error: {e}")
-        return [], [], None
+        raise RuntimeError(f"Brave API network error: {e}") from e
 
     try:
         data = json.loads(raw)
     except (json.JSONDecodeError, ValueError):
         print("[brave] Malformed JSON response from Brave API")
-        return [], [], None
+        raise RuntimeError("Brave API malformed JSON response")
 
     # Web results with extra data
     results = []

@@ -45,8 +45,9 @@ def get_blocked_sites():
     return list(_blocked_sites)
 
 
-def _fetch_page(url, timeout=8):
+def _fetch_page(url, timeout=8, blocked_sites=None):
     """Fetch a URL and return its HTML text. Returns '' on failure."""
+    blocked_sites = _blocked_sites if blocked_sites is None else blocked_sites
     try:
         if not url.startswith('http'):
             url = 'https://' + url
@@ -58,12 +59,12 @@ def _fetch_page(url, timeout=8):
         with resp_ctx as resp:
             html = resp.read(500_000).decode('utf-8', errors='ignore')
             if 'cf-mitigated' in str(resp.headers) or 'Just a moment...' in html[:500]:
-                _blocked_sites.append(url)
+                blocked_sites.append(url)
                 return ''
             return html
     except urllib.error.HTTPError as e:
         if e.code == 403:
-            _blocked_sites.append(url)
+            blocked_sites.append(url)
         return ''
     except Exception:
         return ''
@@ -294,6 +295,18 @@ US_STATES = {
     'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY',
 }
 US_STATE_ABBRS = set(US_STATES.values())
+NON_US_COLLISION_CODES = {
+    'IN': 'India',
+    'CA': 'Canada',
+    'DE': 'Germany',
+    'IL': 'Israel',
+    'CO': 'Colombia',
+    'AR': 'Argentina',
+    'AL': 'Albania',
+    'GA': 'Gabon',
+    'ID': 'Indonesia',
+    'ME': 'Montenegro',
+}
 
 NON_US_INDICATORS = {
     # UK
@@ -431,7 +444,34 @@ CERT_PATTERNS = re.compile(
     re.IGNORECASE
 )
 
-def _extract_certifications(html):
+_SUPPLIER_LEVEL_CERT_PREFIXES = (
+    'ISO', 'AS9100', 'AS 9100', 'ITAR', 'NADCAP', 'NIST ', 'SOC ', 'CMMC', 'CWB', 'AWS D'
+)
+_CONTEXT_MARKERS = (
+    'certified', 'certification', 'certificate', 'certifications', 'registered',
+    'registration', 'accredited', 'accreditation', 'quality management',
+    'management system', 'approved supplier'
+)
+
+
+def _is_supplier_level_cert(cert):
+    normalized = re.sub(r'\s+', ' ', cert.strip().upper())
+    if normalized.startswith(_SUPPLIER_LEVEL_CERT_PREFIXES):
+        return True
+    return any(marker.upper() in normalized for marker in _CONTEXT_MARKERS)
+
+
+def _has_cert_context(text, start, end):
+    window = text[max(0, start - 90):min(len(text), end + 90)].lower()
+    return any(marker in window for marker in _CONTEXT_MARKERS)
+
+
+def _filter_unverified_certifications(certs):
+    """Keep certs likely to be supplier-level when there is no source context."""
+    return [c for c in certs if _is_supplier_level_cert(c)]
+
+
+def _extract_certifications(html, require_context=False):
     """Extract quality certifications from HTML. Returns list of unique cert strings or empty list."""
     if not html:
         return []
@@ -441,7 +481,12 @@ def _extract_certifications(html):
     # Strip HTML tags for the main body text
     body_text = re.sub(r'<[^>]+>', ' ', html)
     text = attr_text + ' ' + body_text
-    matches = CERT_PATTERNS.findall(text)
+    matches = []
+    for match in CERT_PATTERNS.finditer(text):
+        cert = match.group(0)
+        if require_context and not _is_supplier_level_cert(cert) and not _has_cert_context(text, match.start(), match.end()):
+            continue
+        matches.append(cert)
     if not matches:
         return []
     # Normalize to uppercase and dedupe
@@ -466,7 +511,13 @@ def _extract_certifications(html):
         else:
             filtered.append(cert)
 
-    return filtered[:8]  # Cap at 8 certs
+    deduped = []
+    for cert in filtered:
+        if any(other != cert and other.startswith(cert + ':') for other in filtered):
+            continue
+        deduped.append(cert)
+
+    return deduped[:8]  # Cap at 8 certs
 
 
 def _extract_location(html):
@@ -485,29 +536,51 @@ def _extract_location(html):
     text = re.sub(r'<[^>]+>', ' ', html).lower()
 
     us_state_found = None
+    non_us_country = None
+    for indicator, country_code in NON_US_INDICATORS.items():
+        if indicator in text:
+            non_us_country = NON_US_COLLISION_CODES.get(country_code, country_code)
+            break
+
+    def _is_non_us_collision(code):
+        return bool(non_us_country and NON_US_COLLISION_CODES.get(code) == non_us_country)
 
     # Pattern 1: Schema.org / JSON-LD addressRegion — most authoritative
     region_match = re.search(r'"addressRegion"\s*:\s*"([A-Z]{2})"', html)
-    if region_match and region_match.group(1) in US_STATE_ABBRS:
-        us_state_found = region_match.group(1)
+    if region_match:
+        code = region_match.group(1)
+        if code in US_STATE_ABBRS and not _is_non_us_collision(code):
+            us_state_found = code
 
     # Pattern 2: "headquartered/located/based in ..., ST"
     if not us_state_found:
         meta_match = re.search(r'(?:headquartered|located|based)\s+in\s+[\w\s]+,\s*([A-Z]{2})\b', html)
-        if meta_match and meta_match.group(1) in US_STATE_ABBRS:
-            us_state_found = meta_match.group(1)
+        if meta_match:
+            code = meta_match.group(1)
+            if code in US_STATE_ABBRS and not _is_non_us_collision(code):
+                us_state_found = code
 
     # Pattern 3: ", ST ZIP[-4]" — address-formatted (comma anchors the state)
     if not us_state_found:
-        zip_match = re.search(r',\s*([A-Z]{2})\s+\d{5}(?:-\d{4})?', html)
-        if zip_match and zip_match.group(1) in US_STATE_ABBRS:
-            us_state_found = zip_match.group(1)
+        zip_match = re.search(r',\s*([A-Z]{2})\s+\d{5}(?:-\d{4})?(?!\d)', html)
+        if zip_match:
+            code = zip_match.group(1)
+            if code in US_STATE_ABBRS and not _is_non_us_collision(code):
+                us_state_found = code
 
     # Pattern 4: "ST United States" / "ST, USA" — state anchored to country name
     if not us_state_found:
         addr_match = re.search(r'([A-Z]{2})\s*,?\s*(?:United States|USA|U\.S\.A\.)', html)
-        if addr_match and addr_match.group(1) in US_STATE_ABBRS:
-            us_state_found = addr_match.group(1)
+        if addr_match:
+            code = addr_match.group(1)
+            if code in US_STATE_ABBRS and not _is_non_us_collision(code):
+                us_state_found = code
+
+    # Check non-US indicators before loose full-state matching. This prevents
+    # India/Canada/etc. pages from being misclassified because they mention a US
+    # state name in navigation, distributor text, examples, or customer lists.
+    if non_us_country:
+        return non_us_country
 
     # Pattern 5: Full state name anywhere in page text — last resort, low precision
     if not us_state_found:
@@ -520,15 +593,43 @@ def _extract_location(html):
     if us_state_found:
         return us_state_found
 
-    # --- No US state found, check for non-US country ---
-    for indicator, country_code in NON_US_INDICATORS.items():
-        if indicator in text:
-            return country_code
-
     return None
 
 
-def _enrich_single(supplier, skip_email=False):
+def _has_strong_non_us_location(html, country_value):
+    """Return True when a non-US country appears in address/headquarters context."""
+    if not html or not country_value:
+        return False
+    text = re.sub(r'<[^>]+>', ' ', html).lower()
+    country_code = None
+    country_name = str(country_value).lower()
+    for code, name in NON_US_COLLISION_CODES.items():
+        if name.lower() == country_name:
+            country_code = code
+            break
+    indicators = [
+        indicator for indicator, code in NON_US_INDICATORS.items()
+        if code == country_value or code == country_code or indicator == country_name
+    ]
+    if not indicators:
+        indicators = [country_name]
+
+    address_cue = (
+        r'headquarter|head office|registered office|located|based|address|factory|'
+        r'plant|warehouse|manufactur|unit|road|street|avenue|postal|pincode|pin code'
+    )
+    for indicator in indicators:
+        if len(indicator.strip()) < 3:
+            continue
+        escaped = re.escape(indicator.strip())
+        if re.search(rf'(?:{address_cue})[^.{{}}]{{0,140}}\b{escaped}\b', text):
+            return True
+        if re.search(rf'\b{escaped}\b[^.{{}}]{{0,140}}(?:{address_cue})', text):
+            return True
+    return False
+
+
+def _enrich_single(supplier, skip_email=False, blocked_sites=None):
     """Enrich a single supplier with location, certs, contactUrl, and optionally email.
 
     skip_email=True: skips all email extraction (demo mode) — everything else identical.
@@ -544,8 +645,11 @@ def _enrich_single(supplier, skip_email=False):
     existing_contact = supplier.get('contactUrl', '').strip()
     has_contact = bool(existing_contact.startswith('http')) if existing_contact else False
 
-    needs_location = supplier.get('state', '') in ('', 'US', 'USA')
-    needs_certs = supplier.get('certifications', 'N/A') in ('N/A', '', None)
+    existing_certs = (supplier.get('certifications') or '').strip()
+    initial_state = (supplier.get('state') or '').strip().upper()
+    needs_location = True
+    needs_certs = True
+    location_verified = False
 
     # Early exit: nothing left to fetch
     email_done = skip_email or has_email
@@ -562,7 +666,7 @@ def _enrich_single(supplier, skip_email=False):
 
     def _check_html(html):
         """Extract contactUrl, location, certs, and (if not skip_email) email from HTML."""
-        nonlocal all_certs
+        nonlocal all_certs, location_verified
         if not html:
             return
         if not skip_email and not _has_valid_email():
@@ -573,20 +677,26 @@ def _enrich_single(supplier, skip_email=False):
             contact = _extract_contact_url(html, base_url)
             if contact:
                 supplier['contactUrl'] = contact
-        if needs_location and supplier.get('state', '') in ('', 'US', 'USA'):
+        if needs_location:
             loc = _extract_location(html)
-            if loc and loc not in US_STATE_ABBRS:
-                supplier['state'] = loc
-                supplier['_non_us'] = True
-            elif loc:
-                supplier['state'] = loc
+            if loc:
+                if loc not in US_STATE_ABBRS:
+                    if initial_state in US_STATE_ABBRS and not _has_strong_non_us_location(html, loc):
+                        return
+                    location_verified = True
+                    supplier['state'] = loc
+                    supplier['_non_us'] = True
+                else:
+                    location_verified = True
+                    supplier['state'] = loc
+                    supplier.pop('_non_us', None)
         if needs_certs:
-            certs = _extract_certifications(html)
+            certs = _extract_certifications(html, require_context=True)
             if certs:
                 all_certs.extend(certs)
 
     # --- Phase 1: Fast urllib pass (homepage + 4 common paths) ---
-    homepage_html = _fetch_page(base_url, timeout=5)
+    homepage_html = _fetch_page(base_url, timeout=5, blocked_sites=blocked_sites)
     _check_html(homepage_html)
 
     # Discover cert page URL from homepage links before guessing paths
@@ -594,9 +704,9 @@ def _enrich_single(supplier, skip_email=False):
 
     for path in ['/contact', '/contact-us', '/about', '/about-us']:
         # Stop when email (if needed) and state are both resolved
-        if (skip_email or _has_valid_email()) and supplier.get('state', '') not in ('', 'US', 'USA'):
+        if (skip_email or _has_valid_email()) and location_verified:
             break
-        page_html = _fetch_page(base_url.rstrip('/') + path, timeout=5)
+        page_html = _fetch_page(base_url.rstrip('/') + path, timeout=5, blocked_sites=blocked_sites)
         _check_html(page_html)
 
     # Cert pages — always fetched when certs are needed, regardless of earlier hits.
@@ -612,9 +722,9 @@ def _enrich_single(supplier, skip_email=False):
             if url != discovered_cert_url:
                 cert_urls_to_try.append(url)
         for url in cert_urls_to_try:
-            page_html = _fetch_page(url, timeout=5)
+            page_html = _fetch_page(url, timeout=5, blocked_sites=blocked_sites)
             if page_html:
-                certs = _extract_certifications(page_html)
+                certs = _extract_certifications(page_html, require_context=True)
                 if certs:
                     all_certs.extend(certs)
 
@@ -631,9 +741,10 @@ def _enrich_single(supplier, skip_email=False):
 
     # Playwright needed if any data still missing
     email_done = skip_email or _has_valid_email()
-    state_done = supplier.get('state', '') not in ('', 'US', 'USA')
+    state_done = location_verified or supplier.get('state', '') not in ('', 'US', 'USA')
     certs_done = not needs_certs or bool(all_certs)
     if email_done and state_done and certs_done:
+        supplier['_location_verified'] = bool(location_verified)
         return supplier
 
     # --- Phase 2: Single Playwright deep scan (homepage → footer → contact link) ---
@@ -652,7 +763,7 @@ def _enrich_single(supplier, skip_email=False):
                 if not skip_email:
                     emails = _extract_emails(rendered_html)
                 if needs_certs and not all_certs:
-                    certs = _extract_certifications(rendered_html)
+                    certs = _extract_certifications(rendered_html, require_context=True)
                     if certs:
                         all_certs.extend(certs)
 
@@ -665,19 +776,25 @@ def _enrich_single(supplier, skip_email=False):
                     if not skip_email:
                         emails.extend(_extract_emails(footer_text))
                     if needs_certs and not all_certs:
-                        certs = _extract_certifications(footer_text)
+                        certs = _extract_certifications(footer_text, require_context=True)
                         if certs:
                             all_certs.extend(certs)
 
                 # Location from rendered page (catches JS-rendered addresses)
-                if needs_location and supplier.get('state', '') in ('', 'US', 'USA'):
+                if needs_location and not location_verified:
                     loc = _extract_location(rendered_html)
                     if loc:
                         if loc not in US_STATE_ABBRS:
+                            if initial_state in US_STATE_ABBRS and not _has_strong_non_us_location(rendered_html, loc):
+                                loc = None
+                        if loc and loc not in US_STATE_ABBRS:
+                            location_verified = True
                             supplier['state'] = loc
                             supplier['_non_us'] = True
-                        else:
+                        elif loc:
+                            location_verified = True
                             supplier['state'] = loc
+                            supplier.pop('_non_us', None)
 
                 if not skip_email:
                     if emails:
@@ -723,17 +840,23 @@ def _enrich_single(supplier, skip_email=False):
                 seen.add(n)
                 unique.append(c.strip())
         supplier['certifications'] = ', '.join(unique[:6])
+    elif existing_certs and existing_certs != 'N/A':
+        certs = _extract_certifications(existing_certs)
+        certs = _filter_unverified_certifications(certs)
+        supplier['certifications'] = ', '.join(certs) if certs else ''
 
+    supplier['_location_verified'] = bool(location_verified)
     return supplier
 
 
-def enrich_suppliers(suppliers, on_each=None, skip_email=False):
+def enrich_suppliers(suppliers, on_each=None, skip_email=False, blocked_sites=None):
     """Enrich a list of suppliers in parallel. Returns enriched list.
     skip_email=True skips all email extraction (demo mode).
     If on_each callback is provided, it's called after each supplier finishes."""
+    blocked_sites = _blocked_sites if blocked_sites is None else blocked_sites
     results = [None] * len(suppliers)
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
-        futures = {pool.submit(_enrich_single, s, skip_email): i for i, s in enumerate(suppliers)}
+        futures = {pool.submit(_enrich_single, s, skip_email, blocked_sites): i for i, s in enumerate(suppliers)}
         for f in concurrent.futures.as_completed(futures):
             idx = futures[f]
             try:

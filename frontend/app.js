@@ -299,6 +299,19 @@ function getContactType(s) {
 
 // Country/state helpers (hoisted — used by card renderer)
 const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY']);
+const US_STATE_NAME_TO_ABBR = {
+  'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR','california':'CA',
+  'colorado':'CO','connecticut':'CT','delaware':'DE','florida':'FL','georgia':'GA',
+  'hawaii':'HI','idaho':'ID','illinois':'IL','indiana':'IN','iowa':'IA',
+  'kansas':'KS','kentucky':'KY','louisiana':'LA','maine':'ME','maryland':'MD',
+  'massachusetts':'MA','michigan':'MI','minnesota':'MN','mississippi':'MS',
+  'missouri':'MO','montana':'MT','nebraska':'NE','nevada':'NV','new hampshire':'NH',
+  'new jersey':'NJ','new mexico':'NM','new york':'NY','north carolina':'NC',
+  'north dakota':'ND','ohio':'OH','oklahoma':'OK','oregon':'OR','pennsylvania':'PA',
+  'rhode island':'RI','south carolina':'SC','south dakota':'SD','tennessee':'TN',
+  'texas':'TX','utah':'UT','vermont':'VT','virginia':'VA','washington':'WA',
+  'west virginia':'WV','wisconsin':'WI','wyoming':'WY',
+};
 const COUNTRY_NAME_TO_ISO2 = {
   'India':'IN','Germany':'DE','Israel':'IL','Colombia':'CO','Argentina':'AR',
   'Albania':'AL','Gabon':'GA','Indonesia':'ID','Montenegro':'ME',
@@ -335,18 +348,19 @@ function countryFlagFromCode(code) {
 }
 
 function resolveLocationTag(rawState) {
-  const stateVal = rawState || '';
+  const stateVal = (rawState || '').trim();
   // No state yet (e.g. enriching) — render nothing rather than defaulting to a flag.
   if (!stateVal) return { flag: '', label: '' };
-  const normalizedState = stateVal.startsWith('US-') ? stateVal.slice(3) : stateVal;
-  const isUS = stateVal === 'US' || US_STATES.has(stateVal) || US_STATES.has(normalizedState);
   const cleanStateVal = stateVal.replace(/\s*\(.*?\)\s*$/, '').trim();
+  const normalizedState = cleanStateVal.startsWith('US-') ? cleanStateVal.slice(3) : cleanStateVal;
+  const stateNameAbbr = US_STATE_NAME_TO_ABBR[cleanStateVal.toLowerCase()] || '';
+  const isUS = cleanStateVal === 'US' || US_STATES.has(cleanStateVal) || US_STATES.has(normalizedState) || !!stateNameAbbr;
   const resolvedISO2 = COUNTRY_NAME_TO_ISO2[cleanStateVal] || COUNTRY_NAME_TO_ISO2[stateVal] || null;
   const rawIs2Letter = !isUS && /^[A-Za-z]{2}$/.test(cleanStateVal);
   const effectiveCode = resolvedISO2 || (rawIs2Letter ? cleanStateVal.toUpperCase() : null);
   const flag = isUS ? '🇺🇸' : countryFlagFromCode(effectiveCode || cleanStateVal);
   const label = isUS
-    ? (normalizedState === 'US' ? '' : normalizedState)
+    ? (stateNameAbbr || (normalizedState === 'US' ? '' : normalizedState))
     : (effectiveCode || '');
   return { flag, label };
 }
@@ -410,7 +424,7 @@ function computeCardSections(s, i) {
     } else if (s._enriching) {
       actionHtml = '<span class="action-icon action-spin" title="Finding email...">' + ICON_SPIN + '</span>';
     } else {
-      const contactUrl = s.website ? ensureHttp(esc(s.website)) + '/contact' : '#';
+      const contactUrl = s.contactUrl ? ensureHttp(esc(s.contactUrl)) : (s.website ? ensureHttp(esc(s.website)) + '/contact' : '#');
       actionHtml = '<a href="' + contactUrl + '" target="_blank" rel="noopener noreferrer" class="action-icon action-link" title="Visit Website">' + ICON_LINK + '</a>';
     }
   }

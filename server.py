@@ -223,9 +223,8 @@ class AppHandler(SimpleHTTPRequestHandler):
 
         elif self.path == "/api/enrich":
             suppliers = data.get("suppliers", [])
-            scraper._blocked_sites.clear()
-            enriched = scraper.enrich_suppliers(suppliers)
-            blocked = scraper.get_blocked_sites()
+            blocked = []
+            enriched = scraper.enrich_suppliers(suppliers, blocked_sites=blocked)
             _send_json(self, {"suppliers": enriched, "blocked": blocked})
 
         elif self.path == "/api/rfq/draft":

@@ -4,7 +4,9 @@ import json
 import re
 import threading
 import time
+import urllib.parse
 import uuid
+from datetime import datetime, timezone
 from services import llm, scraper, brave
 
 # In-memory store for background enrichment results
@@ -25,6 +27,7 @@ _INDIAN_CITY_TOKENS = {'mumbai', 'delhi', 'bangalore', 'chennai', 'hyderabad', '
 # Used in global mode to remap to full country names before the frontend sees them,
 # so the frontend US_STATES check doesn't misclassify them as US states.
 _ISO_COLLISION_TO_COUNTRY = {
+    'CA': 'Canada',
     'IN': 'India',
     'DE': 'Germany',
     'IL': 'Israel',
@@ -36,10 +39,17 @@ _ISO_COLLISION_TO_COUNTRY = {
     'ME': 'Montenegro',
 }
 
+_UNKNOWN_LOCATION_VALUES = {'', 'US', 'USA', 'UNITED STATES'}
+
 
 def _is_us_supplier(supplier):
-    """Return True if the supplier's state field resolves to a US state."""
-    state = supplier.get('state', '') or ''
+    """Return True only when the supplier location is explicitly a US state."""
+    if supplier.get('_non_us'):
+        return False
+    state = (supplier.get('state', '') or '').strip()
+    if state.upper() in _UNKNOWN_LOCATION_VALUES:
+        return False
+
     # Strip "US-" prefix (e.g. US-PA → PA)
     if state.upper().startswith('US-'):
         state = state[3:]
@@ -54,7 +64,20 @@ def _is_us_supplier(supplier):
         if any(tok in name_products for tok in _INDIAN_CITY_TOKENS):
             return False
 
-    return state.upper() in _US_STATE_ABBRS or state.upper() in ('', 'US', 'USA')
+    return state.upper() in _US_STATE_ABBRS
+
+
+def _is_unknown_location(supplier):
+    state = (supplier.get('state', '') or '').strip().upper()
+    return state in _UNKNOWN_LOCATION_VALUES
+
+
+def _is_known_international_supplier(supplier):
+    """Return True when location is known and is not a US state."""
+    state = (supplier.get('state', '') or '').strip()
+    if not state or state.upper() in _UNKNOWN_LOCATION_VALUES:
+        return False
+    return not _is_us_supplier(supplier)
 
 
 _GEO_KEYWORDS = {
@@ -134,6 +157,7 @@ _GEO_TO_CODES = {
 _TLD_COUNTRY_MAP = [
     ('.co.in', 'India'), ('.in', 'India'),
     ('.co.uk', 'UK'), ('.uk', 'UK'),
+    ('.ca', 'Canada'),
     ('.com.au', 'Australia'), ('.au', 'Australia'),
     ('.com.br', 'Brazil'), ('.br', 'Brazil'),
     ('.com.mx', 'Mexico'), ('.mx', 'Mexico'),
@@ -152,11 +176,125 @@ def _country_from_tld(website):
     """Return the country implied by the website's TLD, or None for generic TLDs (.com etc.)."""
     if not website:
         return None
-    url = website.lower().rstrip('/').split('?')[0]
+    url = website.strip()
+    if not url.startswith(('http://', 'https://')):
+        url = 'https://' + url
+    parsed = urllib.parse.urlparse(url)
+    host = (parsed.netloc or parsed.path.split('/')[0]).lower()
+    if host.startswith('www.'):
+        host = host[4:]
     for tld, country in _TLD_COUNTRY_MAP:
-        if url.endswith(tld):
+        if host.endswith(tld):
             return country
     return None
+
+
+def _normalize_supplier_location(supplier, region='north_america'):
+    """Apply deterministic country signals before region filtering."""
+    state = (supplier.get('state') or '').strip()
+
+    if region == 'global' and state and not state.upper().startswith('US-'):
+        country = _ISO_COLLISION_TO_COUNTRY.get(state.upper())
+        if country:
+            supplier['state'] = country
+            state = country
+
+    tld_country = _country_from_tld(supplier.get('website', ''))
+    if tld_country and (
+        _is_unknown_location(supplier)
+        or (region == 'global' and not state.upper().startswith('US-'))
+        or (state.upper() == 'CA' and tld_country == 'Canada')
+        or (state.upper() == 'IN' and tld_country == 'India')
+    ):
+        supplier['state'] = tld_country
+
+    return supplier
+
+
+def _clean_query_for_prompt(query):
+    """Keep buyer search terms intact while removing control characters."""
+    return re.sub(r'[\x00-\x1f\x7f]+', ' ', query or '').strip()[:200]
+
+
+def _filter_suppliers_for_region(suppliers, region, query='', allow_pending=False):
+    """Drop suppliers that fail deterministic regional checks."""
+    filtered = []
+    geo_hint = _extract_geo_hint(query or '')
+    accepted = _GEO_TO_CODES.get(geo_hint) if region == 'global' and geo_hint else None
+    accepted_lower = {v.lower() for v in accepted} if accepted else None
+
+    for s in suppliers:
+        _normalize_supplier_location(s, region)
+        if region == 'north_america':
+            if _is_us_supplier(s):
+                filtered.append(s)
+            elif allow_pending and _is_unknown_location(s):
+                filtered.append(s)
+            continue
+
+        if accepted_lower:
+            state = (s.get('state') or '').strip().lower()
+            if state in accepted_lower or (allow_pending and not state):
+                filtered.append(s)
+            continue
+
+        if _is_known_international_supplier(s) or (allow_pending and _is_unknown_location(s)):
+            filtered.append(s)
+
+    return filtered
+
+
+_LOWERCASE_PRODUCT_WORDS = {'and', 'or', 'the', 'a', 'an', 'of', 'for', 'in', 'on', 'with', 'to', 'by', 'at'}
+_PRODUCT_ACRONYMS = {
+    'iso', 'asme', 'astm', 'ams', 'ansi', 'api', 'cmmc', 'cnc', 'dfars', 'fda',
+    'itar', 'mil', 'nadcap', 'nist', 'ptfe', 'pvc', 'rfq', 'sae', 'ul', 'uhmw',
+}
+
+
+def _format_years_in_business(year, current_year=None):
+    current_year = current_year or datetime.now(timezone.utc).year
+    age = max(0, current_year - year)
+    unit = "yr" if age == 1 else "yrs"
+    return f"{age} {unit} (est. {year})"
+
+
+def _normalize_years_in_business_value(value, current_year=None):
+    if not value:
+        return value
+    current_year = current_year or datetime.now(timezone.utc).year
+    match = re.search(r'\b(18[5-9]\d|19\d{2}|20\d{2})\b', str(value))
+    if not match:
+        return value
+    year = int(match.group(1))
+    if 1850 <= year <= current_year:
+        return _format_years_in_business(year, current_year)
+    return value
+
+
+def _title_case_product(text):
+    """Title-case product text without mangling acronyms or hyphenated terms."""
+    if not text:
+        return text
+
+    def format_piece(piece, is_first_word):
+        lower = piece.lower()
+        if not is_first_word and lower in _LOWERCASE_PRODUCT_WORDS:
+            return lower
+        if lower in _PRODUCT_ACRONYMS:
+            return lower.upper()
+        if any(ch.isdigit() for ch in piece) or piece.isupper():
+            return piece
+        return piece[:1].upper() + piece[1:].lower()
+
+    formatted_words = []
+    for word_index, word in enumerate(text.split()):
+        parts = word.split('-')
+        formatted_parts = [
+            format_piece(part, word_index == 0 and part_index == 0)
+            for part_index, part in enumerate(parts)
+        ]
+        formatted_words.append('-'.join(formatted_parts))
+    return ' '.join(formatted_words)
 
 
 def _build_queries(query, region='north_america'):
@@ -190,6 +328,7 @@ def handle(query, skip_enrichment=False, region='north_america'):
         all_faq = []
         all_infobox = []
         seen_urls = set()
+        failed_searches = 0
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
             futures = [pool.submit(brave.search, q, 10, region) for q in _build_queries(query, region)]
@@ -203,8 +342,9 @@ def handle(query, skip_enrichment=False, region='north_america'):
                     all_faq.extend(faq)
                     if infobox and infobox not in all_infobox:
                         all_infobox.append(infobox)
-                except Exception:
-                    pass
+                except Exception as e:
+                    failed_searches += 1
+                    print(f"[search] Brave query failed: {e}")
 
         # Filter out aggregator sites
         AGGREGATORS_ALWAYS = ('amazon.com', 'ebay.com', 'aliexpress.com', 'dhgate.com',
@@ -226,6 +366,8 @@ def handle(query, skip_enrichment=False, region='north_america'):
         all_results = filtered_results
 
         if not all_results:
+            if failed_searches == len(futures):
+                return {"suppliers": [], "blocked": [], "error": "Search provider temporarily unavailable. Please try again."}
             return {"suppliers": [], "blocked": [], "error": "No search results"}
 
         # Step 2: Build context with all available data — trim to fit token limits
@@ -255,8 +397,9 @@ def handle(query, skip_enrichment=False, region='north_america'):
         if all_infobox:
             extra_context += "\n\nKnowledge panel:\n" + json.dumps(all_infobox[:2], indent=1)
 
-        # Sanitize query — strip anything that looks like prompt injection
-        safe_query = re.sub(r'(?i)(ignore|forget|disregard|override|system|instruction|prompt)', '', query).strip()[:200]
+        # Preserve buyer terms like "hydraulic system" and "instruction label";
+        # prompt-injection handling belongs in the system prompt, not token deletion.
+        safe_query = _clean_query_for_prompt(query)
 
         # Hard cap: truncate context if too long (~5500 chars ≈ ~1500 tokens, leaves room for system+output)
         user_msg = f"Query: {safe_query}\n\nSearch results:\n{search_context}{extra_context}"
@@ -357,23 +500,22 @@ STRICT RULES:
         if not suppliers:
             return {"suppliers": [], "error": "No suppliers found. Try a different search term."}
 
-        # Hard filter: in NA mode, drop any non-US suppliers the LLM returned
+        # Apply deterministic location signals before any regional filtering.
+        # In NA mode, unknown generic-TLD suppliers may stay temporarily pending
+        # so the background scraper can verify them; final publish is strict.
+        suppliers = [_normalize_supplier_location(s, region) for s in suppliers]
         if region == 'north_america':
-            suppliers = [s for s in suppliers if _is_us_supplier(s)]
+            suppliers = _filter_suppliers_for_region(suppliers, region, safe_query, allow_pending=True)
             if not suppliers:
                 return {"suppliers": [], "error": "No US suppliers found. Try a different search term."}
 
-        # Global mode: remap ISO 2-letter codes that collide with US state abbreviations.
-        # The LLM prompt now uses "US-XX" for US states, so any bare collision code
-        # (IN, DE, IL, etc.) is unambiguously a country code — remap unconditionally.
         if region == 'global':
-            for s in suppliers:
-                state = (s.get('state') or '').strip()
-                if state.upper().startswith('US-'):
-                    continue  # legitimate US state — leave as-is for normalizer
-                country = _ISO_COLLISION_TO_COUNTRY.get(state.upper())
-                if country:
-                    s['state'] = country
+            suppliers = _filter_suppliers_for_region(suppliers, region, safe_query, allow_pending=False)
+            if not suppliers:
+                geo_hint = _extract_geo_hint(safe_query)
+                if _GEO_TO_CODES.get(geo_hint):
+                    return {"suppliers": [], "error": f"No {geo_hint.title()} suppliers found for this query. Try broadening your search terms."}
+                return {"suppliers": [], "error": "No international suppliers found. Try a different search term."}
 
             # Strip ITAR from non-US suppliers — ITAR is a US-only export regulation;
             # a non-US company cannot be ITAR-registered (LLM frequently hallucinates this).
@@ -382,39 +524,6 @@ STRICT RULES:
                     cleaned = re.sub(r'\bITAR\b[\s,;]*', '', s['certifications'], flags=re.IGNORECASE).strip(' ,;')
                     s['certifications'] = cleaned if cleaned else ''
 
-        # Correct location using website TLD — overrides LLM guesses caused by
-        # geo keywords in the query (e.g. "supplier in austria" → LLM assigns Austria
-        # to an Indian company because their site mentions exporting to Austria).
-        for s in suppliers:
-            tld_country = _country_from_tld(s.get('website', ''))
-            if tld_country:
-                current = (s.get('state') or '').strip()
-                if current.lower() != tld_country.lower():
-                    s['state'] = tld_country
-
-        # Hard filter: in global mode, drop any US suppliers the LLM returned.
-        # Runs after ISO remapping + TLD correction so India/Germany/etc. are
-        # no longer misidentified as US states before this check.
-        if region == 'global':
-            suppliers = [s for s in suppliers if not _is_us_supplier(s)]
-            if not suppliers:
-                return {"suppliers": [], "error": "No international suppliers found. Try a different search term."}
-
-        # Hard geo filter: when user specified a specific country, drop any supplier
-        # the LLM returned that isn't actually from that country.
-        if region == 'global':
-            geo_hint = _extract_geo_hint(safe_query)
-            accepted = _GEO_TO_CODES.get(geo_hint) if geo_hint else None
-            if accepted:
-                accepted_lower = {v.lower() for v in accepted}
-                suppliers = [
-                    s for s in suppliers
-                    if (s.get('state') or '').strip().lower() in accepted_lower
-                ]
-                if not suppliers:
-                    geo_label = accepted[0]  # e.g. "AT"
-                    return {"suppliers": [], "error": f"No {geo_hint.title()} suppliers found for this query. Try broadening your search terms."}
-
         # Normalize and dedup certifications from LLM output.
         # Re-runs the cert string through the scraper's extractor which normalizes
         # case and removes prefix duplicates (e.g. ISO 9001:2015 + ISO 9001 → ISO 9001:2015).
@@ -422,17 +531,14 @@ STRICT RULES:
             certs = (s.get('certifications') or '').strip()
             if certs and certs not in ('N/A',):
                 extracted = scraper._extract_certifications(certs)
+                extracted = scraper._filter_unverified_certifications(extracted)
                 s['certifications'] = ', '.join(extracted) if extracted else ''
 
-        # Title-case products field
-        _LOWERCASE_WORDS = {'and', 'or', 'the', 'a', 'an', 'of', 'for', 'in', 'on', 'with', 'to', 'by', 'at'}
         for s in suppliers:
             if s.get("products"):
-                words = s["products"].split()
-                s["products"] = " ".join(
-                    w if i > 0 and w.lower() in _LOWERCASE_WORDS else w.capitalize() if w.islower() else w
-                    for i, w in enumerate(words)
-                )
+                s["products"] = _title_case_product(s["products"])
+            if s.get("yearsInBusiness"):
+                s["yearsInBusiness"] = _normalize_years_in_business_value(s["yearsInBusiness"])
 
         # Step 4+5: Return immediately, enrich reputation + emails in background
         _cleanup_old_searches()
@@ -550,26 +656,37 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
       Render 4 (~5-15s):   location/certs/emails trickle in per-supplier as each finishes
     """
     try:
-        query = _searches.get(search_id, {}).get("query", "")
+        entry = _searches.get(search_id, {})
+        query = entry.get("query", "")
+        region = entry.get("region", "north_america")
+        blocked_sites = []
 
         # Phase 1: Reputation enrichment — fills years, employees, revenue, certs gaps (~3-5s)
         suppliers = _enrich_reputation(suppliers)
-        _searches[search_id] = {"suppliers": list(suppliers), "status": "enriching", "blocked": [], "query": query, "ts": time.time()}
+        publish_suppliers = _filter_suppliers_for_region(suppliers, region, query, allow_pending=True)
+        _searches[search_id] = {
+            "suppliers": list(publish_suppliers),
+            "status": "enriching",
+            "blocked": [],
+            "query": query,
+            "region": region,
+            "ts": time.time(),
+        }
 
         # Phase 2: Match reasons + website scraping in parallel
-        if not skip_emails:
-            scraper._blocked_sites.clear()
         current_suppliers = list(suppliers)
 
         def _on_supplier_enriched(idx, enriched_supplier):
             """Called as each supplier finishes website scraping — publish immediately."""
             enriched_supplier.pop("_enriching", None)
             current_suppliers[idx] = enriched_supplier
+            publish_suppliers = _filter_suppliers_for_region(list(current_suppliers), region, query, allow_pending=True)
             _searches[search_id] = {
-                "suppliers": list(current_suppliers),
+                "suppliers": publish_suppliers,
                 "status": "enriching",
-                "blocked": [] if skip_emails else scraper.get_blocked_sites(),
+                "blocked": [] if skip_emails else list(blocked_sites),
                 "query": query,
+                "region": region,
                 "ts": time.time(),
             }
 
@@ -577,7 +694,12 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
             return _regenerate_match_reasons(list(suppliers), query)
 
         def _do_scraping():
-            return scraper.enrich_suppliers(list(suppliers), on_each=_on_supplier_enriched, skip_email=skip_emails)
+            return scraper.enrich_suppliers(
+                list(suppliers),
+                on_each=_on_supplier_enriched,
+                skip_email=skip_emails,
+                blocked_sites=blocked_sites,
+            )
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
             match_future = pool.submit(_do_match_reasons)
@@ -595,9 +717,10 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
             # Wait for website scraping to finish
             try:
                 enriched = scrape_future.result()
-                blocked = [] if skip_emails else scraper.get_blocked_sites()
+                blocked = [] if skip_emails else list(blocked_sites)
                 for s in enriched:
                     s.pop("_enriching", None)
+                enriched = _filter_suppliers_for_region(enriched, region, query, allow_pending=False)
 
                 # Apply match reasons from the parallel LLM call
                 for s in enriched:
@@ -615,7 +738,14 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                 if has_new_certs:
                     enriched = _regenerate_match_reasons(enriched, query)
 
-                _searches[search_id] = {"suppliers": enriched, "status": "done", "blocked": blocked, "query": query, "ts": time.time()}
+                _searches[search_id] = {
+                    "suppliers": enriched,
+                    "status": "done",
+                    "blocked": blocked,
+                    "query": query,
+                    "region": region,
+                    "ts": time.time(),
+                }
             except Exception as e:
                 print(f"[search] Website scraping error: {e}")
                 for s in current_suppliers:
@@ -623,13 +753,31 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                     reason = reason_map.get(s.get("name"))
                     if reason:
                         s["matchReason"] = reason
-                _searches[search_id] = {"suppliers": current_suppliers, "status": "done", "blocked": [], "query": query, "ts": time.time()}
+                publish_suppliers = _filter_suppliers_for_region(current_suppliers, region, query, allow_pending=False)
+                _searches[search_id] = {
+                    "suppliers": publish_suppliers,
+                    "status": "done",
+                    "blocked": [],
+                    "query": query,
+                    "region": region,
+                    "ts": time.time(),
+                }
 
     except Exception as e:
         for s in suppliers:
             s.pop("_enriching", None)
-        query = _searches.get(search_id, {}).get("query", "")
-        _searches[search_id] = {"suppliers": suppliers, "status": "done", "blocked": [], "query": query, "ts": time.time()}
+        entry = _searches.get(search_id, {})
+        query = entry.get("query", "")
+        region = entry.get("region", "north_america")
+        publish_suppliers = _filter_suppliers_for_region(suppliers, region, query, allow_pending=False)
+        _searches[search_id] = {
+            "suppliers": publish_suppliers,
+            "status": "done",
+            "blocked": [],
+            "query": query,
+            "region": region,
+            "ts": time.time(),
+        }
         print(f"[search] Background enrichment error: {e}")
 
 
@@ -654,19 +802,25 @@ def _enrich_reputation(suppliers):
     needs_enrichment = [s for s in suppliers if not s.get("yearsInBusiness") or not s.get("employees")]
     if not needs_enrichment:
         return suppliers
+    current_year = datetime.now(timezone.utc).year
 
     # Search up to 5 companies in parallel
     def _fetch_company_facts(supplier):
         try:
             name = supplier.get("name", "")
-            results, faq, infobox = brave.search(f"{name} company founded employees", 3)
+            website = supplier.get("website", "")
+            if website and not website.startswith(('http://', 'https://')):
+                website = 'https://' + website
+            domain = urllib.parse.urlparse(website).netloc.lower().removeprefix('www.')
+            facts_query = f"{name} site:{domain} founded employees revenue" if domain else f"{name} company founded employees"
+            results, faq, infobox = brave.search(facts_query, 3)
             facts = {}
 
             def _parse_year(text):
-                """Extract a plausible founding year (1850–2024) from text."""
+                """Extract a plausible founding year."""
                 for m in re.finditer(r'\b(\d{4})\b', text):
                     y = int(m.group(1))
-                    if 1850 <= y <= 2024:
+                    if 1850 <= y <= current_year:
                         return y
                 return None
 
@@ -677,7 +831,7 @@ def _enrich_reputation(suppliers):
                 if "founded" in q or "established" in q:
                     year = _parse_year(a)
                     if year:
-                        facts["yearsInBusiness"] = f"{2026 - year} yrs (est. {year})"
+                        facts["yearsInBusiness"] = _format_years_in_business(year, current_year)
                 if ("employee" in q or "size" in q or "staff" in q) and "key employee" not in q:
                     # Require the number to precede "employees" — avoids matching client headcounts
                     emp_match = re.search(r'\b([\d,]+K?\+?)\s*(?:total\s+)?(?:employees|staff|workers)\b', a, re.I)
@@ -697,7 +851,7 @@ def _enrich_reputation(suppliers):
                     if "founded" in attr_lower and not facts.get("yearsInBusiness"):
                         year = _parse_year(attr_val)
                         if year:
-                            facts["yearsInBusiness"] = f"{2026 - year} yrs (est. {year})"
+                            facts["yearsInBusiness"] = _format_years_in_business(year, current_year)
                     if "employee" in attr_lower and not facts.get("employees"):
                         emp_match = re.search(r'([\d,]+K?\+?)', attr_val)
                         if emp_match:

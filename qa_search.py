@@ -46,7 +46,7 @@ US_STATE_ABBRS = {
 }
 KNOWN_COUNTRY_NAMES = {
     'india','china','uk','germany','france','japan','korea','taiwan',
-    'singapore','australia','canada','brazil','mexico',
+    'singapore','australia','canada','brazil','mexico','austria','czechia',
 }
 INDIAN_SIGNALS = {'india', 'mumbai', 'delhi', 'bangalore', 'chennai', 'hyderabad', 'pune', '.co.in'}
 
