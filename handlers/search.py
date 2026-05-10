@@ -5,7 +5,6 @@ import re
 import threading
 import time
 import uuid
-from urllib.parse import urlparse
 from services import llm, scraper, brave
 
 # In-memory store for background enrichment results
@@ -160,220 +159,6 @@ def _country_from_tld(website):
     return None
 
 
-def _domain_from_url(url):
-    """Return a normalized host from a URL-like string."""
-    if not url:
-        return ""
-    raw = url.strip()
-    if not raw:
-        return ""
-    parsed = urlparse(raw if "://" in raw else "https://" + raw)
-    host = (parsed.netloc or parsed.path.split("/")[0]).lower()
-    if host.startswith("www."):
-        host = host[4:]
-    return host
-
-
-def _source_text(result):
-    """Compact all text Brave returned for one result."""
-    parts = [
-        result.get("title", ""),
-        result.get("description", ""),
-        " ".join(result.get("extra_snippets", []) or []),
-    ]
-    return " ".join(p for p in parts if p).strip()
-
-
-def _significant_tokens(text):
-    """Tokens useful for loose company-name matching across any industrial vertical."""
-    stop = {
-        "inc", "llc", "ltd", "corp", "corporation", "company", "co", "the",
-        "usa", "us", "america", "american", "industrial", "industries",
-        "manufacturing", "manufacturer", "supplier", "suppliers", "supply",
-        "valve", "valves", "bearing", "bearings", "metal", "metals",
-    }
-    return [
-        t for t in re.findall(r"[a-z0-9]+", (text or "").lower())
-        if len(t) > 2 and t not in stop
-    ]
-
-
-def _source_score(supplier, result):
-    """Score how strongly a Brave result supports a supplier card."""
-    supplier_host = _domain_from_url(supplier.get("website", ""))
-    result_host = _domain_from_url(result.get("url", ""))
-    text = _source_text(result).lower()
-    name = (supplier.get("name") or "").lower()
-    score = 0
-
-    if supplier_host and result_host:
-        if supplier_host == result_host or result_host.endswith("." + supplier_host):
-            score += 50
-        elif supplier_host in result_host or result_host in supplier_host:
-            score += 30
-
-    if name and name in text:
-        score += 15
-
-    name_tokens = set(_significant_tokens(name))
-    if name_tokens:
-        score += min(16, sum(4 for t in name_tokens if t in text))
-
-    product_tokens = set(_significant_tokens(supplier.get("products", "")))
-    if product_tokens:
-        score += min(8, sum(1 for t in product_tokens if t in text))
-
-    return score
-
-
-def _compact_source(result):
-    """Public, frontend-safe source evidence for a supplier card."""
-    snippet = result.get("description") or ""
-    if not snippet and result.get("extra_snippets"):
-        snippet = result["extra_snippets"][0]
-    return {
-        "url": result.get("url", ""),
-        "title": result.get("title", ""),
-        "snippet": snippet[:320],
-        "rank": result.get("_source_rank", ""),
-        "query": result.get("_source_query", ""),
-    }
-
-
-def _source_relationship(supplier, source):
-    """Flag when a result appears to be a catalog/distributor page for another brand."""
-    if not source:
-        return ""
-    host = _domain_from_url(source.get("url", ""))
-    host_tokens = set(_significant_tokens(host))
-    name_tokens = set(_significant_tokens(supplier.get("name", "")))
-    if any(t in host for t in name_tokens):
-        return "direct_source"
-    if name_tokens and host_tokens and not (name_tokens & host_tokens):
-        return "catalog_or_distributor_source"
-    return "direct_source"
-
-
-def _attach_source_evidence(suppliers, results):
-    """Attach the Brave results that justify each supplier card."""
-    for supplier in suppliers:
-        ranked = sorted(
-            ((score, r) for r in results if (score := _source_score(supplier, r)) > 0),
-            key=lambda item: item[0],
-            reverse=True,
-        )
-        if not ranked:
-            continue
-        evidence = [_compact_source(r) for _, r in ranked[:3]]
-        supplier["sourceEvidence"] = evidence
-        supplier["sourceUrl"] = evidence[0]["url"]
-        supplier["sourceTitle"] = evidence[0]["title"]
-        supplier["sourceSnippet"] = evidence[0]["snippet"]
-        supplier["sourceRank"] = evidence[0]["rank"]
-        supplier["sourceQuery"] = evidence[0]["query"]
-        supplier["sourceRelationship"] = _source_relationship(supplier, evidence[0])
-    return suppliers
-
-
-def _source_evidence_has_us_signal(supplier):
-    """Return True when attached source evidence points to US operations."""
-    text = " ".join(
-        " ".join(str(src.get(k, "")) for k in ("title", "snippet", "url"))
-        for src in supplier.get("sourceEvidence", []) or []
-    ).lower()
-    if any(term in text for term in ("united states", "usa", "u.s.a.", "made in usa", "based facility")):
-        return True
-    if re.search(r"\b[A-Z]{2}\s+\d{5}(?:-\d{4})?\b", text.upper()):
-        return True
-    return False
-
-
-def _fallback_match_reason(supplier):
-    """Deterministic match text when the LLM reason cites unsupported facts."""
-    products = supplier.get("products") or "industrial products/services"
-    parts = [f"Lists {products} relevant to this search."]
-    certs = supplier.get("certifications")
-    if certs:
-        parts.append(f"Listed certifications/standards: {certs}.")
-    scale = []
-    if supplier.get("yearsInBusiness"):
-        scale.append(supplier["yearsInBusiness"])
-    if supplier.get("employees"):
-        scale.append(f"{supplier['employees']} employees")
-    if supplier.get("revenue"):
-        scale.append(supplier["revenue"])
-    if scale:
-        parts.append("Scale signals: " + ", ".join(scale) + ".")
-    return " ".join(parts)
-
-
-def _sanitize_match_reason(supplier):
-    """Keep the match reason consistent with visible supplier fields."""
-    reason = supplier.get("matchReason") or ""
-    if not reason:
-        return
-
-    certs_on_card = {
-        c.upper()
-        for c in scraper._extract_certifications(supplier.get("certifications", ""))
-    }
-    certs_in_reason = scraper._extract_certifications(reason)
-    unsupported = [c for c in certs_in_reason if c.upper() not in certs_on_card]
-
-    for cert in unsupported:
-        pattern = re.escape(cert).replace(r"\ ", r"\s+")
-        reason = re.sub(
-            r"(?i)\b" + pattern + r"(?:[-\s]*(?:certified|registered|compliant|approved|listed))?,?\s*",
-            "",
-            reason,
-        )
-
-    if supplier.get("certifications") and re.search(r"(?i)\bno relevant certifications listed\b", reason):
-        reason = re.sub(r"(?i)\bno relevant certifications listed,?\s*", "", reason)
-
-    reason = re.sub(r"(?i)\bunknown certification(?:s)?\b,?\s*", "", reason)
-    reason = re.sub(r"(?i)\bcertification(?:s)? unknown\b,?\s*", "", reason)
-
-    reason = re.sub(r"\s+", " ", reason).strip(" ,;.-")
-    if len(reason) < 25:
-        reason = _fallback_match_reason(supplier)
-    supplier["matchReason"] = reason
-
-
-def _post_validate_suppliers(suppliers, region, query):
-    """Apply region and consistency checks after LLM/scraper enrichment."""
-    validated = []
-    geo_hint = _extract_geo_hint(query or "") if region == "global" else None
-    accepted = _GEO_TO_CODES.get(geo_hint) if geo_hint else None
-    accepted_lower = {v.lower() for v in accepted} if accepted else set()
-
-    for supplier in suppliers:
-        warnings = supplier.setdefault("validationWarnings", [])
-        state = (supplier.get("state") or "").strip()
-
-        if region == "north_america" and not _is_us_supplier(supplier):
-            if _source_evidence_has_us_signal(supplier):
-                warnings.append("Ignored non-US location found during enrichment; source evidence indicates US operations.")
-                supplier["state"] = ""
-                supplier.pop("_non_us", None)
-            else:
-                continue
-
-        if region == "global":
-            if _is_us_supplier(supplier):
-                continue
-            if accepted_lower and state.lower() not in accepted_lower:
-                continue
-
-        _sanitize_match_reason(supplier)
-        supplier.pop("_non_us", None)
-        if not warnings:
-            supplier.pop("validationWarnings", None)
-        validated.append(supplier)
-
-    return validated
-
-
 def _build_queries(query, region='north_america'):
     """Generate 3 search variations for broader coverage."""
     if region == 'global':
@@ -407,18 +192,14 @@ def handle(query, skip_enrichment=False, region='north_america'):
         seen_urls = set()
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
-            futures = {pool.submit(brave.search, q, 10, region): q for q in _build_queries(query, region)}
+            futures = [pool.submit(brave.search, q, 10, region) for q in _build_queries(query, region)]
             for f in concurrent.futures.as_completed(futures):
                 try:
-                    source_query = futures[f]
                     results, faq, infobox = f.result()
-                    for rank, r in enumerate(results, start=1):
+                    for r in results:
                         if r["url"] not in seen_urls:
                             seen_urls.add(r["url"])
-                            item = dict(r)
-                            item["_source_query"] = source_query
-                            item["_source_rank"] = rank
-                            all_results.append(item)
+                            all_results.append(r)
                     all_faq.extend(faq)
                     if infobox and infobox not in all_infobox:
                         all_infobox.append(infobox)
@@ -653,13 +434,6 @@ STRICT RULES:
                     for i, w in enumerate(words)
                 )
 
-        _attach_source_evidence(suppliers, all_results)
-        suppliers = _post_validate_suppliers(suppliers, region, safe_query)
-        if not suppliers:
-            if region == 'north_america':
-                return {"suppliers": [], "error": "No US suppliers found. Try a different search term."}
-            return {"suppliers": [], "error": "No international suppliers found. Try a different search term."}
-
         # Step 4+5: Return immediately, enrich reputation + emails in background
         _cleanup_old_searches()
 
@@ -776,21 +550,11 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
       Render 4 (~5-15s):   location/certs/emails trickle in per-supplier as each finishes
     """
     try:
-        entry = _searches.get(search_id, {})
-        query = entry.get("query", "")
-        region = entry.get("region", "north_america")
+        query = _searches.get(search_id, {}).get("query", "")
 
         # Phase 1: Reputation enrichment — fills years, employees, revenue, certs gaps (~3-5s)
         suppliers = _enrich_reputation(suppliers)
-        published_suppliers = _post_validate_suppliers(list(suppliers), region, query)
-        _searches[search_id] = {
-            "suppliers": published_suppliers,
-            "status": "enriching",
-            "blocked": [],
-            "query": query,
-            "region": region,
-            "ts": time.time(),
-        }
+        _searches[search_id] = {"suppliers": list(suppliers), "status": "enriching", "blocked": [], "query": query, "ts": time.time()}
 
         # Phase 2: Match reasons + website scraping in parallel
         if not skip_emails:
@@ -801,13 +565,11 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
             """Called as each supplier finishes website scraping — publish immediately."""
             enriched_supplier.pop("_enriching", None)
             current_suppliers[idx] = enriched_supplier
-            published = _post_validate_suppliers(list(current_suppliers), region, query)
             _searches[search_id] = {
-                "suppliers": published,
+                "suppliers": list(current_suppliers),
                 "status": "enriching",
                 "blocked": [] if skip_emails else scraper.get_blocked_sites(),
                 "query": query,
-                "region": region,
                 "ts": time.time(),
             }
 
@@ -853,15 +615,7 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                 if has_new_certs:
                     enriched = _regenerate_match_reasons(enriched, query)
 
-                enriched = _post_validate_suppliers(enriched, region, query)
-                _searches[search_id] = {
-                    "suppliers": enriched,
-                    "status": "done",
-                    "blocked": blocked,
-                    "query": query,
-                    "region": region,
-                    "ts": time.time(),
-                }
+                _searches[search_id] = {"suppliers": enriched, "status": "done", "blocked": blocked, "query": query, "ts": time.time()}
             except Exception as e:
                 print(f"[search] Website scraping error: {e}")
                 for s in current_suppliers:
@@ -869,31 +623,13 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                     reason = reason_map.get(s.get("name"))
                     if reason:
                         s["matchReason"] = reason
-                current_suppliers = _post_validate_suppliers(current_suppliers, region, query)
-                _searches[search_id] = {
-                    "suppliers": current_suppliers,
-                    "status": "done",
-                    "blocked": [],
-                    "query": query,
-                    "region": region,
-                    "ts": time.time(),
-                }
+                _searches[search_id] = {"suppliers": current_suppliers, "status": "done", "blocked": [], "query": query, "ts": time.time()}
 
     except Exception as e:
         for s in suppliers:
             s.pop("_enriching", None)
-        entry = _searches.get(search_id, {})
-        query = entry.get("query", "")
-        region = entry.get("region", "north_america")
-        suppliers = _post_validate_suppliers(suppliers, region, query)
-        _searches[search_id] = {
-            "suppliers": suppliers,
-            "status": "done",
-            "blocked": [],
-            "query": query,
-            "region": region,
-            "ts": time.time(),
-        }
+        query = _searches.get(search_id, {}).get("query", "")
+        _searches[search_id] = {"suppliers": suppliers, "status": "done", "blocked": [], "query": query, "ts": time.time()}
         print(f"[search] Background enrichment error: {e}")
 
 
