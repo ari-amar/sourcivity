@@ -278,9 +278,7 @@ function pollForUpdates(searchId) {
       const data = await res.json();
       const suppliers = Array.isArray(data.suppliers) ? data.suppliers : null;
       const isDone = data.status === 'done';
-      // Demo enrichment has no email payoff, so render only the stable result.
-      const shouldRender = suppliers && (!DEMO_MODE || isDone);
-      if (shouldRender) {
+      if (suppliers) {
         searchResults = suppliers;
         renderSearchResults(searchResults);
       }

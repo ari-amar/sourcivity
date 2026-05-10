@@ -647,8 +647,7 @@ Use ```json fences."""
 def _background_enrich(search_id, suppliers, skip_emails=False):
     """Enrich reputation + match reasons + website scraping in parallel.
 
-    skip_emails=True: identical pipeline but no email extraction (demo mode);
-    per-supplier scrape ticks are buffered so demo cards do not flicker.
+    skip_emails=True: identical pipeline but no email extraction (demo mode).
 
     Rendering order:
       Render 1 (instant):  name, state, products, certs*, years*, employees*, revenue* (* if in Brave)
@@ -697,7 +696,7 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
         def _do_scraping():
             return scraper.enrich_suppliers(
                 list(suppliers),
-                on_each=None if skip_emails else _on_supplier_enriched,
+                on_each=_on_supplier_enriched,
                 skip_email=skip_emails,
                 blocked_sites=blocked_sites,
             )
