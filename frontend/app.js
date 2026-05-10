@@ -354,6 +354,9 @@ function resolveLocationTag(rawState) {
   // No state yet (e.g. enriching) — render nothing rather than defaulting to a flag.
   if (!stateVal) return { flag: '', label: '' };
   const cleanStateVal = stateVal.replace(/\s*\(.*?\)\s*$/, '').trim();
+  if (['N/A', 'NA', 'UNKNOWN'].includes(cleanStateVal.toUpperCase())) {
+    return { flag: '', label: 'N/A' };
+  }
   const normalizedState = cleanStateVal.startsWith('US-') ? cleanStateVal.slice(3) : cleanStateVal;
   const stateNameAbbr = US_STATE_NAME_TO_ABBR[cleanStateVal.toLowerCase()] || '';
   const isUS = cleanStateVal === 'US' || US_STATES.has(cleanStateVal) || US_STATES.has(normalizedState) || !!stateNameAbbr;

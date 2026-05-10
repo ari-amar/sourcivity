@@ -39,7 +39,7 @@ _ISO_COLLISION_TO_COUNTRY = {
     'ME': 'Montenegro',
 }
 
-_UNKNOWN_LOCATION_VALUES = {'', 'US', 'USA', 'UNITED STATES'}
+_UNKNOWN_LOCATION_VALUES = {'', 'US', 'USA', 'UNITED STATES', 'N/A', 'NA', 'UNKNOWN'}
 
 
 def _is_us_supplier(supplier):
@@ -242,6 +242,14 @@ def _filter_suppliers_for_region(suppliers, region, query='', allow_pending=Fals
             filtered.append(s)
 
     return filtered
+
+
+def _mark_unknown_locations(suppliers):
+    """Use a visible placeholder for suppliers whose location stayed unresolved."""
+    for s in suppliers:
+        if _is_unknown_location(s):
+            s['state'] = 'N/A'
+    return suppliers
 
 
 _LOWERCASE_PRODUCT_WORDS = {'and', 'or', 'the', 'a', 'an', 'of', 'for', 'in', 'on', 'with', 'to', 'by', 'at'}
@@ -501,8 +509,8 @@ STRICT RULES:
             return {"suppliers": [], "error": "No suppliers found. Try a different search term."}
 
         # Apply deterministic location signals before any regional filtering.
-        # In NA mode, unknown generic-TLD suppliers may stay temporarily pending
-        # so the background scraper can verify them; final publish is strict.
+        # Unknown generic-TLD suppliers stay pending so the background scraper
+        # can verify them; final publish marks unresolved locations as N/A.
         suppliers = [_normalize_supplier_location(s, region) for s in suppliers]
         if region == 'north_america':
             suppliers = _filter_suppliers_for_region(suppliers, region, safe_query, allow_pending=True)
@@ -720,7 +728,8 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                 blocked = [] if skip_emails else list(blocked_sites)
                 for s in enriched:
                     s.pop("_enriching", None)
-                enriched = _filter_suppliers_for_region(enriched, region, query, allow_pending=False)
+                enriched = _filter_suppliers_for_region(enriched, region, query, allow_pending=True)
+                enriched = _mark_unknown_locations(enriched)
 
                 # Apply match reasons from the parallel LLM call
                 for s in enriched:
@@ -753,7 +762,8 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                     reason = reason_map.get(s.get("name"))
                     if reason:
                         s["matchReason"] = reason
-                publish_suppliers = _filter_suppliers_for_region(current_suppliers, region, query, allow_pending=False)
+                publish_suppliers = _filter_suppliers_for_region(current_suppliers, region, query, allow_pending=True)
+                publish_suppliers = _mark_unknown_locations(publish_suppliers)
                 _searches[search_id] = {
                     "suppliers": publish_suppliers,
                     "status": "done",
@@ -769,7 +779,8 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
         entry = _searches.get(search_id, {})
         query = entry.get("query", "")
         region = entry.get("region", "north_america")
-        publish_suppliers = _filter_suppliers_for_region(suppliers, region, query, allow_pending=False)
+        publish_suppliers = _filter_suppliers_for_region(suppliers, region, query, allow_pending=True)
+        publish_suppliers = _mark_unknown_locations(publish_suppliers)
         _searches[search_id] = {
             "suppliers": publish_suppliers,
             "status": "done",
