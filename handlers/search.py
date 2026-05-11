@@ -54,7 +54,7 @@ def _metric_value(value):
 
 def _log_search_metric(search_id, phase, **fields):
     payload = ' '.join(f"{key}={_metric_value(value)}" for key, value in fields.items())
-    print(f"[search-metrics] id={search_id or '-'} phase={phase} {payload}".rstrip())
+    print(f"[search-metrics] id={search_id or '-'} phase={phase} {payload}".rstrip(), flush=True)
 
 
 def _elapsed(start):
