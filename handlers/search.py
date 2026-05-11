@@ -42,6 +42,41 @@ _ISO_COLLISION_TO_COUNTRY = {
 _UNKNOWN_LOCATION_VALUES = {'', 'US', 'USA', 'UNITED STATES', 'N/A', 'NA', 'UNKNOWN'}
 
 
+def _metric_value(value):
+    if isinstance(value, float):
+        return f"{value:.2f}"
+    if isinstance(value, str):
+        return json.dumps(value[:160])
+    if isinstance(value, bool):
+        return str(value).lower()
+    return str(value)
+
+
+def _log_search_metric(search_id, phase, **fields):
+    payload = ' '.join(f"{key}={_metric_value(value)}" for key, value in fields.items())
+    print(f"[search-metrics] id={search_id or '-'} phase={phase} {payload}".rstrip())
+
+
+def _elapsed(start):
+    return round(time.monotonic() - start, 2)
+
+
+def _store_search(search_id, data):
+    existing = _searches.get(search_id, {})
+    if existing.get("metrics") and "metrics" not in data:
+        data["metrics"] = existing["metrics"]
+    _searches[search_id] = data
+
+
+def _supplier_metric_counts(suppliers):
+    return {
+        "emails": sum(1 for s in suppliers if s.get("email")),
+        "contacts": sum(1 for s in suppliers if s.get("contactUrl")),
+        "certs": sum(1 for s in suppliers if s.get("certifications")),
+        "unknown_locations": sum(1 for s in suppliers if _is_unknown_location(s)),
+    }
+
+
 def _is_us_supplier(supplier):
     """Return True only when the supplier location is explicitly a US state."""
     if supplier.get('_non_us'):
@@ -351,6 +386,7 @@ def _build_queries(query, region='north_america'):
 def handle(query, skip_enrichment=False, region='north_america'):
     """Search for US suppliers using parallel Brave queries. Returns enriched supplier list."""
     try:
+        started_at = time.monotonic()
         # Step 1: Run Brave searches in parallel
         all_results = []
         all_faq = []
@@ -358,6 +394,7 @@ def handle(query, skip_enrichment=False, region='north_america'):
         seen_urls = set()
         failed_searches = 0
 
+        brave_started = time.monotonic()
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
             futures = [pool.submit(brave.search, q, 10, region) for q in _build_queries(query, region)]
             for f in concurrent.futures.as_completed(futures):
@@ -373,6 +410,7 @@ def handle(query, skip_enrichment=False, region='north_america'):
                 except Exception as e:
                     failed_searches += 1
                     print(f"[search] Brave query failed: {e}")
+        brave_sec = _elapsed(brave_started)
 
         # Filter out aggregator sites
         AGGREGATORS_ALWAYS = ('amazon.com', 'ebay.com', 'aliexpress.com', 'dhgate.com',
@@ -395,7 +433,9 @@ def handle(query, skip_enrichment=False, region='north_america'):
 
         if not all_results:
             if failed_searches == len(futures):
+                _log_search_metric(None, "initial_error", query=query, region=region, brave_s=brave_sec, error="provider_unavailable")
                 return {"suppliers": [], "blocked": [], "error": "Search provider temporarily unavailable. Please try again."}
+            _log_search_metric(None, "initial_error", query=query, region=region, brave_s=brave_sec, error="no_results")
             return {"suppliers": [], "blocked": [], "error": "No search results"}
 
         # Step 2: Build context with all available data — trim to fit token limits
@@ -512,8 +552,11 @@ STRICT RULES:
 4. Extract 5-8 suppliers maximum.
 5. READ ALL extra_snippets carefully — they often contain certifications, founding year, and employee data that the main description misses."""
 
+        llm_started = time.monotonic()
         response = llm.call_llm(system, user_msg, max_tokens=2048)
+        llm_sec = _elapsed(llm_started)
         if not response:
+            _log_search_metric(None, "initial_error", query=safe_query, region=region, brave_s=brave_sec, llm_s=llm_sec, error="llm_unavailable")
             return {"suppliers": [], "error": "Search service temporarily unavailable. Please try again."}
 
         suppliers = _parse_suppliers(response)
@@ -521,11 +564,14 @@ STRICT RULES:
         # Retry once if LLM returned unparseable response but we have search results
         if not suppliers and all_results:
             print("[search] LLM parse failed, retrying...")
+            retry_started = time.monotonic()
             response = llm.call_llm(system, user_msg, max_tokens=2048)
+            llm_sec += _elapsed(retry_started)
             if response:
                 suppliers = _parse_suppliers(response)
 
         if not suppliers:
+            _log_search_metric(None, "initial_error", query=safe_query, region=region, brave_s=brave_sec, llm_s=llm_sec, error="no_suppliers")
             return {"suppliers": [], "error": "No suppliers found. Try a different search term."}
 
         # Apply deterministic location signals before any regional filtering.
@@ -535,12 +581,14 @@ STRICT RULES:
         if region == 'north_america':
             suppliers = _filter_suppliers_for_region(suppliers, region, safe_query, allow_pending=True)
             if not suppliers:
+                _log_search_metric(None, "initial_error", query=safe_query, region=region, brave_s=brave_sec, llm_s=llm_sec, error="no_us_suppliers")
                 return {"suppliers": [], "error": "No US suppliers found. Try a different search term."}
 
         if region == 'global':
             suppliers = _filter_suppliers_for_region(suppliers, region, safe_query, allow_pending=False)
             if not suppliers:
                 geo_hint = _extract_geo_hint(safe_query)
+                _log_search_metric(None, "initial_error", query=safe_query, region=region, brave_s=brave_sec, llm_s=llm_sec, error="no_global_suppliers")
                 if _GEO_TO_CODES.get(geo_hint):
                     return {"suppliers": [], "error": f"No {geo_hint.title()} suppliers found for this query. Try broadening your search terms."}
                 return {"suppliers": [], "error": "No international suppliers found. Try a different search term."}
@@ -592,7 +640,35 @@ STRICT RULES:
         for s in suppliers:
             if not s.get("email"):
                 s["_enriching"] = True
-        _searches[search_id] = {"suppliers": list(suppliers), "status": "enriching", "blocked": [], "query": query, "region": region, "ts": time.time()}
+        metrics = {
+            "started_monotonic": started_at,
+            "initial_count": len(suppliers),
+            "raw_results": len(all_results),
+            "brave_sec": brave_sec,
+            "llm_sec": round(llm_sec, 2),
+            "first_response_sec": _elapsed(started_at),
+        }
+        _store_search(search_id, {
+            "suppliers": list(suppliers),
+            "status": "enriching",
+            "blocked": [],
+            "query": query,
+            "region": region,
+            "metrics": metrics,
+            "ts": time.time(),
+        })
+        _log_search_metric(
+            search_id,
+            "initial",
+            query=safe_query,
+            region=region,
+            demo=skip_enrichment,
+            brave_s=metrics["brave_sec"],
+            llm_s=metrics["llm_sec"],
+            first_s=metrics["first_response_sec"],
+            raw_results=metrics["raw_results"],
+            suppliers=metrics["initial_count"],
+        )
 
         thread = threading.Thread(target=_background_enrich, args=(search_id, suppliers, skip_enrichment), daemon=True)
         thread.start()
@@ -675,7 +751,8 @@ Use ```json fences."""
 def _background_enrich(search_id, suppliers, skip_emails=False):
     """Enrich reputation + match reasons + website scraping in parallel.
 
-    skip_emails=True: identical pipeline but no email extraction (demo mode).
+    skip_emails=True: demo pipeline skips email/contact discovery while still
+    filling missing reputation, locations, and certifications.
 
     Rendering order:
       Render 1 (instant):  name, state, products, certs*, years*, employees*, revenue* (* if in Brave)
@@ -687,19 +764,23 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
         entry = _searches.get(search_id, {})
         query = entry.get("query", "")
         region = entry.get("region", "north_america")
+        metrics = entry.get("metrics", {})
+        enrichment_started = time.monotonic()
         blocked_sites = []
 
         # Phase 1: Reputation enrichment — fills years, employees, revenue, certs gaps (~3-5s)
+        reputation_started = time.monotonic()
         suppliers = _enrich_reputation(suppliers)
+        _log_search_metric(search_id, "reputation", elapsed_s=_elapsed(reputation_started), suppliers=len(suppliers))
         publish_suppliers = _prepare_visible_suppliers(suppliers, region, query)
-        _searches[search_id] = {
+        _store_search(search_id, {
             "suppliers": list(publish_suppliers),
             "status": "enriching",
             "blocked": [],
             "query": query,
             "region": region,
             "ts": time.time(),
-        }
+        })
 
         # Phase 2: Match reasons + website scraping in parallel
         current_suppliers = list(suppliers)
@@ -709,25 +790,31 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
             enriched_supplier.pop("_enriching", None)
             current_suppliers[idx] = enriched_supplier
             publish_suppliers = _prepare_visible_suppliers(current_suppliers, region, query)
-            _searches[search_id] = {
+            _store_search(search_id, {
                 "suppliers": publish_suppliers,
                 "status": "enriching",
                 "blocked": [] if skip_emails else list(blocked_sites),
                 "query": query,
                 "region": region,
                 "ts": time.time(),
-            }
+            })
 
         def _do_match_reasons():
-            return _regenerate_match_reasons(list(suppliers), query)
+            match_started = time.monotonic()
+            result = _regenerate_match_reasons(list(suppliers), query)
+            _log_search_metric(search_id, "match_reasons", elapsed_s=_elapsed(match_started), suppliers=len(result))
+            return result
 
         def _do_scraping():
-            return scraper.enrich_suppliers(
+            scrape_started = time.monotonic()
+            result = scraper.enrich_suppliers(
                 list(suppliers),
                 on_each=_on_supplier_enriched,
                 skip_email=skip_emails,
                 blocked_sites=blocked_sites,
             )
+            _log_search_metric(search_id, "scrape", elapsed_s=_elapsed(scrape_started), suppliers=len(result), blocked=len(blocked_sites))
+            return result
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
             match_future = pool.submit(_do_match_reasons)
@@ -766,14 +853,28 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                 if has_new_certs:
                     enriched = _regenerate_match_reasons(enriched, query)
 
-                _searches[search_id] = {
+                _store_search(search_id, {
                     "suppliers": enriched,
                     "status": "done",
                     "blocked": blocked,
                     "query": query,
                     "region": region,
                     "ts": time.time(),
-                }
+                })
+                counts = _supplier_metric_counts(enriched)
+                total_sec = _elapsed(metrics["started_monotonic"]) if metrics.get("started_monotonic") else None
+                _log_search_metric(
+                    search_id,
+                    "done",
+                    query=query,
+                    region=region,
+                    initial=metrics.get("initial_count", len(suppliers)),
+                    final=len(enriched),
+                    enrich_s=_elapsed(enrichment_started),
+                    total_s=total_sec if total_sec is not None else "",
+                    blocked=len(blocked),
+                    **counts,
+                )
             except Exception as e:
                 print(f"[search] Website scraping error: {e}")
                 for s in current_suppliers:
@@ -782,14 +883,15 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                     if reason:
                         s["matchReason"] = reason
                 publish_suppliers = _prepare_visible_suppliers(current_suppliers, region, query, final=True)
-                _searches[search_id] = {
+                _store_search(search_id, {
                     "suppliers": publish_suppliers,
                     "status": "done",
                     "blocked": [],
                     "query": query,
                     "region": region,
                     "ts": time.time(),
-                }
+                })
+                _log_search_metric(search_id, "done_error", query=query, region=region, error="scrape_failed", enrich_s=_elapsed(enrichment_started))
 
     except Exception as e:
         for s in suppliers:
@@ -798,14 +900,15 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
         query = entry.get("query", "")
         region = entry.get("region", "north_america")
         publish_suppliers = _prepare_visible_suppliers(suppliers, region, query, final=True)
-        _searches[search_id] = {
+        _store_search(search_id, {
             "suppliers": publish_suppliers,
             "status": "done",
             "blocked": [],
             "query": query,
             "region": region,
             "ts": time.time(),
-        }
+        })
+        _log_search_metric(search_id, "done_error", query=query, region=region, error="background_failed")
         print(f"[search] Background enrichment error: {e}")
 
 

@@ -39,6 +39,14 @@ _BROWSER_HEADERS = {
 
 _blocked_sites = []
 
+FAST_FETCH_TIMEOUT = 4
+CERT_FETCH_TIMEOUT = 3
+PLAYWRIGHT_GOTO_TIMEOUT_MS = 8000
+PLAYWRIGHT_WAIT_MS = 800
+FAST_ENRICH_PATHS = ('/contact', '/contact-us', '/about', '/about-us')
+CERT_ENRICH_PATHS = ('/quality', '/certifications')
+UNKNOWN_LOCATION_VALUES = {'', 'US', 'USA', 'UNITED STATES', 'N/A', 'NA', 'UNKNOWN'}
+
 
 def get_blocked_sites():
     """Return list of sites that returned 403/Cloudflare blocks."""
@@ -416,8 +424,8 @@ NON_US_INDICATORS = {
 
 CERT_PATTERNS = re.compile(
     r'(?:'
-    r'ISO\s*\d{4,5}(?::\d{4})?'         # ISO 9001, ISO 9001:2015, ISO 13485
-    r'|AS\s*9100[A-Z]?(?::\d{4})?'       # AS9100, AS9100D
+    r'ISO\s*\d{4,5}(?::\s*\d{4})?'       # ISO 9001, ISO 9001:2015, ISO 13485
+    r'|AS\s*9100[A-Z]?(?::\s*\d{4})?'    # AS9100, AS9100D
     r'|ITAR(?:\s+registered)?'            # ITAR
     r'|NADCAP'                            # NADCAP
     r'|AMS\s*\d+'                         # AMS specs
@@ -444,8 +452,9 @@ CERT_PATTERNS = re.compile(
     re.IGNORECASE
 )
 
-_SUPPLIER_LEVEL_CERT_PREFIXES = (
-    'ISO', 'AS9100', 'AS 9100', 'ITAR', 'NADCAP', 'NIST ', 'SOC ', 'CMMC', 'CWB', 'AWS D'
+_WEAK_CERT_PREFIXES = (
+    'FDA', 'ROHS', 'CE ', 'UL ', 'PED', 'ASME', 'API ', 'DFARS', 'ASTM',
+    'AMS', 'SAE', 'JIS', 'MIL-SPEC', 'QPL'
 )
 _CONTEXT_MARKERS = (
     'certified', 'certification', 'certificate', 'certifications', 'registered',
@@ -454,11 +463,85 @@ _CONTEXT_MARKERS = (
 )
 
 
+def _normalize_cert(cert):
+    normalized = re.sub(r'\s+', ' ', str(cert or '').strip().upper())
+    normalized = normalized.replace('MIL SPEC', 'MIL-SPEC')
+
+    iso_match = re.fullmatch(r'ISO\s*(\d{4,5})(?::\s*(\d{4}))?', normalized)
+    if iso_match:
+        version = f":{iso_match.group(2)}" if iso_match.group(2) else ""
+        return f"ISO {iso_match.group(1)}{version}"
+
+    as_match = re.fullmatch(r'AS\s*9100\s*([A-Z]?)(?::\s*(\d{4}))?', normalized)
+    if as_match:
+        suffix = as_match.group(1) or ""
+        version = f":{as_match.group(2)}" if as_match.group(2) else ""
+        return f"AS9100{suffix}{version}"
+
+    return normalized
+
+
+def _cert_family_key(cert):
+    cert = _normalize_cert(cert)
+    iso_match = re.match(r'ISO (\d{4,5})', cert)
+    if iso_match:
+        return f"ISO {iso_match.group(1)}"
+    as_match = re.match(r'AS9100', cert)
+    if as_match:
+        return "AS9100"
+    return cert
+
+
+def _cert_specificity(cert):
+    cert = _normalize_cert(cert)
+    return (10 if ':' in cert else 0) + len(cert)
+
+
+def _dedupe_certifications(certs):
+    normalized = []
+    seen = set()
+    for cert in certs:
+        n = _normalize_cert(cert)
+        if not n or n in seen:
+            continue
+        seen.add(n)
+        normalized.append(n)
+
+    filtered = []
+    for cert in normalized:
+        key = _cert_family_key(cert)
+        if any(
+            other != cert
+            and _cert_family_key(other) == key
+            and _cert_specificity(other) > _cert_specificity(cert)
+            for other in normalized
+        ):
+            continue
+        filtered.append(cert)
+
+    _SUBSUMABLE = {'ASME', 'ISO', 'AS', 'AMS', 'ASTM', 'SAE', 'AWS', 'API'}
+    deduped = []
+    for cert in filtered:
+        base = cert.split()[0] if cert.split() else cert
+        if base in _SUBSUMABLE and len(cert.split()) == 1:
+            if not any(c != cert and c.startswith(cert) for c in filtered):
+                deduped.append(cert)
+        else:
+            deduped.append(cert)
+    return deduped
+
+
 def _is_supplier_level_cert(cert):
-    normalized = re.sub(r'\s+', ' ', cert.strip().upper())
-    if normalized.startswith(_SUPPLIER_LEVEL_CERT_PREFIXES):
+    normalized = _normalize_cert(cert)
+    if re.match(r'^ISO \d{4,5}', normalized):
         return True
-    return any(marker.upper() in normalized for marker in _CONTEXT_MARKERS)
+    if normalized.startswith(('AS9100', 'NADCAP', 'NIST 800', 'NIST SP', 'SOC 1', 'SOC 2', 'CMMC', 'CWB', 'AWS D')):
+        return True
+    if normalized.startswith('ITAR REGISTERED'):
+        return True
+    if normalized.startswith(_WEAK_CERT_PREFIXES) or normalized == 'ITAR':
+        return False
+    return False
 
 
 def _has_cert_context(text, start, end):
@@ -468,7 +551,7 @@ def _has_cert_context(text, start, end):
 
 def _filter_unverified_certifications(certs):
     """Keep certs likely to be supplier-level when there is no source context."""
-    return [c for c in certs if _is_supplier_level_cert(c)]
+    return _dedupe_certifications(c for c in certs if _is_supplier_level_cert(c))
 
 
 def _extract_certifications(html, require_context=False):
@@ -489,34 +572,7 @@ def _extract_certifications(html, require_context=False):
         matches.append(cert)
     if not matches:
         return []
-    # Normalize to uppercase and dedupe
-    seen = set()
-    unique = []
-    for cert in matches:
-        normalized = re.sub(r'\s+', ' ', cert.strip().upper())
-        if normalized not in seen:
-            seen.add(normalized)
-            unique.append(normalized)  # store normalized form, not original case
-
-    # Remove bare prefix entries when a more specific variant exists.
-    # e.g. drop "ASME" if "ASME B16.20" or "ASME RTJ" is already present.
-    _SUBSUMABLE = {'ASME', 'ISO', 'AS', 'AMS', 'ASTM', 'SAE', 'AWS', 'API'}
-    filtered = []
-    for cert in unique:
-        base = cert.split()[0] if cert.split() else cert
-        if base in _SUBSUMABLE and len(cert.split()) == 1:
-            # Only keep the bare form if no more-specific variant exists
-            if not any(c != cert and c.startswith(cert) for c in unique):
-                filtered.append(cert)
-        else:
-            filtered.append(cert)
-
-    deduped = []
-    for cert in filtered:
-        if any(other != cert and other.startswith(cert + ':') for other in filtered):
-            continue
-        deduped.append(cert)
-
+    deduped = _dedupe_certifications(matches)
     return deduped[:8]  # Cap at 8 certs
 
 
@@ -629,10 +685,15 @@ def _has_strong_non_us_location(html, country_value):
     return False
 
 
+def _is_unknown_location_value(value):
+    return (value or '').strip().upper() in UNKNOWN_LOCATION_VALUES
+
+
 def _enrich_single(supplier, skip_email=False, blocked_sites=None):
     """Enrich a single supplier with location, certs, contactUrl, and optionally email.
 
-    skip_email=True: skips all email extraction (demo mode) — everything else identical.
+    skip_email=True: skips email/contact discovery for demo mode, while still
+    filling missing location and certifications.
     Fast path: urllib on homepage + 4 common paths.
     Slow path: single Playwright deep scan only if still missing data after fast path.
     """
@@ -647,13 +708,19 @@ def _enrich_single(supplier, skip_email=False, blocked_sites=None):
 
     existing_certs = (supplier.get('certifications') or '').strip()
     initial_state = (supplier.get('state') or '').strip().upper()
-    needs_location = True
-    needs_certs = True
-    location_verified = False
+    existing_cert_list = []
+    if existing_certs and existing_certs.upper() not in UNKNOWN_LOCATION_VALUES:
+        existing_cert_list = _filter_unverified_certifications(_extract_certifications(existing_certs))
+        supplier['certifications'] = ', '.join(existing_cert_list) if existing_cert_list else ''
+
+    needs_location = _is_unknown_location_value(initial_state)
+    needs_certs = not bool(existing_cert_list)
+    needs_contact = not skip_email
+    location_verified = not needs_location
 
     # Early exit: nothing left to fetch
     email_done = skip_email or has_email
-    if email_done and has_contact and not needs_location and not needs_certs:
+    if email_done and (not needs_contact or has_contact) and not needs_location and not needs_certs:
         return supplier
 
     base_url = website if website.startswith('http') else 'https://' + website
@@ -661,6 +728,19 @@ def _enrich_single(supplier, skip_email=False, blocked_sites=None):
     def _has_valid_email():
         e = supplier.get('email', '').strip()
         return bool(e and EMAIL_RE.fullmatch(e))
+
+    def _has_contact_url():
+        contact = supplier.get('contactUrl', '').strip()
+        return bool(contact and contact.startswith('http'))
+
+    def _contact_done():
+        return not needs_contact or _has_contact_url()
+
+    def _state_done():
+        return not needs_location or location_verified or not _is_unknown_location_value(supplier.get('state', ''))
+
+    def _fast_enough():
+        return (skip_email or _has_valid_email()) and _contact_done() and _state_done() and (not needs_certs or bool(all_certs))
 
     all_certs = []
 
@@ -673,7 +753,7 @@ def _enrich_single(supplier, skip_email=False, blocked_sites=None):
             emails = _extract_emails(html)
             if emails:
                 supplier['email'] = _pick_best_email(emails)
-        if not supplier.get('contactUrl', '').strip():
+        if needs_contact and not supplier.get('contactUrl', '').strip():
             contact = _extract_contact_url(html, base_url)
             if contact:
                 supplier['contactUrl'] = contact
@@ -682,11 +762,12 @@ def _enrich_single(supplier, skip_email=False, blocked_sites=None):
             if loc:
                 if loc not in US_STATE_ABBRS:
                     if initial_state in US_STATE_ABBRS and not _has_strong_non_us_location(html, loc):
-                        return
+                        loc = None
+                if loc and loc not in US_STATE_ABBRS:
                     location_verified = True
                     supplier['state'] = loc
                     supplier['_non_us'] = True
-                else:
+                elif loc:
                     location_verified = True
                     supplier['state'] = loc
                     supplier.pop('_non_us', None)
@@ -695,55 +776,56 @@ def _enrich_single(supplier, skip_email=False, blocked_sites=None):
             if certs:
                 all_certs.extend(certs)
 
+    def _publish_certs():
+        if all_certs:
+            certs = _dedupe_certifications(all_certs)
+            supplier['certifications'] = ', '.join(certs[:6]) if certs else ''
+            return bool(certs)
+        if existing_cert_list:
+            supplier['certifications'] = ', '.join(existing_cert_list[:6])
+            return True
+        return False
+
     # --- Phase 1: Fast urllib pass (homepage + 4 common paths) ---
-    homepage_html = _fetch_page(base_url, timeout=5, blocked_sites=blocked_sites)
+    homepage_html = _fetch_page(base_url, timeout=FAST_FETCH_TIMEOUT, blocked_sites=blocked_sites)
     _check_html(homepage_html)
 
     # Discover cert page URL from homepage links before guessing paths
     discovered_cert_url = _find_cert_page_url(homepage_html, base_url) if homepage_html else ''
 
-    for path in ['/contact', '/contact-us', '/about', '/about-us']:
-        # Stop when email (if needed) and state are both resolved
-        if (skip_email or _has_valid_email()) and location_verified:
+    for path in FAST_ENRICH_PATHS:
+        if _fast_enough():
             break
-        page_html = _fetch_page(base_url.rstrip('/') + path, timeout=5, blocked_sites=blocked_sites)
+        page_html = _fetch_page(base_url.rstrip('/') + path, timeout=FAST_FETCH_TIMEOUT, blocked_sites=blocked_sites)
         _check_html(page_html)
 
-    # Cert pages — always fetched when certs are needed, regardless of earlier hits.
-    # Earlier pages (homepage, contact, about) may match cert names in customer
-    # requirements or blog text; dedicated pages are ground truth.
+    # Cert pages are only fetched when the first pass still has no supplier-level certs.
     if needs_certs:
-        # Try the discovered cert URL first, then fall back to guessed paths
         cert_urls_to_try = []
         if discovered_cert_url:
             cert_urls_to_try.append(discovered_cert_url)
-        for path in ['/quality', '/certifications', '/capabilities']:
+        for path in CERT_ENRICH_PATHS:
             url = base_url.rstrip('/') + path
             if url != discovered_cert_url:
                 cert_urls_to_try.append(url)
         for url in cert_urls_to_try:
-            page_html = _fetch_page(url, timeout=5, blocked_sites=blocked_sites)
+            if all_certs:
+                break
+            page_html = _fetch_page(url, timeout=CERT_FETCH_TIMEOUT, blocked_sites=blocked_sites)
             if page_html:
                 certs = _extract_certifications(page_html, require_context=True)
                 if certs:
                     all_certs.extend(certs)
 
     # Merge collected certs
-    if all_certs:
-        seen = set()
-        unique = []
-        for c in all_certs:
-            n = c.strip().upper()
-            if n not in seen:
-                seen.add(n)
-                unique.append(c.strip())
-        supplier['certifications'] = ', '.join(unique[:6])
+    _publish_certs()
 
-    # Playwright needed if any data still missing
+    # Playwright is expensive; use it only for missing email or missing location,
+    # not for cert-only cleanup.
     email_done = skip_email or _has_valid_email()
-    state_done = location_verified or supplier.get('state', '') not in ('', 'US', 'USA')
-    certs_done = not needs_certs or bool(all_certs)
-    if email_done and state_done and certs_done:
+    state_done = _state_done()
+    needs_playwright = (not email_done) or (needs_location and not state_done)
+    if not needs_playwright:
         supplier['_location_verified'] = bool(location_verified)
         return supplier
 
@@ -755,8 +837,8 @@ def _enrich_single(supplier, skip_email=False, blocked_sites=None):
             page = browser.new_page()
             page.set_extra_http_headers({"User-Agent": _BROWSER_HEADERS["User-Agent"]})
             try:
-                page.goto(base_url, wait_until="domcontentloaded", timeout=12000)
-                page.wait_for_timeout(2000)
+                page.goto(base_url, wait_until="domcontentloaded", timeout=PLAYWRIGHT_GOTO_TIMEOUT_MS)
+                page.wait_for_timeout(PLAYWRIGHT_WAIT_MS)
 
                 # Rendered homepage — catches JS-injected content
                 rendered_html = page.content()
@@ -814,8 +896,8 @@ def _enrich_single(supplier, skip_email=False, blocked_sites=None):
                         }""")
                         if contact_href:
                             try:
-                                page.goto(contact_href, wait_until="domcontentloaded", timeout=12000)
-                                page.wait_for_timeout(2000)
+                                page.goto(contact_href, wait_until="domcontentloaded", timeout=PLAYWRIGHT_GOTO_TIMEOUT_MS)
+                                page.wait_for_timeout(PLAYWRIGHT_WAIT_MS)
                                 contact_html = page.content()
                                 emails = _extract_emails(contact_html)
                                 if emails:
@@ -832,18 +914,9 @@ def _enrich_single(supplier, skip_email=False, blocked_sites=None):
 
     # Final cert merge (covers Playwright-found certs)
     if all_certs and needs_certs:
-        seen = set()
-        unique = []
-        for c in all_certs:
-            n = c.strip().upper()
-            if n not in seen:
-                seen.add(n)
-                unique.append(c.strip())
-        supplier['certifications'] = ', '.join(unique[:6])
-    elif existing_certs and existing_certs != 'N/A':
-        certs = _extract_certifications(existing_certs)
-        certs = _filter_unverified_certifications(certs)
-        supplier['certifications'] = ', '.join(certs) if certs else ''
+        _publish_certs()
+    elif existing_certs and existing_certs.upper() not in UNKNOWN_LOCATION_VALUES:
+        supplier['certifications'] = ', '.join(existing_cert_list) if existing_cert_list else ''
 
     supplier['_location_verified'] = bool(location_verified)
     return supplier
@@ -851,7 +924,7 @@ def _enrich_single(supplier, skip_email=False, blocked_sites=None):
 
 def enrich_suppliers(suppliers, on_each=None, skip_email=False, blocked_sites=None):
     """Enrich a list of suppliers in parallel. Returns enriched list.
-    skip_email=True skips all email extraction (demo mode).
+    skip_email=True skips email/contact discovery (demo mode).
     If on_each callback is provided, it's called after each supplier finishes."""
     blocked_sites = _blocked_sites if blocked_sites is None else blocked_sites
     results = [None] * len(suppliers)
