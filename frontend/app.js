@@ -355,7 +355,7 @@ function resolveLocationTag(rawState) {
   if (!stateVal) return { flag: '', label: '' };
   const cleanStateVal = stateVal.replace(/\s*\(.*?\)\s*$/, '').trim();
   if (['N/A', 'NA', 'UNKNOWN'].includes(cleanStateVal.toUpperCase())) {
-    return { flag: '', label: 'N/A' };
+    return { flag: '', label: '' };
   }
   const normalizedState = cleanStateVal.startsWith('US-') ? cleanStateVal.slice(3) : cleanStateVal;
   const stateNameAbbr = US_STATE_NAME_TO_ABBR[cleanStateVal.toLowerCase()] || '';
