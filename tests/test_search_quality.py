@@ -28,6 +28,10 @@ class SearchQualityTests(unittest.TestCase):
             [],
         )
         self.assertEqual(
+            scraper._extract_certifications("Certifications: FDA, CE mark, and ISO 9001 certified", require_context=True),
+            ["ISO 9001"],
+        )
+        self.assertEqual(
             scraper._filter_unverified_certifications(
                 scraper._extract_certifications("FDA, ITAR, ISO9001, ISO 9001:2015, ASME SECTION, RoHS")
             ),

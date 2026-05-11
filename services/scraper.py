@@ -456,6 +456,15 @@ _WEAK_CERT_PREFIXES = (
     'FDA', 'ROHS', 'CE ', 'UL ', 'PED', 'ASME', 'API ', 'DFARS', 'ASTM',
     'AMS', 'SAE', 'JIS', 'MIL-SPEC', 'QPL'
 )
+_ALWAYS_REJECT_CERTS = {
+    'FDA', 'FDA APPROVED', 'FDA CLEARED', 'FDA COMPLIANT',
+    'ROHS', 'ROHS COMPLIANT',
+    'CE MARK', 'CE MARKED', 'CE MARKING',
+    'UL LISTED', 'UL CERTIFIED', 'UL APPROVED',
+    'PED', 'PED CERTIFIED',
+    'ASME', 'ASME SECTION',
+    'DFARS', 'DFARS COMPLIANT',
+}
 _CONTEXT_MARKERS = (
     'certified', 'certification', 'certificate', 'certifications', 'registered',
     'registration', 'accredited', 'accreditation', 'quality management',
@@ -531,8 +540,14 @@ def _dedupe_certifications(certs):
     return deduped
 
 
+def _is_always_rejected_cert(cert):
+    return _normalize_cert(cert) in _ALWAYS_REJECT_CERTS
+
+
 def _is_supplier_level_cert(cert):
     normalized = _normalize_cert(cert)
+    if _is_always_rejected_cert(normalized):
+        return False
     if re.match(r'^ISO \d{4,5}', normalized):
         return True
     if normalized.startswith(('AS9100', 'NADCAP', 'NIST 800', 'NIST SP', 'SOC 1', 'SOC 2', 'CMMC', 'CWB', 'AWS D')):
@@ -566,7 +581,9 @@ def _extract_certifications(html, require_context=False):
     text = attr_text + ' ' + body_text
     matches = []
     for match in CERT_PATTERNS.finditer(text):
-        cert = match.group(0)
+        cert = _normalize_cert(match.group(0))
+        if _is_always_rejected_cert(cert):
+            continue
         if require_context and not _is_supplier_level_cert(cert) and not _has_cert_context(text, match.start(), match.end()):
             continue
         matches.append(cert)
