@@ -252,6 +252,26 @@ def _mark_unknown_locations(suppliers):
     return suppliers
 
 
+def _prepare_visible_suppliers(suppliers, region, query='', final=False):
+    """Keep already-rendered suppliers visible while normalizing unsafe locations.
+
+    Initial search filtering decides which suppliers are worth showing. Background
+    enrichment should update those cards, not remove them if a scrape later finds
+    an ambiguous or conflicting location signal.
+    """
+    prepared = []
+    for supplier in suppliers:
+        s = dict(supplier)
+        _normalize_supplier_location(s, region)
+        passes_region = bool(_filter_suppliers_for_region([dict(s)], region, query, allow_pending=True))
+        if not passes_region:
+            s['state'] = 'N/A' if final else ''
+            s.pop('_non_us', None)
+        prepared.append(s)
+
+    return _mark_unknown_locations(prepared) if final else prepared
+
+
 _LOWERCASE_PRODUCT_WORDS = {'and', 'or', 'the', 'a', 'an', 'of', 'for', 'in', 'on', 'with', 'to', 'by', 'at'}
 _PRODUCT_ACRONYMS = {
     'iso', 'asme', 'astm', 'ams', 'ansi', 'api', 'cmmc', 'cnc', 'dfars', 'fda',
@@ -671,7 +691,7 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
 
         # Phase 1: Reputation enrichment — fills years, employees, revenue, certs gaps (~3-5s)
         suppliers = _enrich_reputation(suppliers)
-        publish_suppliers = _filter_suppliers_for_region(suppliers, region, query, allow_pending=True)
+        publish_suppliers = _prepare_visible_suppliers(suppliers, region, query)
         _searches[search_id] = {
             "suppliers": list(publish_suppliers),
             "status": "enriching",
@@ -688,7 +708,7 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
             """Called as each supplier finishes website scraping — publish immediately."""
             enriched_supplier.pop("_enriching", None)
             current_suppliers[idx] = enriched_supplier
-            publish_suppliers = _filter_suppliers_for_region(list(current_suppliers), region, query, allow_pending=True)
+            publish_suppliers = _prepare_visible_suppliers(current_suppliers, region, query)
             _searches[search_id] = {
                 "suppliers": publish_suppliers,
                 "status": "enriching",
@@ -728,8 +748,7 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                 blocked = [] if skip_emails else list(blocked_sites)
                 for s in enriched:
                     s.pop("_enriching", None)
-                enriched = _filter_suppliers_for_region(enriched, region, query, allow_pending=True)
-                enriched = _mark_unknown_locations(enriched)
+                enriched = _prepare_visible_suppliers(enriched, region, query, final=True)
 
                 # Apply match reasons from the parallel LLM call
                 for s in enriched:
@@ -762,8 +781,7 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                     reason = reason_map.get(s.get("name"))
                     if reason:
                         s["matchReason"] = reason
-                publish_suppliers = _filter_suppliers_for_region(current_suppliers, region, query, allow_pending=True)
-                publish_suppliers = _mark_unknown_locations(publish_suppliers)
+                publish_suppliers = _prepare_visible_suppliers(current_suppliers, region, query, final=True)
                 _searches[search_id] = {
                     "suppliers": publish_suppliers,
                     "status": "done",
@@ -779,8 +797,7 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
         entry = _searches.get(search_id, {})
         query = entry.get("query", "")
         region = entry.get("region", "north_america")
-        publish_suppliers = _filter_suppliers_for_region(suppliers, region, query, allow_pending=True)
-        publish_suppliers = _mark_unknown_locations(publish_suppliers)
+        publish_suppliers = _prepare_visible_suppliers(suppliers, region, query, final=True)
         _searches[search_id] = {
             "suppliers": publish_suppliers,
             "status": "done",
