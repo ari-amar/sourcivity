@@ -58,6 +58,13 @@ const printQuotesBtn = document.getElementById('print-quotes-btn');
 const locationInput = document.getElementById('location-input');
 const themeToggle = document.getElementById('theme-toggle');
 const themeColorMeta = document.getElementById('theme-color-meta');
+const settingsForm = document.getElementById('settings-form');
+const settingsTone = document.getElementById('settings-rfq-tone');
+const settingsDeadline = document.getElementById('settings-rfq-deadline');
+const settingsSignature = document.getElementById('settings-rfq-signature');
+const settingsExtra = document.getElementById('settings-rfq-extra');
+const settingsStatus = document.getElementById('settings-status');
+const settingsSaveBtn = document.getElementById('settings-save-btn');
 
 // === THEME ===
 function applyTheme(theme) {
@@ -106,6 +113,7 @@ const rfqStatus       = document.getElementById('rfq-status');
 
 // === FLOATING RFQ CART ===
 let cartPanelOpen = false;
+let settingsLoaded = false;
 
 function setCartPanelOpen(open) {
   cartPanelOpen = open && rfqCart.length > 0;
@@ -218,6 +226,7 @@ navBtns.forEach(btn => {
     tab.classList.remove('hidden');
     tab.classList.add('active');
     if (btn.dataset.tab === 'quotes') loadQuotes();
+    if (btn.dataset.tab === 'settings') loadSettings();
   });
 });
 
@@ -792,6 +801,62 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
     renderQuotes(allQuotes);
   });
 });
+
+// === SETTINGS (full mode only) ===
+function fillSettingsForm(settings) {
+  if (!settingsForm || !settings) return;
+  settingsTone.value = settings.rfq_tone || '';
+  settingsDeadline.value = settings.rfq_default_deadline || '';
+  settingsSignature.value = settings.rfq_signature || '';
+  settingsExtra.value = settings.rfq_extra_instructions || '';
+}
+
+async function loadSettings(force) {
+  if (DEMO_MODE || !settingsForm) return;
+  if (settingsLoaded && !force) return;
+  showStatus(settingsStatus, 'loading', 'Loading settings...');
+  try {
+    const res = await fetch(API_URL + '/api/settings');
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Settings unavailable');
+    fillSettingsForm(data.settings || {});
+    settingsLoaded = true;
+    hideStatus(settingsStatus);
+  } catch (err) {
+    showStatus(settingsStatus, 'error', 'Failed to load settings: ' + err.message);
+  }
+}
+
+if (!DEMO_MODE && settingsForm) {
+  settingsForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    settingsSaveBtn.disabled = true;
+    showStatus(settingsStatus, 'loading', 'Saving settings...');
+    try {
+      const payload = {
+        rfq_tone: settingsTone.value.trim(),
+        rfq_default_deadline: settingsDeadline.value.trim(),
+        rfq_signature: settingsSignature.value.trim(),
+        rfq_extra_instructions: settingsExtra.value.trim(),
+      };
+      const res = await fetch(API_URL + '/api/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({settings: payload}),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Save failed');
+      fillSettingsForm(data.settings || payload);
+      settingsLoaded = true;
+      showStatus(settingsStatus, 'success', 'Settings saved.');
+      setTimeout(() => hideStatus(settingsStatus), 2500);
+    } catch (err) {
+      showStatus(settingsStatus, 'error', 'Failed to save settings: ' + err.message);
+    } finally {
+      settingsSaveBtn.disabled = false;
+    }
+  });
+}
 
 // === RFQ MODAL (full mode only) ===
 if (!DEMO_MODE && rfqModal) {

@@ -68,6 +68,7 @@ QUOTES_CSV = os.path.join(WORKSPACE_DIR, "quotes", "quote-tracker.csv")
 COMMS_DIR = os.path.join(WORKSPACE_DIR, "comms")
 CREDENTIALS_DIR = os.path.join(WORKSPACE_DIR, "credentials")
 SYNC_SCRIPT = os.path.join(WORKSPACE_DIR, "sync_to_sheets.py")
+SETTINGS_JSON = os.environ.get("SETTINGS_JSON", os.path.join(WORKSPACE_DIR, "settings.json"))
 
 # --- Email (via Himalaya CLI — supports Gmail, Outlook/M365, any IMAP/SMTP) ---
 HIMALAYA_BIN = os.environ.get("HIMALAYA_BIN", "/tmp/himalaya")

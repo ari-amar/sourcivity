@@ -1,7 +1,7 @@
 """RFQ drafting and sending — LLM for drafting, Python for execution."""
 import threading
 from datetime import date
-from services import llm, email_client, csv_store, sheets
+from services import llm, email_client, csv_store, sheets, settings as user_settings
 from config import (
     EMAIL_ADDRESS,
     EMAIL_DISPLAY_NAME,
@@ -10,21 +10,17 @@ from config import (
     CUSTOMER_FULL_NAME,
     CUSTOMER_TITLE,
     CUSTOMER_COMPANY,
-    RFQ_DEFAULT_DEADLINE,
-    RFQ_EXTRA_INSTRUCTIONS,
-    RFQ_SIGNATURE,
-    RFQ_TONE,
 )
 
 
-def _customer_style_block():
-    extra = RFQ_EXTRA_INSTRUCTIONS or "none"
+def _customer_style_block(settings):
+    extra = settings["rfq_extra_instructions"] or "none"
     return f"""CUSTOMER-SPECIFIC WRITING STYLE:
-- Tone: {RFQ_TONE}
-- Default urgency/deadline: {RFQ_DEFAULT_DEADLINE}
+- Tone: {settings["rfq_tone"]}
+- Default urgency/deadline: {settings["rfq_default_deadline"]}
 - Extra instructions: {extra}
 - Signature must be exactly:
-{RFQ_SIGNATURE}"""
+{settings["rfq_signature"]}"""
 
 
 def handle_draft(supplier, part, qty="", notes=""):
@@ -32,6 +28,8 @@ def handle_draft(supplier, part, qty="", notes=""):
     supplier_name = supplier.get("name", "Unknown")
     supplier_email = supplier.get("email", "")
     website = supplier.get("website", "")
+    rfq_settings = user_settings.get_rfq_settings()
+    signature = rfq_settings["rfq_signature"]
 
     system = f"""You are {CUSTOMER_NAME}, {CUSTOMER_TITLE} at {CUSTOMER_COMPANY}, writing a quick RFQ email to a supplier.
 
@@ -50,14 +48,14 @@ STRICT FORMATTING RULES — violating any of these means failure:
 6. If quantity is given, weave it into a sentence naturally. NEVER list it as a field.
 7. Sound like a real buyer who sends these daily — casual, direct, confident.
 
-{_customer_style_block()}
+{_customer_style_block(rfq_settings)}
 
 GOOD example:
 Hi Schaeffler,
 
 I'm sourcing crossed roller bearings for an upcoming automation build at {CUSTOMER_COMPANY}. We'd need around 50 units to start, with likely repeat orders down the line. Could you send over ballpark pricing and lead time when you get a chance? We're finalizing our vendor list this week.
 
-{RFQ_SIGNATURE}
+{signature}
 
 BAD (do NOT do this):
 Dear Schaeffler Team,
@@ -179,6 +177,7 @@ def handle_followup(supplier_name):
 
     part = quote.get("partService", "")
     sent_date = quote.get("date", "")
+    rfq_settings = user_settings.get_rfq_settings()
 
     system = f"""You are {CUSTOMER_NAME}, {CUSTOMER_TITLE} at {CUSTOMER_COMPANY}, sending a short, polite follow-up to a supplier who hasn't replied to an earlier RFQ.
 
@@ -190,7 +189,7 @@ STRICT RULES:
 5. Start with "Hi {supplier_name}," — never "Dear" or "To Whom It May Concern".
 6. End with the configured signature exactly.
 
-{_customer_style_block()}
+{_customer_style_block(rfq_settings)}
 
 Return ONLY in this exact format:
 Subject: Re: [Part] — quick follow-up

@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from urllib.parse import urlparse, parse_qs
 
 from config import SERVE_PORT, EMAIL_ADDRESS, CUSTOMER_NAME, CUSTOMER_COMPANY, WORKSPACE_DIR, DEMO_MODE
-from services import csv_store, scraper
+from services import csv_store, scraper, settings as user_settings
 from handlers import search, rfq, inbox, compare
 
 if DEMO_MODE:
@@ -161,6 +161,11 @@ class AppHandler(SimpleHTTPRequestHandler):
             except Exception as e:
                 print(f"[quotes] Error: {e}")
                 _send_json(self, {"error": "Failed to load quotes"}, 500)
+        elif self.path == "/api/settings":
+            if DEMO_MODE:
+                _send_json(self, {"error": "Settings are not available in demo mode."}, 403)
+                return
+            _send_json(self, {"settings": user_settings.get_rfq_settings()})
         elif self.path.startswith("/api/search/status"):
             parsed = parse_qs(urlparse(self.path).query)
             search_id = parsed.get("id", [""])[0]
@@ -185,6 +190,7 @@ class AppHandler(SimpleHTTPRequestHandler):
         if DEMO_MODE and self.path in ("/api/rfq/draft", "/api/rfq/send",
                                         "/api/rfq/batch-draft", "/api/rfq/batch-send",
                                         "/api/rfq/followup",
+                                        "/api/settings",
                                         "/api/enrich",
                                         "/api/inbox/check", "/api/browser/detect-forms",
                                         "/api/browser/autofill", "/api/browser/fill-form",
@@ -292,6 +298,16 @@ class AppHandler(SimpleHTTPRequestHandler):
             except Exception as e:
                 print(f"[rfq] Follow-up error: {e}")
                 _send_json(self, {"success": False, "error": "Follow-up failed. Please try again."}, 500)
+
+        elif self.path == "/api/settings":
+            try:
+                settings = data.get("settings", data)
+                updated = user_settings.update_rfq_settings(settings)
+                log_activity("settings_update", "rfq_email_style", _get_real_ip(self), _get_referrer(self), _get_device(self))
+                _send_json(self, {"settings": updated, "success": True})
+            except Exception as e:
+                print(f"[settings] Error: {e}")
+                _send_json(self, {"error": "Failed to save settings"}, 500)
 
         elif self.path == "/api/inbox/check":
             result = inbox.handle()

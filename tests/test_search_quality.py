@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,7 +12,7 @@ os.environ.setdefault("GMAIL_ADDRESS", "dummy@example.com")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from handlers import search
-from services import scraper
+from services import scraper, settings as user_settings
 
 
 class SearchQualityTests(unittest.TestCase):
@@ -133,6 +134,25 @@ class SearchQualityTests(unittest.TestCase):
     def test_international_location_switches_to_global_region(self):
         self.assertEqual(search._resolve_region_for_location("north_america", "Germany"), "global")
         self.assertEqual(search._resolve_region_for_location("global", "California"), "north_america")
+
+    def test_customer_settings_persist_and_sanitize_rfq_style(self):
+        original_path = user_settings.SETTINGS_JSON
+        with tempfile.TemporaryDirectory() as tmpdir:
+            user_settings.SETTINGS_JSON = str(Path(tmpdir) / "settings.json")
+            try:
+                updated = user_settings.update_rfq_settings({
+                    "rfq_tone": "technical and concise",
+                    "rfq_signature": "Ari\nSourcivity",
+                    "rfq_default_deadline": "We are selecting vendors this week.",
+                    "rfq_extra_instructions": "Do not promise repeat orders.\r\nAsk for availability.",
+                })
+                loaded = user_settings.get_rfq_settings()
+            finally:
+                user_settings.SETTINGS_JSON = original_path
+
+        self.assertEqual(updated["rfq_tone"], "technical and concise")
+        self.assertEqual(loaded["rfq_signature"], "Ari\nSourcivity")
+        self.assertEqual(loaded["rfq_extra_instructions"], "Do not promise repeat orders.\nAsk for availability.")
 
 
 if __name__ == "__main__":

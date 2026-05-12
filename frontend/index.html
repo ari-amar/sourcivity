@@ -13,7 +13,7 @@
   <meta property="og:description" content="AI-powered supplier search and procurement">
   <meta property="og:image" content="sourcivity-logo.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="style.css?v=118">
+  <link rel="stylesheet" href="style.css?v=119">
 </head>
 <body>
   <header>
@@ -24,6 +24,7 @@
     <nav>
       <button class="nav-btn active" data-tab="search">Supplier Search</button>
       <button class="nav-btn" data-tab="quotes">Quote Tracker</button>
+      <button class="nav-btn" data-tab="settings">Settings</button>
     </nav>
     <div class="header-right">
       <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle light mode" title="Toggle light mode">
@@ -127,6 +128,37 @@
       </table>
     </section>
 
+    <!-- SETTINGS TAB -->
+    <section id="tab-settings" class="tab hidden">
+      <div class="settings-header">
+        <h2>Email Settings</h2>
+      </div>
+      <form id="settings-form" class="settings-panel">
+        <div class="settings-grid">
+          <label class="settings-field" for="settings-rfq-tone">
+            <span>Tone</span>
+            <input type="text" id="settings-rfq-tone" maxlength="160">
+          </label>
+          <label class="settings-field" for="settings-rfq-deadline">
+            <span>Deadline</span>
+            <input type="text" id="settings-rfq-deadline" maxlength="240">
+          </label>
+          <label class="settings-field full-width" for="settings-rfq-signature">
+            <span>Signature</span>
+            <textarea id="settings-rfq-signature" rows="4" maxlength="500"></textarea>
+          </label>
+          <label class="settings-field full-width" for="settings-rfq-extra">
+            <span>Extra Instructions</span>
+            <textarea id="settings-rfq-extra" rows="5" maxlength="1200"></textarea>
+          </label>
+        </div>
+        <div id="settings-status" class="status-msg hidden"></div>
+        <div class="settings-actions">
+          <button type="submit" id="settings-save-btn" class="btn-primary">Save Settings</button>
+        </div>
+      </form>
+    </section>
+
     <!-- FLOATING RFQ CART -->
     <div id="rfq-cart-float" class="rfq-cart-float hidden">
       <!-- Collapsed pill -->
@@ -223,6 +255,6 @@
     </div>
   </main>
 
-  <script src="app.js?v=119"></script>
+  <script src="app.js?v=120"></script>
 </body>
 </html>
