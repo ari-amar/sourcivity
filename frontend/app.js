@@ -44,7 +44,7 @@ let searchRegion = 'north_america';
 let lastSearchQuery = '';
 
 // === DOM REFS ===
-const navBtns = document.querySelectorAll('.nav-btn');
+const tabBtns = document.querySelectorAll('[data-tab]');
 const searchInput = document.getElementById('search-input');
 const searchBtn = document.getElementById('search-btn');
 const searchStatus = document.getElementById('search-status');
@@ -214,9 +214,9 @@ if (newSearchBtn) {
 }
 
 // === TAB NAVIGATION ===
-navBtns.forEach(btn => {
+tabBtns.forEach(btn => {
   btn.addEventListener('click', () => {
-    navBtns.forEach(b => b.classList.remove('active'));
+    tabBtns.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     document.querySelectorAll('.tab').forEach(t => {
       t.classList.remove('active');
@@ -1246,7 +1246,7 @@ if (!DEMO_MODE) {
 
 // === HELPERS ===
 function switchToTab(tabName) {
-  navBtns.forEach(b => {
+  tabBtns.forEach(b => {
     b.classList.remove('active');
     if (b.dataset.tab === tabName) b.classList.add('active');
   });

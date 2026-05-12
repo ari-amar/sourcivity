@@ -171,7 +171,8 @@ nav {
   min-width: 140px;
 }
 
-.theme-toggle {
+.theme-toggle,
+.header-icon-btn {
   width: 32px;
   height: 32px;
   display: inline-flex;
@@ -184,8 +185,15 @@ nav {
   cursor: pointer;
   transition: all 0.15s;
 }
-.theme-toggle:hover { color: var(--text); background: var(--card-2); border-color: var(--border-strong); }
+.theme-toggle:hover,
+.header-icon-btn:hover,
+.header-icon-btn.active {
+  color: var(--text);
+  background: var(--card-2);
+  border-color: var(--border-strong);
+}
 .theme-icon { width: 16px; height: 16px; }
+.header-icon-btn svg { width: 16px; height: 16px; }
 html[data-theme="light"] .theme-icon-sun { display: none; }
 html:not([data-theme="light"]) .theme-icon-moon { display: none; }
 
