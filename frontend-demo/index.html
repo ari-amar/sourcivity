@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0f1117" id="theme-color-meta">
   <script>window.DEMO_MODE = true;</script>
   <title>Sourcivity — Demo</title>
   <link rel="icon" type="image/png" href="sourcivity-logo.png">
@@ -11,7 +13,7 @@
   <meta property="og:description" content="AI-powered supplier search and procurement — try it live">
   <meta property="og:image" content="sourcivity-logo.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="style.css?v=117">
+  <link rel="stylesheet" href="style.css?v=118">
   <style>
     /* Demo-only: banner + CTA popup (everything else lives in style.css) */
     .demo-banner {
@@ -123,6 +125,10 @@
       <button class="nav-btn" data-tab="quotes">Quote Tracker</button>
     </nav>
     <div class="header-right">
+      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle light mode" title="Toggle light mode">
+        <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+      </button>
       <button type="button" class="header-action" id="new-search-btn">+ New Search</button>
     </div>
   </header>
@@ -141,13 +147,33 @@
       </div>
       <div id="suggestions" class="suggestions">
         <div id="suggestion-chips" class="suggestion-chips"></div>
-        <div class="region-toggle" id="region-toggle">
-          <span class="region-emoji" id="region-emoji-na">🇺🇸</span>
-          <input type="checkbox" id="region-switch-input" class="region-input">
-          <label for="region-switch-input" class="region-track">
-            <span class="region-knob"></span>
+        <div class="search-options">
+          <div class="region-toggle" id="region-toggle">
+            <span class="region-emoji" id="region-emoji-na">🇺🇸</span>
+            <input type="checkbox" id="region-switch-input" class="region-input">
+            <label for="region-switch-input" class="region-track">
+              <span class="region-knob"></span>
+            </label>
+            <span class="region-emoji" id="region-emoji-global">🌍</span>
+          </div>
+          <label class="location-filter" for="location-input">
+            <span>Location</span>
+            <input type="text" id="location-input" list="location-options" placeholder="Any">
           </label>
-          <span class="region-emoji" id="region-emoji-global">🌍</span>
+          <datalist id="location-options">
+            <option value="United States"></option>
+            <option value="California"></option>
+            <option value="Texas"></option>
+            <option value="Ohio"></option>
+            <option value="Pennsylvania"></option>
+            <option value="Canada"></option>
+            <option value="Mexico"></option>
+            <option value="Germany"></option>
+            <option value="United Kingdom"></option>
+            <option value="Europe"></option>
+            <option value="China"></option>
+            <option value="Japan"></option>
+          </datalist>
         </div>
       </div>
       <div id="search-status" class="status-msg hidden"></div>
@@ -173,6 +199,7 @@
             <button class="filter-btn" data-filter="bounced">Bounced</button>
           </div>
           <button id="refresh-quotes-btn">Refresh</button>
+          <button id="print-quotes-btn">Print / PDF</button>
         </div>
       </div>
       <div id="quotes-status" class="status-msg hidden"></div>
@@ -181,6 +208,7 @@
           <tr>
             <th>Date</th>
             <th>Supplier</th>
+            <th>Email</th>
             <th>Part / Service</th>
             <th>Quoted Price</th>
             <th>Unit</th>
@@ -231,6 +259,6 @@
     </div>
   </main>
 
-  <script src="app.js?v=118"></script>
+  <script src="app.js?v=119"></script>
 </body>
 </html>

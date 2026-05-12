@@ -2,7 +2,29 @@
 import threading
 from datetime import date
 from services import llm, email_client, csv_store, sheets
-from config import EMAIL_ADDRESS, EMAIL_DISPLAY_NAME, CATEGORIES, CUSTOMER_NAME, CUSTOMER_FULL_NAME, CUSTOMER_TITLE, CUSTOMER_COMPANY
+from config import (
+    EMAIL_ADDRESS,
+    EMAIL_DISPLAY_NAME,
+    CATEGORIES,
+    CUSTOMER_NAME,
+    CUSTOMER_FULL_NAME,
+    CUSTOMER_TITLE,
+    CUSTOMER_COMPANY,
+    RFQ_DEFAULT_DEADLINE,
+    RFQ_EXTRA_INSTRUCTIONS,
+    RFQ_SIGNATURE,
+    RFQ_TONE,
+)
+
+
+def _customer_style_block():
+    extra = RFQ_EXTRA_INSTRUCTIONS or "none"
+    return f"""CUSTOMER-SPECIFIC WRITING STYLE:
+- Tone: {RFQ_TONE}
+- Default urgency/deadline: {RFQ_DEFAULT_DEADLINE}
+- Extra instructions: {extra}
+- Signature must be exactly:
+{RFQ_SIGNATURE}"""
 
 
 def handle_draft(supplier, part, qty="", notes=""):
@@ -23,18 +45,19 @@ STRICT FORMATTING RULES — violating any of these means failure:
 1. PLAIN TEXT ONLY. Absolutely NO markdown, NO asterisks, NO bullet points, NO numbered lists, NO dashes, NO "Please include:" lists. Zero formatting.
 2. Maximum 4-5 sentences total. One or two short paragraphs.
 3. Start with "Hi [Company]," — NEVER "Dear", NEVER "To Whom It May Concern", NEVER "Team".
-4. End with just "{CUSTOMER_NAME}" on its own line, then "{CUSTOMER_COMPANY}" on the next line. NEVER "Sincerely", NEVER "Best regards". No other signature lines.
+4. End with the configured signature exactly. NEVER "Sincerely", NEVER "Best regards". No other signature lines.
 5. Mention what you need and ask for pricing, lead time, and availability naturally. Do NOT break these into separate lines or a checklist.
 6. If quantity is given, weave it into a sentence naturally. NEVER list it as a field.
 7. Sound like a real buyer who sends these daily — casual, direct, confident.
+
+{_customer_style_block()}
 
 GOOD example:
 Hi Schaeffler,
 
 I'm sourcing crossed roller bearings for an upcoming automation build at {CUSTOMER_COMPANY}. We'd need around 50 units to start, with likely repeat orders down the line. Could you send over ballpark pricing and lead time when you get a chance? We're finalizing our vendor list this week.
 
-{CUSTOMER_NAME}
-{CUSTOMER_COMPANY}
+{RFQ_SIGNATURE}
 
 BAD (do NOT do this):
 Dear Schaeffler Team,
@@ -165,7 +188,9 @@ STRICT RULES:
 3. Briefly reference the original request.
 4. Ask if they can share ballpark pricing and lead time.
 5. Start with "Hi {supplier_name}," — never "Dear" or "To Whom It May Concern".
-6. End with "{CUSTOMER_NAME}" on its own line, then "{CUSTOMER_COMPANY}" on the next line.
+6. End with the configured signature exactly.
+
+{_customer_style_block()}
 
 Return ONLY in this exact format:
 Subject: Re: [Part] — quick follow-up

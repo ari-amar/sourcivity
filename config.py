@@ -84,6 +84,10 @@ CUSTOMER_FULL_NAME = os.environ.get("CUSTOMER_FULL_NAME", CUSTOMER_NAME)
 CUSTOMER_COMPANY = os.environ.get("CUSTOMER_COMPANY", "")
 CUSTOMER_TITLE = os.environ.get("CUSTOMER_TITLE", "Procurement Manager")
 CUSTOMER_STATE = os.environ.get("CUSTOMER_STATE", "")
+RFQ_TONE = os.environ.get("RFQ_TONE", "casual, direct, confident")
+RFQ_SIGNATURE = os.environ.get("RFQ_SIGNATURE", f"{CUSTOMER_NAME}\n{CUSTOMER_COMPANY}").strip()
+RFQ_DEFAULT_DEADLINE = os.environ.get("RFQ_DEFAULT_DEADLINE", "We're finalizing our vendor list this week.")
+RFQ_EXTRA_INSTRUCTIONS = os.environ.get("RFQ_EXTRA_INSTRUCTIONS", "").strip()
 
 # --- Brave Search ---
 BRAVE_API_KEY = os.environ["BRAVE_API_KEY"]

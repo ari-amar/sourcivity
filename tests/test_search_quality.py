@@ -89,6 +89,51 @@ class SearchQualityTests(unittest.TestCase):
         self.assertEqual(len(final), 1)
         self.assertEqual(final[0]["state"], "N/A")
 
+    def test_named_manufacturer_query_ranks_direct_supplier_first(self):
+        suppliers = [
+            {"name": "Omega Engineering", "website": "https://omega.com"},
+            {"name": "Brooks Instrument", "website": "https://www.brooksinstrument.com"},
+            {"name": "MKS Instruments", "website": "https://www.mks.com"},
+        ]
+
+        ranked = search._rank_suppliers_for_query(suppliers, "Brooks Instrument mass flow controller")
+
+        self.assertEqual(ranked[0]["name"], "Brooks Instrument")
+
+        ranked = search._rank_suppliers_for_query(suppliers, "MKS mass flow controller")
+        self.assertEqual(ranked[0]["name"], "MKS Instruments")
+
+    def test_generic_query_preserves_supplier_order(self):
+        suppliers = [
+            {"name": "Omega Engineering", "website": "https://omega.com"},
+            {"name": "Brooks Instrument", "website": "https://www.brooksinstrument.com"},
+        ]
+
+        ranked = search._rank_suppliers_for_query(suppliers, "mass flow controller")
+
+        self.assertEqual([s["name"] for s in ranked], ["Omega Engineering", "Brooks Instrument"])
+
+    def test_location_filter_keeps_matching_state_and_pending(self):
+        suppliers = [
+            {"name": "CA Supplier", "state": "CA"},
+            {"name": "MA Supplier", "state": "MA"},
+            {"name": "Pending Supplier", "state": ""},
+        ]
+
+        filtered = search._filter_suppliers_for_region(
+            suppliers,
+            "north_america",
+            "bearings",
+            allow_pending=True,
+            location="California",
+        )
+
+        self.assertEqual([s["name"] for s in filtered], ["CA Supplier", "Pending Supplier"])
+
+    def test_international_location_switches_to_global_region(self):
+        self.assertEqual(search._resolve_region_for_location("north_america", "Germany"), "global")
+        self.assertEqual(search._resolve_region_for_location("global", "California"), "north_america")
+
 
 if __name__ == "__main__":
     unittest.main()

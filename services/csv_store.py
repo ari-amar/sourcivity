@@ -4,7 +4,7 @@ import fcntl
 import os
 from config import QUOTES_CSV, CSV_KEYS, CSV_COLUMNS, CATEGORIES
 
-EXPECTED_COLS = len(CSV_KEYS)  # 12
+EXPECTED_COLS = len(CSV_KEYS)
 
 
 def read_quotes():

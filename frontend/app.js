@@ -41,6 +41,7 @@ let selectedSupplier = null;
 let suggestionInterval = null;
 let rfqCart = [];
 let searchRegion = 'north_america';
+let lastSearchQuery = '';
 
 // === DOM REFS ===
 const navBtns = document.querySelectorAll('.nav-btn');
@@ -53,6 +54,30 @@ const resultsMetaCount = document.getElementById('results-meta-count');
 const quotesBody = document.getElementById('quotes-body');
 const quotesStatus = document.getElementById('quotes-status');
 const refreshQuotesBtn = document.getElementById('refresh-quotes-btn');
+const printQuotesBtn = document.getElementById('print-quotes-btn');
+const locationInput = document.getElementById('location-input');
+const themeToggle = document.getElementById('theme-toggle');
+const themeColorMeta = document.getElementById('theme-color-meta');
+
+// === THEME ===
+function applyTheme(theme) {
+  const next = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  if (themeToggle) themeToggle.setAttribute('aria-label', next === 'light' ? 'Switch to dark mode' : 'Switch to light mode');
+  if (themeColorMeta) themeColorMeta.setAttribute('content', next === 'light' ? '#f6f8fc' : '#0f1117');
+}
+
+const savedTheme = localStorage.getItem('sourcivity-theme');
+const preferredTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+applyTheme(savedTheme || preferredTheme);
+
+if (themeToggle) {
+  themeToggle.addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+    localStorage.setItem('sourcivity-theme', next);
+    applyTheme(next);
+  });
+}
 // Floating RFQ cart
 const cartFloat          = document.getElementById('rfq-cart-float');
 const cartPill           = document.getElementById('rfq-cart-pill');
@@ -203,13 +228,41 @@ searchInput.addEventListener('keydown', (e) => {
 });
 
 const regionSwitchInput = document.getElementById('region-switch-input');
+const US_LOCATION_TERMS = new Set(['', 'any', 'us', 'usa', 'u.s.', 'united states', 'united states of america', 'north america',
+  'alabama','alaska','arizona','arkansas','california','colorado','connecticut','delaware','florida','georgia','hawaii','idaho',
+  'illinois','indiana','iowa','kansas','kentucky','louisiana','maine','maryland','massachusetts','michigan','minnesota',
+  'mississippi','missouri','montana','nebraska','nevada','new hampshire','new jersey','new mexico','new york','north carolina',
+  'north dakota','ohio','oklahoma','oregon','pennsylvania','rhode island','south carolina','south dakota','tennessee','texas',
+  'utah','vermont','virginia','washington','west virginia','wisconsin','wyoming',
+  'al','ak','az','ar','ca','co','ct','de','fl','ga','hi','id','il','in','ia','ks','ky','la','me','md','ma','mi','mn','ms','mo',
+  'mt','ne','nv','nh','nj','nm','ny','nc','nd','oh','ok','or','pa','ri','sc','sd','tn','tx','ut','vt','va','wa','wv','wi','wy']);
+
+function setSearchRegion(region) {
+  searchRegion = region === 'global' ? 'global' : 'north_america';
+  if (regionSwitchInput) regionSwitchInput.checked = searchRegion === 'global';
+  const naEmoji = document.getElementById('region-emoji-na');
+  const globalEmoji = document.getElementById('region-emoji-global');
+  if (naEmoji) naEmoji.style.opacity = searchRegion === 'global' ? '0.35' : '1';
+  if (globalEmoji) globalEmoji.style.opacity = searchRegion === 'global' ? '1' : '0.35';
+}
+
+function regionFromLocation(location) {
+  const value = (location || '').trim().toLowerCase();
+  if (!value) return searchRegion;
+  if (US_LOCATION_TERMS.has(value)) return 'north_america';
+  return 'global';
+}
+
 if (regionSwitchInput) {
   regionSwitchInput.addEventListener('change', () => {
-    searchRegion = regionSwitchInput.checked ? 'global' : 'north_america';
-    document.getElementById('region-emoji-na').style.opacity = regionSwitchInput.checked ? '0.35' : '1';
-    document.getElementById('region-emoji-global').style.opacity = regionSwitchInput.checked ? '1' : '0.35';
+    setSearchRegion(regionSwitchInput.checked ? 'global' : 'north_america');
   });
 }
+if (locationInput) {
+  locationInput.addEventListener('change', () => setSearchRegion(regionFromLocation(locationInput.value)));
+  locationInput.addEventListener('blur', () => setSearchRegion(regionFromLocation(locationInput.value)));
+}
+setSearchRegion(searchRegion);
 
 let _pollInterval = null;
 let _searchPending = false;
@@ -217,6 +270,9 @@ let _searchPending = false;
 async function doSearch() {
   const query = searchInput.value.trim();
   if (!query || _searchPending) return;
+  const location = locationInput ? locationInput.value.trim() : '';
+  setSearchRegion(regionFromLocation(location));
+  lastSearchQuery = query;
 
   if (_pollInterval) { clearInterval(_pollInterval); _pollInterval = null; }
 
@@ -233,7 +289,7 @@ async function doSearch() {
     const res = await fetch(API_URL + '/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: query.slice(0, 500), region: searchRegion })
+      body: JSON.stringify({ query: query.slice(0, 500), region: searchRegion, location: location.slice(0, 80) })
     });
 
     let data;
@@ -609,7 +665,7 @@ function renderQuotes(quotes) {
   const filtered = quotes.filter(q => matchesFilter(q.status));
 
   if (filtered.length === 0) {
-    quotesBody.innerHTML = '<tr><td colspan="12" class="empty-state"><p>' +
+    quotesBody.innerHTML = '<tr><td colspan="13" class="empty-state"><p>' +
       (quotes.length === 0 ? 'No quotes tracked yet.' : 'No quotes match this filter.') +
       '</p></td></tr>';
     return;
@@ -630,7 +686,7 @@ function renderQuotes(quotes) {
     const headerTr = document.createElement('tr');
     headerTr.className = 'category-header';
     headerTr.dataset.group = groupId;
-    headerTr.innerHTML = '<td colspan="12"><span class="cat-arrow">&#9660;</span> ' + esc(cat) + ' <span class="cat-count">(' + count + ')</span></td>';
+    headerTr.innerHTML = '<td colspan="13"><span class="cat-arrow">&#9660;</span> ' + esc(cat) + ' <span class="cat-count">(' + count + ')</span></td>';
     headerTr.addEventListener('click', () => {
       const isCollapsed = headerTr.classList.toggle('collapsed');
       document.querySelectorAll('tr[data-cat="' + groupId + '"]').forEach(r => r.classList.toggle('hidden', isCollapsed));
@@ -643,6 +699,7 @@ function renderQuotes(quotes) {
       tr.innerHTML = `
         <td data-label="Date">${fmtDate(q.date)}</td>
         <td data-label="Supplier"><strong>${esc(q.supplier || '')}</strong></td>
+        <td data-label="Email">${q.email ? '<a href="mailto:' + esc(q.email) + '">' + esc(q.email) + '</a>' : ''}</td>
         <td data-label="Part / Service">${esc(q.partService || '')}</td>
         <td data-label="Quoted Price">${esc(q.quotedPrice || '')}</td>
         <td data-label="Unit">${esc(q.unit || '')}</td>
@@ -686,6 +743,12 @@ function statusBadge(status) {
 }
 
 refreshQuotesBtn.addEventListener('click', loadQuotes);
+if (printQuotesBtn) {
+  printQuotesBtn.addEventListener('click', () => {
+    if (!allQuotes.length) loadQuotes().finally(() => window.print());
+    else window.print();
+  });
+}
 
 // === FOLLOW-UP BUTTON (delegated) ===
 quotesBody.addEventListener('click', async (e) => {
@@ -739,7 +802,7 @@ if (!DEMO_MODE && rfqModal) {
     }
     selectedSupplier = supplier;
     rfqSupplierInfo.textContent = 'Sending RFQ to: ' + (supplier.name || 'Unknown') + (supplier.email ? ' (' + supplier.email + ')' : ' (no email found)');
-    rfqPart.value = '';
+    rfqPart.value = lastSearchQuery || searchInput.value.trim();
     rfqQty.value = '';
     rfqNotes.value = '';
     rfqPreview.classList.add('hidden');
@@ -957,7 +1020,7 @@ if (!DEMO_MODE) {
       return;
     }
     if (rfqCart.length === 0) return;
-    checkoutPart.value = '';
+    checkoutPart.value = lastSearchQuery || searchInput.value.trim();
     checkoutQty.value = '';
     checkoutNotes.value = '';
     checkoutPreviews.classList.add('hidden');

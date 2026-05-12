@@ -20,6 +20,20 @@ _US_STATE_ABBRS = {
     'VA','WA','WV','WI','WY',
 }
 
+_US_STATE_NAME_TO_ABBR = {
+    'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
+    'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
+    'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
+    'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+    'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS',
+    'missouri': 'MO', 'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH',
+    'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC',
+    'north dakota': 'ND', 'ohio': 'OH', 'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA',
+    'rhode island': 'RI', 'south carolina': 'SC', 'south dakota': 'SD', 'tennessee': 'TN',
+    'texas': 'TX', 'utah': 'UT', 'vermont': 'VT', 'virginia': 'VA', 'washington': 'WA',
+    'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY',
+}
+
 
 _INDIAN_CITY_TOKENS = {'mumbai', 'delhi', 'bangalore', 'chennai', 'hyderabad', 'pune', 'kolkata', 'india'}
 
@@ -40,6 +54,15 @@ _ISO_COLLISION_TO_COUNTRY = {
 }
 
 _UNKNOWN_LOCATION_VALUES = {'', 'US', 'USA', 'UNITED STATES', 'N/A', 'NA', 'UNKNOWN'}
+_US_LOCATION_TERMS = {'us', 'usa', 'u.s.', 'u.s.a.', 'united states', 'united states of america', 'north america'}
+_GLOBAL_LOCATION_TERMS = {'global', 'worldwide', 'international', 'anywhere', 'any'}
+_COMPANY_SUFFIX_WORDS = {
+    'co', 'company', 'corp', 'corporation', 'inc', 'incorporated', 'llc', 'ltd',
+    'limited', 'group', 'holdings', 'technologies', 'technology', 'systems',
+    'solutions', 'industries', 'industrial', 'usa', 'us', 'america', 'american',
+    'international', 'global', 'the'
+}
+_MIN_DIRECT_NAME_TOKEN_LEN = 3
 
 
 def _metric_value(value):
@@ -115,6 +138,75 @@ def _is_known_international_supplier(supplier):
     return not _is_us_supplier(supplier)
 
 
+def _normalize_location_text(location):
+    return re.sub(r'\s+', ' ', (location or '').strip())[:80]
+
+
+def _normalize_match_text(text):
+    return re.sub(r'[^a-z0-9]+', ' ', (text or '').lower()).strip()
+
+
+def _tokenize_match_text(text):
+    return [tok for tok in _normalize_match_text(text).split() if tok]
+
+
+def _supplier_domain_tokens(supplier):
+    website = supplier.get('website', '') or ''
+    if not website:
+        return []
+    url = website if website.startswith(('http://', 'https://')) else 'https://' + website
+    parsed = urllib.parse.urlparse(url)
+    host = (parsed.netloc or parsed.path.split('/')[0]).lower()
+    if host.startswith('www.'):
+        host = host[4:]
+    return [tok for tok in re.split(r'[^a-z0-9]+', host.split(':')[0]) if tok]
+
+
+def _supplier_name_tokens(name):
+    tokens = _tokenize_match_text(name)
+    return [
+        tok for tok in tokens
+        if tok not in _COMPANY_SUFFIX_WORDS and len(tok) >= _MIN_DIRECT_NAME_TOKEN_LEN
+    ]
+
+
+def _direct_manufacturer_match_score(supplier, query):
+    """Boost the official supplier when the buyer included its name in the query."""
+    query_norm = _normalize_match_text(query)
+    query_tokens = set(query_norm.split())
+    name = supplier.get('name', '') or ''
+    name_norm = _normalize_match_text(name)
+    name_tokens = _supplier_name_tokens(name)
+    domain_tokens = _supplier_domain_tokens(supplier)
+
+    if not query_norm or not name_tokens:
+        return 0
+
+    if name_norm and f" {name_norm} " in f" {query_norm} ":
+        return 100
+
+    matched = [tok for tok in name_tokens if tok in query_tokens]
+    if len(matched) >= min(2, len(name_tokens)):
+        return 90
+
+    if len(name_tokens) == 1 and name_tokens[0] in query_tokens and name_tokens[0] in domain_tokens:
+        return 80
+
+    if matched and any(tok in domain_tokens for tok in matched):
+        return 70
+
+    return 0
+
+
+def _rank_suppliers_for_query(suppliers, query):
+    """Stable ranking pass that puts named official manufacturer matches first."""
+    scored = []
+    for idx, supplier in enumerate(suppliers):
+        scored.append((_direct_manufacturer_match_score(supplier, query), idx, supplier))
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return [supplier for _, _, supplier in scored]
+
+
 _GEO_KEYWORDS = {
     # Countries
     'austria', 'germany', 'france', 'italy', 'spain', 'netherlands', 'belgium',
@@ -187,6 +279,57 @@ _GEO_TO_CODES = {
 }
 
 
+def _location_filter(location):
+    """Return deterministic location filter metadata for state/country options."""
+    loc = _normalize_location_text(location)
+    if not loc:
+        return None
+    lower = loc.lower()
+    compact = re.sub(r'[^a-z0-9]+', '', lower)
+
+    if lower in _GLOBAL_LOCATION_TERMS:
+        return {"kind": "global", "label": loc, "values": set()}
+    if lower in _US_LOCATION_TERMS:
+        return {"kind": "us", "label": loc, "values": set()}
+
+    if lower in _US_STATE_NAME_TO_ABBR:
+        abbr = _US_STATE_NAME_TO_ABBR[lower]
+        return {"kind": "us_state", "label": loc, "values": {abbr.lower(), lower}}
+    if len(compact) == 2 and compact.upper() in _US_STATE_ABBRS:
+        return {"kind": "us_state", "label": loc, "values": {compact.lower()}}
+
+    accepted = _GEO_TO_CODES.get(lower)
+    if accepted:
+        return {"kind": "country", "label": loc, "values": {v.lower() for v in accepted}}
+    for geo, values in _GEO_TO_CODES.items():
+        if lower in {v.lower() for v in values}:
+            return {"kind": "country", "label": loc, "values": {v.lower() for v in values}}
+
+    if lower in {'europe', 'asia', 'central europe', 'eastern europe', 'western europe', 'scandinavia', 'balkans', 'dach'}:
+        return {"kind": "region", "label": loc, "values": set()}
+
+    return {"kind": "freeform", "label": loc, "values": {lower}}
+
+
+def _resolve_region_for_location(region, location):
+    loc_filter = _location_filter(location)
+    if not loc_filter:
+        return region
+    if loc_filter["kind"] in ("country", "region", "global"):
+        return "global"
+    if loc_filter["kind"] in ("us", "us_state"):
+        return "north_america"
+    return region
+
+
+def _state_matches_values(supplier, values):
+    state = (supplier.get('state') or '').strip()
+    state_lower = state.lower()
+    if state.upper().startswith('US-'):
+        state_lower = state[3:].lower()
+    return state_lower in values
+
+
 # Country-specific TLDs — reliable signals for a company's actual location.
 # Multi-part TLDs must come before single-part (e.g. .co.in before .in).
 _TLD_COUNTRY_MAP = [
@@ -251,15 +394,35 @@ def _clean_query_for_prompt(query):
     return re.sub(r'[\x00-\x1f\x7f]+', ' ', query or '').strip()[:200]
 
 
-def _filter_suppliers_for_region(suppliers, region, query='', allow_pending=False):
+def _filter_suppliers_for_region(suppliers, region, query='', allow_pending=False, location=''):
     """Drop suppliers that fail deterministic regional checks."""
     filtered = []
-    geo_hint = _extract_geo_hint(query or '')
+    loc_filter = _location_filter(location)
+    geo_hint = None if loc_filter else _extract_geo_hint(query or '')
     accepted = _GEO_TO_CODES.get(geo_hint) if region == 'global' and geo_hint else None
     accepted_lower = {v.lower() for v in accepted} if accepted else None
 
     for s in suppliers:
         _normalize_supplier_location(s, region)
+        if loc_filter and loc_filter["kind"] == "us":
+            if _is_us_supplier(s) or (allow_pending and _is_unknown_location(s)):
+                filtered.append(s)
+            continue
+
+        if loc_filter and loc_filter["kind"] == "us_state":
+            if _is_us_supplier(s) and _state_matches_values(s, loc_filter["values"]):
+                filtered.append(s)
+            elif allow_pending and _is_unknown_location(s):
+                filtered.append(s)
+            continue
+
+        if loc_filter and loc_filter["kind"] == "country":
+            if _state_matches_values(s, loc_filter["values"]):
+                filtered.append(s)
+            elif allow_pending and _is_unknown_location(s):
+                filtered.append(s)
+            continue
+
         if region == 'north_america':
             if _is_us_supplier(s):
                 filtered.append(s)
@@ -287,7 +450,7 @@ def _mark_unknown_locations(suppliers):
     return suppliers
 
 
-def _prepare_visible_suppliers(suppliers, region, query='', final=False):
+def _prepare_visible_suppliers(suppliers, region, query='', final=False, location=''):
     """Keep already-rendered suppliers visible while normalizing unsafe locations.
 
     Initial search filtering decides which suppliers are worth showing. Background
@@ -298,7 +461,7 @@ def _prepare_visible_suppliers(suppliers, region, query='', final=False):
     for supplier in suppliers:
         s = dict(supplier)
         _normalize_supplier_location(s, region)
-        passes_region = bool(_filter_suppliers_for_region([dict(s)], region, query, allow_pending=True))
+        passes_region = bool(_filter_suppliers_for_region([dict(s)], region, query, allow_pending=True, location=location))
         if not passes_region:
             s['state'] = 'N/A' if final else ''
             s.pop('_non_us', None)
@@ -360,8 +523,23 @@ def _title_case_product(text):
     return ' '.join(formatted_words)
 
 
-def _build_queries(query, region='north_america'):
+def _build_queries(query, region='north_america', location=''):
     """Generate 3 search variations for broader coverage."""
+    location = _normalize_location_text(location)
+    loc_filter = _location_filter(location)
+    if location and (not loc_filter or loc_filter["kind"] not in ("global",)):
+        if region == 'global':
+            return [
+                f"{query} supplier manufacturer {location}",
+                f"{query} company {location} supplier",
+                f"{query} distributor {location}",
+            ]
+        return [
+            f"{query} supplier manufacturer {location} USA",
+            f"{query} distributor vendor {location} United States",
+            f"{query} company buy purchase {location} USA",
+        ]
+
     if region == 'global':
         geo = _extract_geo_hint(query)
         if geo:
@@ -383,10 +561,12 @@ def _build_queries(query, region='north_america'):
     ]
 
 
-def handle(query, skip_enrichment=False, region='north_america'):
+def handle(query, skip_enrichment=False, region='north_america', location=''):
     """Search for US suppliers using parallel Brave queries. Returns enriched supplier list."""
     try:
         started_at = time.monotonic()
+        location = _normalize_location_text(location)
+        region = _resolve_region_for_location(region, location)
         # Step 1: Run Brave searches in parallel
         all_results = []
         all_faq = []
@@ -396,7 +576,7 @@ def handle(query, skip_enrichment=False, region='north_america'):
 
         brave_started = time.monotonic()
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
-            futures = [pool.submit(brave.search, q, 10, region) for q in _build_queries(query, region)]
+            futures = [pool.submit(brave.search, q, 10, region) for q in _build_queries(query, region, location)]
             for f in concurrent.futures.as_completed(futures):
                 try:
                     results, faq, infobox = f.result()
@@ -470,7 +650,8 @@ def handle(query, skip_enrichment=False, region='north_america'):
         safe_query = _clean_query_for_prompt(query)
 
         # Hard cap: truncate context if too long (~5500 chars ≈ ~1500 tokens, leaves room for system+output)
-        user_msg = f"Query: {safe_query}\n\nSearch results:\n{search_context}{extra_context}"
+        location_context = f"\nLocation filter: {location}" if location else ""
+        user_msg = f"Query: {safe_query}{location_context}\n\nSearch results:\n{search_context}{extra_context}"
         if len(user_msg) > 12000:
             user_msg = user_msg[:12000] + "\n... (truncated)"
 
@@ -493,6 +674,7 @@ def handle(query, skip_enrichment=False, region='north_america'):
                 'This avoids ambiguity with country codes. If unknown, use the 2-letter country code.'
             )
             geo_hint = _extract_geo_hint(safe_query)
+            loc_filter = _location_filter(location)
             if geo_hint:
                 rule_1 = (
                     f'1. The buyer specified a geographic preference: "{geo_hint}". '
@@ -500,6 +682,13 @@ def handle(query, skip_enrichment=False, region='north_america'):
                     f'Do NOT include a supplier just because they export to, mention, or serve that region — physical location only. '
                     f'Exclude suppliers from unrelated regions entirely (e.g. if buyer wants Europe, exclude China, India, Americas). '
                     f'For US suppliers, use "US-XX" format (e.g. "US-CA", "US-TX"). For all others, use the 2-letter ISO country code (e.g. "DE", "FR", "CN").'
+                )
+            elif loc_filter and loc_filter["kind"] in ("country", "region", "freeform"):
+                rule_1 = (
+                    f'1. The buyer specified this location filter: "{location}". '
+                    'ONLY include suppliers whose headquarters or primary manufacturing operations are physically in that location. '
+                    'Do NOT include a supplier just because it ships there, serves that market, or mentions that location in distributor text. '
+                    'For US suppliers, use "US-XX" format; for all others, use the 2-letter country code or full country name.'
                 )
             else:
                 rule_1 = (
@@ -528,6 +717,9 @@ def handle(query, skip_enrichment=False, region='north_america'):
                 'India-based companies must NEVER appear, even if state looks like "IN" (Indiana). '
                 'Always determine the specific US state — never return just "US".'
             )
+            loc_filter = _location_filter(location)
+            if loc_filter and loc_filter["kind"] == "us_state":
+                rule_1 += f' The buyer also selected location "{location}"; prioritize suppliers physically in that state and exclude clear out-of-state suppliers.'
             rule_2 = (
                 '2. Skip aggregator/marketplace sites: ThomasNet, Alibaba, Amazon, GlobalSpec, '
                 'Made-in-China, IndiaMART, eBay, Grainger catalog pages, McMaster-Carr catalog pages.'
@@ -579,13 +771,13 @@ STRICT RULES:
         # can verify them; final publish marks unresolved locations as N/A.
         suppliers = [_normalize_supplier_location(s, region) for s in suppliers]
         if region == 'north_america':
-            suppliers = _filter_suppliers_for_region(suppliers, region, safe_query, allow_pending=True)
+            suppliers = _filter_suppliers_for_region(suppliers, region, safe_query, allow_pending=True, location=location)
             if not suppliers:
                 _log_search_metric(None, "initial_error", query=safe_query, region=region, brave_s=brave_sec, llm_s=llm_sec, error="no_us_suppliers")
                 return {"suppliers": [], "error": "No US suppliers found. Try a different search term."}
 
         if region == 'global':
-            suppliers = _filter_suppliers_for_region(suppliers, region, safe_query, allow_pending=False)
+            suppliers = _filter_suppliers_for_region(suppliers, region, safe_query, allow_pending=False, location=location)
             if not suppliers:
                 geo_hint = _extract_geo_hint(safe_query)
                 _log_search_metric(None, "initial_error", query=safe_query, region=region, brave_s=brave_sec, llm_s=llm_sec, error="no_global_suppliers")
@@ -615,6 +807,8 @@ STRICT RULES:
                 s["products"] = _title_case_product(s["products"])
             if s.get("yearsInBusiness"):
                 s["yearsInBusiness"] = _normalize_years_in_business_value(s["yearsInBusiness"])
+
+        suppliers = _rank_suppliers_for_query(suppliers, safe_query)
 
         # Step 4+5: Return immediately, enrich reputation + emails in background
         _cleanup_old_searches()
@@ -654,6 +848,7 @@ STRICT RULES:
             "blocked": [],
             "query": query,
             "region": region,
+            "location": location,
             "metrics": metrics,
             "ts": time.time(),
         })
@@ -662,6 +857,7 @@ STRICT RULES:
             "initial",
             query=safe_query,
             region=region,
+            location=location,
             demo=skip_enrichment,
             brave_s=metrics["brave_sec"],
             llm_s=metrics["llm_sec"],
@@ -764,6 +960,7 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
         entry = _searches.get(search_id, {})
         query = entry.get("query", "")
         region = entry.get("region", "north_america")
+        location = entry.get("location", "")
         metrics = entry.get("metrics", {})
         enrichment_started = time.monotonic()
         blocked_sites = []
@@ -772,13 +969,14 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
         reputation_started = time.monotonic()
         suppliers = _enrich_reputation(suppliers)
         _log_search_metric(search_id, "reputation", elapsed_s=_elapsed(reputation_started), suppliers=len(suppliers))
-        publish_suppliers = _prepare_visible_suppliers(suppliers, region, query)
+        publish_suppliers = _prepare_visible_suppliers(suppliers, region, query, location=location)
         _store_search(search_id, {
             "suppliers": list(publish_suppliers),
             "status": "enriching",
             "blocked": [],
             "query": query,
             "region": region,
+            "location": location,
             "ts": time.time(),
         })
 
@@ -789,13 +987,14 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
             """Called as each supplier finishes website scraping — publish immediately."""
             enriched_supplier.pop("_enriching", None)
             current_suppliers[idx] = enriched_supplier
-            publish_suppliers = _prepare_visible_suppliers(current_suppliers, region, query)
+            publish_suppliers = _prepare_visible_suppliers(current_suppliers, region, query, location=location)
             _store_search(search_id, {
                 "suppliers": publish_suppliers,
                 "status": "enriching",
                 "blocked": [] if skip_emails else list(blocked_sites),
                 "query": query,
                 "region": region,
+                "location": location,
                 "ts": time.time(),
             })
 
@@ -835,7 +1034,7 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                 blocked = [] if skip_emails else list(blocked_sites)
                 for s in enriched:
                     s.pop("_enriching", None)
-                enriched = _prepare_visible_suppliers(enriched, region, query, final=True)
+                enriched = _prepare_visible_suppliers(enriched, region, query, final=True, location=location)
 
                 # Apply match reasons from the parallel LLM call
                 for s in enriched:
@@ -859,6 +1058,7 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                     "blocked": blocked,
                     "query": query,
                     "region": region,
+                    "location": location,
                     "ts": time.time(),
                 })
                 counts = _supplier_metric_counts(enriched)
@@ -868,6 +1068,7 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                     "done",
                     query=query,
                     region=region,
+                    location=location,
                     initial=metrics.get("initial_count", len(suppliers)),
                     final=len(enriched),
                     enrich_s=_elapsed(enrichment_started),
@@ -882,16 +1083,17 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
                     reason = reason_map.get(s.get("name"))
                     if reason:
                         s["matchReason"] = reason
-                publish_suppliers = _prepare_visible_suppliers(current_suppliers, region, query, final=True)
+                publish_suppliers = _prepare_visible_suppliers(current_suppliers, region, query, final=True, location=location)
                 _store_search(search_id, {
                     "suppliers": publish_suppliers,
                     "status": "done",
                     "blocked": [],
                     "query": query,
                     "region": region,
+                    "location": location,
                     "ts": time.time(),
                 })
-                _log_search_metric(search_id, "done_error", query=query, region=region, error="scrape_failed", enrich_s=_elapsed(enrichment_started))
+                _log_search_metric(search_id, "done_error", query=query, region=region, location=location, error="scrape_failed", enrich_s=_elapsed(enrichment_started))
 
     except Exception as e:
         for s in suppliers:
@@ -899,16 +1101,18 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
         entry = _searches.get(search_id, {})
         query = entry.get("query", "")
         region = entry.get("region", "north_america")
-        publish_suppliers = _prepare_visible_suppliers(suppliers, region, query, final=True)
+        location = entry.get("location", "")
+        publish_suppliers = _prepare_visible_suppliers(suppliers, region, query, final=True, location=location)
         _store_search(search_id, {
             "suppliers": publish_suppliers,
             "status": "done",
             "blocked": [],
             "query": query,
             "region": region,
+            "location": location,
             "ts": time.time(),
         })
-        _log_search_metric(search_id, "done_error", query=query, region=region, error="background_failed")
+        _log_search_metric(search_id, "done_error", query=query, region=region, location=location, error="background_failed")
         print(f"[search] Background enrichment error: {e}")
 
 
