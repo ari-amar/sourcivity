@@ -141,19 +141,35 @@ class SearchQualityTests(unittest.TestCase):
             user_settings.SETTINGS_JSON = str(Path(tmpdir) / "settings.json")
             try:
                 updated = user_settings.update_rfq_settings({
-                    "rfq_tone": "technical and concise",
+                    "buyer_name": "Ari Amar",
+                    "buyer_title": "Founder",
+                    "buyer_company": "Sourcivity",
+                    "rfq_company_intro": "I'm sourcing this for Sourcivity.",
+                    "rfq_tone": "technical",
+                    "rfq_length": "standard",
+                    "rfq_urgency": "high",
+                    "rfq_repeat_orders": True,
+                    "rfq_vendor_deadline": True,
+                    "rfq_casual": False,
+                    "rfq_requirements": ["pricing", "lead_time", "datasheet", "bad_key"],
                     "rfq_signature": "Ari\nSourcivity",
                     "rfq_default_deadline": "We are selecting vendors this week.",
-                    "rfq_extra_instructions": "Do not promise repeat orders.\r\nAsk for availability.",
+                    "rfq_buyer_notes": "Do not promise repeat orders.\r\nAsk for availability.",
+                    "rfq_category_rules": [{"category": "Sensors", "instructions": "Ask for calibration docs.\r\nAsk for range."}],
                     "rfq_prompt_template": "Ask {{supplier_name}} about {{part}}.\r\nUse {{signature}}.",
                 })
                 loaded = user_settings.get_rfq_settings()
             finally:
                 user_settings.SETTINGS_JSON = original_path
 
-        self.assertEqual(updated["rfq_tone"], "technical and concise")
+        self.assertEqual(updated["rfq_tone"], "technical")
+        self.assertEqual(updated["rfq_length"], "standard")
+        self.assertEqual(updated["rfq_urgency"], "high")
+        self.assertTrue(updated["rfq_repeat_orders"])
+        self.assertEqual(loaded["rfq_requirements"], ["pricing", "lead_time", "datasheet"])
         self.assertEqual(loaded["rfq_signature"], "Ari\nSourcivity")
-        self.assertEqual(loaded["rfq_extra_instructions"], "Do not promise repeat orders.\nAsk for availability.")
+        self.assertEqual(loaded["rfq_buyer_notes"], "Do not promise repeat orders.\nAsk for availability.")
+        self.assertEqual(loaded["rfq_category_rules"], [{"category": "Sensors", "instructions": "Ask for calibration docs.\nAsk for range."}])
         self.assertEqual(loaded["rfq_prompt_template"], "Ask {{supplier_name}} about {{part}}.\nUse {{signature}}.")
         self.assertEqual(
             user_settings.render_rfq_prompt_template(loaded, {

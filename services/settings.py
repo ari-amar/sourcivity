@@ -1,9 +1,13 @@
 """Customer-editable account settings."""
+import copy
 import json
 import os
 import tempfile
 
 from config import (
+    CUSTOMER_COMPANY,
+    CUSTOMER_NAME,
+    CUSTOMER_TITLE,
     RFQ_DEFAULT_DEADLINE,
     RFQ_EXTRA_INSTRUCTIONS,
     RFQ_PROMPT_TEMPLATE,
@@ -12,7 +16,7 @@ from config import (
     SETTINGS_JSON,
 )
 
-DEFAULT_RFQ_PROMPT_TEMPLATE = """Write a short RFQ email to {{supplier_name}}.
+LEGACY_RFQ_PROMPT_TEMPLATE = """Write a short RFQ email to {{supplier_name}}.
 
 We are sourcing {{part}} for {{customer_company}}.
 Quantity: {{quantity}}
@@ -23,30 +27,156 @@ Ask for pricing, lead time, availability, and MOQ if relevant. Use this tone: {{
 End with this exact signature:
 {{signature}}"""
 
-RFQ_SETTING_FIELDS = {
-    "rfq_tone": 160,
+TEXT_LIMITS = {
+    "buyer_name": 160,
+    "buyer_title": 160,
+    "buyer_company": 180,
+    "rfq_company_intro": 300,
     "rfq_signature": 500,
-    "rfq_default_deadline": 240,
-    "rfq_extra_instructions": 1200,
+    "rfq_buyer_notes": 1200,
     "rfq_prompt_template": 3000,
+    "rfq_default_deadline": 240,
 }
+
+TONE_OPTIONS = {
+    "direct": "direct and concise",
+    "friendly": "friendly and professional",
+    "formal": "formal and polished",
+    "technical": "technical and precise",
+}
+
+LENGTH_OPTIONS = {
+    "very_short": "very short, 2-3 sentences",
+    "short": "short, 3-4 sentences",
+    "standard": "standard, 4-5 sentences",
+    "detailed": "detailed when the request needs context",
+}
+
+URGENCY_OPTIONS = {
+    "low": "no urgency; avoid deadline pressure",
+    "normal": RFQ_DEFAULT_DEADLINE,
+    "high": "we are selecting suppliers soon and would appreciate a quick turnaround",
+}
+
+REQUIREMENT_OPTIONS = {
+    "pricing": "pricing",
+    "lead_time": "lead time",
+    "availability": "availability",
+    "moq": "MOQ",
+    "payment_terms": "payment terms",
+    "shipping_terms": "shipping terms",
+    "datasheet": "datasheet",
+    "certifications": "certifications",
+    "volume_discounts": "volume discounts",
+    "alternatives": "alternatives or substitutes",
+}
+
+DEFAULT_REQUIREMENTS = ["pricing", "lead_time", "availability", "moq"]
+
+DEFAULT_CATEGORY_RULES = [
+    {"category": "Electronics", "instructions": "Ask for datasheet, RoHS compliance, and lifecycle status."},
+    {"category": "Machining", "instructions": "Ask for material certs, tolerances, finish, and inspection notes."},
+    {"category": "Sensors", "instructions": "Ask for datasheet, calibration docs, range, and lead time."},
+    {"category": "Hydraulics", "instructions": "Ask for pressure rating, seal material, ports, and compatibility."},
+]
+
+
+def _default_company_intro():
+    if CUSTOMER_COMPANY:
+        return f"I'm sourcing this for {CUSTOMER_COMPANY}."
+    return "I'm sourcing this for an upcoming project."
+
+
+def _default_tone():
+    raw = (RFQ_TONE or "").lower()
+    if "formal" in raw:
+        return "formal"
+    if "technical" in raw:
+        return "technical"
+    if "friendly" in raw:
+        return "friendly"
+    return "direct"
 
 
 def default_rfq_settings():
     return {
-        "rfq_tone": RFQ_TONE,
+        "buyer_name": CUSTOMER_NAME,
+        "buyer_title": CUSTOMER_TITLE,
+        "buyer_company": CUSTOMER_COMPANY,
+        "rfq_company_intro": _default_company_intro(),
+        "rfq_tone": _default_tone(),
+        "rfq_length": "short",
+        "rfq_urgency": "normal",
+        "rfq_repeat_orders": False,
+        "rfq_vendor_deadline": True,
+        "rfq_casual": False,
+        "rfq_requirements": list(DEFAULT_REQUIREMENTS),
+        "rfq_buyer_notes": RFQ_EXTRA_INSTRUCTIONS,
         "rfq_signature": RFQ_SIGNATURE,
+        "rfq_category_rules": copy.deepcopy(DEFAULT_CATEGORY_RULES),
+        "rfq_prompt_template": "" if RFQ_PROMPT_TEMPLATE == LEGACY_RFQ_PROMPT_TEMPLATE else RFQ_PROMPT_TEMPLATE,
+        # Kept for compatibility with older saved settings and env defaults.
         "rfq_default_deadline": RFQ_DEFAULT_DEADLINE,
         "rfq_extra_instructions": RFQ_EXTRA_INSTRUCTIONS,
-        "rfq_prompt_template": RFQ_PROMPT_TEMPLATE or DEFAULT_RFQ_PROMPT_TEMPLATE,
     }
 
 
-def _clean_value(key, value):
+def _clean_text(key, value):
     if value is None:
         return ""
     text = str(value).replace("\r\n", "\n").replace("\r", "\n").strip()
-    return text[:RFQ_SETTING_FIELDS[key]]
+    return text[:TEXT_LIMITS[key]]
+
+
+def _clean_choice(value, allowed, default):
+    text = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if text in allowed:
+        return text
+    if allowed == TONE_OPTIONS:
+        raw = str(value or "").lower()
+        if "formal" in raw:
+            return "formal"
+        if "technical" in raw:
+            return "technical"
+        if "friendly" in raw:
+            return "friendly"
+    return default
+
+
+def _clean_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _clean_requirements(value):
+    if isinstance(value, str):
+        items = [item.strip() for item in value.split(",")]
+    elif isinstance(value, list):
+        items = value
+    else:
+        items = []
+    cleaned = []
+    for item in items:
+        key = str(item or "").strip()
+        if key in REQUIREMENT_OPTIONS and key not in cleaned:
+            cleaned.append(key)
+    return cleaned or list(DEFAULT_REQUIREMENTS)
+
+
+def _clean_category_rules(value):
+    rules = []
+    raw_rules = value if isinstance(value, list) else []
+    for item in raw_rules[:12]:
+        if not isinstance(item, dict):
+            continue
+        category = str(item.get("category") or "").replace("\r", " ").replace("\n", " ").strip()[:80]
+        instructions = str(item.get("instructions") or "").replace("\r\n", "\n").replace("\r", "\n").strip()[:300]
+        if category and instructions:
+            rules.append({"category": category, "instructions": instructions})
+    return rules
 
 
 def _read_settings_file():
@@ -72,42 +202,96 @@ def _write_settings_file(data):
             os.unlink(tmp_path)
 
 
-def get_rfq_settings():
-    settings = default_rfq_settings()
-    data = _read_settings_file()
-    rfq = data.get("rfq", data)
+def _merge_rfq_settings(base, rfq):
+    settings = dict(base)
     if not isinstance(rfq, dict):
         return settings
-    for key in RFQ_SETTING_FIELDS:
+
+    for key in ("buyer_name", "buyer_title", "buyer_company", "rfq_company_intro", "rfq_signature", "rfq_buyer_notes", "rfq_default_deadline"):
         if key in rfq:
-            settings[key] = _clean_value(key, rfq.get(key))
+            settings[key] = _clean_text(key, rfq.get(key))
+
+    # Older installs stored this as "Extra Instructions".
+    if "rfq_buyer_notes" not in rfq and "rfq_extra_instructions" in rfq:
+        settings["rfq_buyer_notes"] = _clean_text("rfq_buyer_notes", rfq.get("rfq_extra_instructions"))
+    settings["rfq_extra_instructions"] = settings["rfq_buyer_notes"]
+
+    if "rfq_tone" in rfq:
+        settings["rfq_tone"] = _clean_choice(rfq.get("rfq_tone"), TONE_OPTIONS, settings["rfq_tone"])
+    if "rfq_length" in rfq:
+        settings["rfq_length"] = _clean_choice(rfq.get("rfq_length"), LENGTH_OPTIONS, settings["rfq_length"])
+    if "rfq_urgency" in rfq:
+        settings["rfq_urgency"] = _clean_choice(rfq.get("rfq_urgency"), URGENCY_OPTIONS, settings["rfq_urgency"])
+
+    for key in ("rfq_repeat_orders", "rfq_vendor_deadline", "rfq_casual"):
+        if key in rfq:
+            settings[key] = _clean_bool(rfq.get(key))
+
+    if "rfq_requirements" in rfq:
+        settings["rfq_requirements"] = _clean_requirements(rfq.get("rfq_requirements"))
+    if "rfq_category_rules" in rfq:
+        settings["rfq_category_rules"] = _clean_category_rules(rfq.get("rfq_category_rules"))
+
+    if "rfq_prompt_template" in rfq:
+        prompt = _clean_text("rfq_prompt_template", rfq.get("rfq_prompt_template"))
+        settings["rfq_prompt_template"] = "" if prompt == LEGACY_RFQ_PROMPT_TEMPLATE else prompt
+
+    if not settings["buyer_name"]:
+        settings["buyer_name"] = CUSTOMER_NAME
+    if not settings["buyer_title"]:
+        settings["buyer_title"] = CUSTOMER_TITLE
+    if not settings["buyer_company"]:
+        settings["buyer_company"] = CUSTOMER_COMPANY
+    if not settings["rfq_company_intro"]:
+        settings["rfq_company_intro"] = _default_company_intro()
     if not settings["rfq_signature"]:
         settings["rfq_signature"] = RFQ_SIGNATURE
-    if not settings["rfq_prompt_template"]:
-        settings["rfq_prompt_template"] = DEFAULT_RFQ_PROMPT_TEMPLATE
+    if not settings["rfq_category_rules"]:
+        settings["rfq_category_rules"] = copy.deepcopy(DEFAULT_CATEGORY_RULES)
+
     return settings
 
 
-def update_rfq_settings(updates):
-    settings = get_rfq_settings()
-    updates = updates or {}
-    for key in RFQ_SETTING_FIELDS:
-        if key in updates:
-            settings[key] = _clean_value(key, updates.get(key))
-    if not settings["rfq_signature"]:
-        settings["rfq_signature"] = RFQ_SIGNATURE
-    if not settings["rfq_prompt_template"]:
-        settings["rfq_prompt_template"] = DEFAULT_RFQ_PROMPT_TEMPLATE
+def get_rfq_settings():
+    data = _read_settings_file()
+    rfq = data.get("rfq", data)
+    return _merge_rfq_settings(default_rfq_settings(), rfq)
 
+
+def update_rfq_settings(updates):
+    settings = _merge_rfq_settings(get_rfq_settings(), updates or {})
     data = _read_settings_file()
     data["rfq"] = settings
     _write_settings_file(data)
     return settings
 
 
+def requirement_labels(settings):
+    return [REQUIREMENT_OPTIONS[key] for key in settings.get("rfq_requirements", []) if key in REQUIREMENT_OPTIONS]
+
+
+def tone_label(settings):
+    return TONE_OPTIONS.get(settings.get("rfq_tone"), TONE_OPTIONS["direct"])
+
+
+def length_label(settings):
+    return LENGTH_OPTIONS.get(settings.get("rfq_length"), LENGTH_OPTIONS["short"])
+
+
+def urgency_label(settings):
+    if not settings.get("rfq_vendor_deadline"):
+        return URGENCY_OPTIONS["low"]
+    return URGENCY_OPTIONS.get(settings.get("rfq_urgency"), URGENCY_OPTIONS["normal"])
+
+
+def category_rules_text(settings):
+    rules = settings.get("rfq_category_rules") or []
+    return "\n".join(f"- {rule['category']}: {rule['instructions']}" for rule in rules if rule.get("category") and rule.get("instructions"))
+
+
 def render_rfq_prompt_template(settings, values):
-    template = settings.get("rfq_prompt_template") or DEFAULT_RFQ_PROMPT_TEMPLATE
+    template = settings.get("rfq_prompt_template") or ""
     rendered = template
     for key, value in values.items():
         rendered = rendered.replace("{{" + key + "}}", str(value or ""))
-    return rendered
+    return rendered.strip()

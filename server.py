@@ -165,7 +165,10 @@ class AppHandler(SimpleHTTPRequestHandler):
             if DEMO_MODE:
                 _send_json(self, {"error": "Settings are not available in demo mode."}, 403)
                 return
-            _send_json(self, {"settings": user_settings.get_rfq_settings()})
+            _send_json(self, {
+                "settings": user_settings.get_rfq_settings(),
+                "defaults": user_settings.default_rfq_settings(),
+            })
         elif self.path.startswith("/api/search/status"):
             parsed = parse_qs(urlparse(self.path).query)
             search_id = parsed.get("id", [""])[0]

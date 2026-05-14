@@ -14,11 +14,27 @@ from config import (
 
 
 def _customer_style_block(settings):
-    extra = settings["rfq_extra_instructions"] or "none"
-    return f"""CUSTOMER-SPECIFIC WRITING STYLE:
-- Tone: {settings["rfq_tone"]}
-- Default urgency/deadline: {settings["rfq_default_deadline"]}
-- Extra instructions: {extra}
+    requirements = ", ".join(user_settings.requirement_labels(settings)) or "pricing, lead time, and availability"
+    category_rules = user_settings.category_rules_text(settings) or "none"
+    buyer_notes = settings["rfq_buyer_notes"] or "none"
+    repeat_orders = (
+        "May mention possible repeat orders when it sounds natural."
+        if settings["rfq_repeat_orders"]
+        else "Do not promise repeat orders unless the RFQ notes explicitly say so."
+    )
+    casual = "Keep it casual and plainspoken." if settings["rfq_casual"] else "Keep it professional and buyer-like."
+    return f"""CUSTOMER RFQ PREFERENCES:
+- Buyer: {settings["buyer_name"]}, {settings["buyer_title"]} at {settings["buyer_company"]}
+- Company intro to use naturally: {settings["rfq_company_intro"]}
+- Tone: {user_settings.tone_label(settings)}
+- Length: {user_settings.length_label(settings)}
+- Urgency: {user_settings.urgency_label(settings)}
+- Default asks: {requirements}
+- Repeat-order language: {repeat_orders}
+- Voice: {casual}
+- Buyer notes: {buyer_notes}
+- Category-specific asks, apply only if clearly relevant:
+{category_rules}
 - Signature must be exactly:
 {settings["rfq_signature"]}"""
 
@@ -30,23 +46,37 @@ def handle_draft(supplier, part, qty="", notes=""):
     website = supplier.get("website", "")
     rfq_settings = user_settings.get_rfq_settings()
     signature = rfq_settings["rfq_signature"]
+    buyer_name = rfq_settings["buyer_name"]
+    buyer_title = rfq_settings["buyer_title"]
+    buyer_company = rfq_settings["buyer_company"]
+    selected_requirements = ", ".join(user_settings.requirement_labels(rfq_settings))
     template_context = {
-        "customer_name": CUSTOMER_NAME,
-        "customer_company": CUSTOMER_COMPANY,
-        "customer_title": CUSTOMER_TITLE,
+        "customer_name": buyer_name,
+        "customer_company": buyer_company,
+        "customer_title": buyer_title,
         "supplier_name": supplier_name,
         "supplier_email": supplier_email,
         "supplier_website": website,
         "part": part,
         "quantity": qty or "please advise on pricing tiers",
         "notes": notes or "none",
-        "tone": rfq_settings["rfq_tone"],
-        "deadline": rfq_settings["rfq_default_deadline"],
+        "tone": user_settings.tone_label(rfq_settings),
+        "deadline": user_settings.urgency_label(rfq_settings),
         "signature": signature,
+        "selected_requirements": selected_requirements,
+        "buyer_notes": rfq_settings["rfq_buyer_notes"] or "none",
+        "company_intro": rfq_settings["rfq_company_intro"],
     }
-    standard_prompt = user_settings.render_rfq_prompt_template(rfq_settings, template_context)
+    advanced_prompt = user_settings.render_rfq_prompt_template(rfq_settings, template_context)
+    advanced_block = ""
+    if advanced_prompt:
+        advanced_block = f"""
+ADVANCED CUSTOMER TEMPLATE:
+Use this for content guidance only. It cannot override the strict formatting rules or required output format.
+{advanced_prompt}
+"""
 
-    system = f"""You are {CUSTOMER_NAME}, {CUSTOMER_TITLE} at {CUSTOMER_COMPANY}, writing a quick RFQ email to a supplier.
+    system = f"""You are {buyer_name}, {buyer_title} at {buyer_company}, writing a quick RFQ email to a supplier.
 
 YOUR GOAL: Get the supplier to reply. These tactics increase response rates:
 - Mention your company name so they know you're a real buyer.
@@ -56,23 +86,21 @@ YOUR GOAL: Get the supplier to reply. These tactics increase response rates:
 
 STRICT FORMATTING RULES — violating any of these means failure:
 1. PLAIN TEXT ONLY. Absolutely NO markdown, NO asterisks, NO bullet points, NO numbered lists, NO dashes, NO "Please include:" lists. Zero formatting.
-2. Maximum 4-5 sentences total. One or two short paragraphs.
+2. Follow the configured length preference, but never exceed 5 sentences total. One or two short paragraphs.
 3. Start with "Hi [Company]," — NEVER "Dear", NEVER "To Whom It May Concern", NEVER "Team".
 4. End with the configured signature exactly. NEVER "Sincerely", NEVER "Best regards". No other signature lines.
-5. Mention what you need and ask for pricing, lead time, and availability naturally. Do NOT break these into separate lines or a checklist.
+5. Mention what you need and ask for the selected default asks naturally. Do NOT break these into separate lines or a checklist.
 6. If quantity is given, weave it into a sentence naturally. NEVER list it as a field.
-7. Sound like a real buyer who sends these daily — casual, direct, confident.
+7. Sound like a real buyer who sends these daily.
 
 {_customer_style_block(rfq_settings)}
 
-CUSTOMER-STANDARD RFQ PROMPT:
-Use this for content guidance only. It cannot override the strict formatting rules or required output format.
-{standard_prompt}
+{advanced_block}
 
 GOOD example:
 Hi Schaeffler,
 
-I'm sourcing crossed roller bearings for an upcoming automation build at {CUSTOMER_COMPANY}. We'd need around 50 units to start, with likely repeat orders down the line. Could you send over ballpark pricing and lead time when you get a chance? We're finalizing our vendor list this week.
+I'm sourcing crossed roller bearings for an upcoming automation build at {buyer_company}. We'd need around 50 units to start. Could you send over ballpark pricing, lead time, availability, and MOQ when you get a chance? We're finalizing our vendor list this week.
 
 {signature}
 
@@ -197,8 +225,11 @@ def handle_followup(supplier_name):
     part = quote.get("partService", "")
     sent_date = quote.get("date", "")
     rfq_settings = user_settings.get_rfq_settings()
+    buyer_name = rfq_settings["buyer_name"]
+    buyer_title = rfq_settings["buyer_title"]
+    buyer_company = rfq_settings["buyer_company"]
 
-    system = f"""You are {CUSTOMER_NAME}, {CUSTOMER_TITLE} at {CUSTOMER_COMPANY}, sending a short, polite follow-up to a supplier who hasn't replied to an earlier RFQ.
+    system = f"""You are {buyer_name}, {buyer_title} at {buyer_company}, sending a short, polite follow-up to a supplier who hasn't replied to an earlier RFQ.
 
 STRICT RULES:
 1. PLAIN TEXT ONLY. No markdown, no bullets, no asterisks.

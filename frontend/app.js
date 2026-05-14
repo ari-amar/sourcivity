@@ -59,12 +59,28 @@ const locationInput = document.getElementById('location-input');
 const themeToggle = document.getElementById('theme-toggle');
 const themeColorMeta = document.getElementById('theme-color-meta');
 const settingsForm = document.getElementById('settings-form');
+const settingsBuyerName = document.getElementById('settings-buyer-name');
+const settingsBuyerTitle = document.getElementById('settings-buyer-title');
+const settingsBuyerCompany = document.getElementById('settings-buyer-company');
+const settingsCompanyIntro = document.getElementById('settings-company-intro');
 const settingsTone = document.getElementById('settings-rfq-tone');
-const settingsDeadline = document.getElementById('settings-rfq-deadline');
+const settingsLength = document.getElementById('settings-rfq-length');
+const settingsUrgency = document.getElementById('settings-rfq-urgency');
+const settingsRepeatOrders = document.getElementById('settings-repeat-orders');
+const settingsVendorDeadline = document.getElementById('settings-vendor-deadline');
+const settingsCasual = document.getElementById('settings-casual');
 const settingsSignature = document.getElementById('settings-rfq-signature');
 const settingsPrompt = document.getElementById('settings-rfq-prompt');
-const settingsExtra = document.getElementById('settings-rfq-extra');
+const settingsBuyerNotes = document.getElementById('settings-buyer-notes');
+const settingsCategoryRules = document.getElementById('settings-category-rules');
+const settingsAddRuleBtn = document.getElementById('settings-add-rule-btn');
+const settingsPreviewSupplier = document.getElementById('settings-preview-supplier');
+const settingsPreviewPart = document.getElementById('settings-preview-part');
+const settingsPreviewQty = document.getElementById('settings-preview-qty');
+const settingsPreviewNotes = document.getElementById('settings-preview-notes');
+const settingsPreviewOutput = document.getElementById('settings-preview-output');
 const settingsStatus = document.getElementById('settings-status');
+const settingsResetBtn = document.getElementById('settings-reset-btn');
 const settingsSaveBtn = document.getElementById('settings-save-btn');
 
 // === THEME ===
@@ -115,6 +131,7 @@ const rfqStatus       = document.getElementById('rfq-status');
 // === FLOATING RFQ CART ===
 let cartPanelOpen = false;
 let settingsLoaded = false;
+let settingsDefaults = null;
 
 function setCartPanelOpen(open) {
   cartPanelOpen = open && rfqCart.length > 0;
@@ -804,13 +821,116 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
 });
 
 // === SETTINGS (full mode only) ===
+const SETTINGS_REQUIREMENT_LABELS = {
+  pricing: 'pricing',
+  lead_time: 'lead time',
+  availability: 'availability',
+  moq: 'MOQ',
+  payment_terms: 'payment terms',
+  shipping_terms: 'shipping terms',
+  datasheet: 'datasheet',
+  certifications: 'certifications',
+  volume_discounts: 'volume discounts',
+  alternatives: 'alternatives or substitutes',
+};
+
+const SETTINGS_TONE_LABELS = {
+  direct: 'direct and concise',
+  friendly: 'friendly and professional',
+  formal: 'formal and polished',
+  technical: 'technical and precise',
+};
+
+const SETTINGS_URGENCY_LABELS = {
+  low: 'no urgency',
+  normal: 'we are finalizing our vendor list this week',
+  high: 'we are selecting suppliers soon and would appreciate a quick turnaround',
+};
+
+function settingsRequirementInputs() {
+  return Array.from(document.querySelectorAll('[data-rfq-requirement]'));
+}
+
+function addSettingsRuleRow(rule) {
+  if (!settingsCategoryRules) return;
+  const row = document.createElement('div');
+  row.className = 'settings-rule-row';
+  const category = document.createElement('input');
+  category.type = 'text';
+  category.className = 'settings-rule-category';
+  category.placeholder = 'Category';
+  category.maxLength = 80;
+  category.value = rule?.category || '';
+  const instructions = document.createElement('input');
+  instructions.type = 'text';
+  instructions.className = 'settings-rule-instructions';
+  instructions.placeholder = 'Extra asks';
+  instructions.maxLength = 300;
+  instructions.value = rule?.instructions || '';
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'settings-rule-remove';
+  remove.setAttribute('aria-label', 'Remove rule');
+  remove.title = 'Remove rule';
+  remove.innerHTML = '&times;';
+  row.append(category, instructions, remove);
+  settingsCategoryRules.appendChild(row);
+}
+
+function renderSettingsRules(rules) {
+  if (!settingsCategoryRules) return;
+  settingsCategoryRules.innerHTML = '';
+  const list = Array.isArray(rules) && rules.length ? rules : [{category: '', instructions: ''}];
+  list.forEach(addSettingsRuleRow);
+}
+
+function collectSettingsRules() {
+  if (!settingsCategoryRules) return [];
+  return Array.from(settingsCategoryRules.querySelectorAll('.settings-rule-row')).map(row => ({
+    category: row.querySelector('.settings-rule-category')?.value.trim() || '',
+    instructions: row.querySelector('.settings-rule-instructions')?.value.trim() || '',
+  })).filter(rule => rule.category && rule.instructions);
+}
+
+function collectSettingsPayload() {
+  return {
+    buyer_name: settingsBuyerName.value.trim(),
+    buyer_title: settingsBuyerTitle.value.trim(),
+    buyer_company: settingsBuyerCompany.value.trim(),
+    rfq_company_intro: settingsCompanyIntro.value.trim(),
+    rfq_tone: settingsTone.value,
+    rfq_length: settingsLength.value,
+    rfq_urgency: settingsUrgency.value,
+    rfq_repeat_orders: settingsRepeatOrders.checked,
+    rfq_vendor_deadline: settingsVendorDeadline.checked,
+    rfq_casual: settingsCasual.checked,
+    rfq_requirements: settingsRequirementInputs().filter(input => input.checked).map(input => input.dataset.rfqRequirement),
+    rfq_buyer_notes: settingsBuyerNotes.value.trim(),
+    rfq_signature: settingsSignature.value.trim(),
+    rfq_category_rules: collectSettingsRules(),
+    rfq_prompt_template: settingsPrompt.value.trim(),
+  };
+}
+
 function fillSettingsForm(settings) {
   if (!settingsForm || !settings) return;
-  settingsTone.value = settings.rfq_tone || '';
-  settingsDeadline.value = settings.rfq_default_deadline || '';
+  settingsBuyerName.value = settings.buyer_name || '';
+  settingsBuyerTitle.value = settings.buyer_title || '';
+  settingsBuyerCompany.value = settings.buyer_company || '';
+  settingsCompanyIntro.value = settings.rfq_company_intro || '';
+  settingsTone.value = settings.rfq_tone || 'direct';
+  settingsLength.value = settings.rfq_length || 'short';
+  settingsUrgency.value = settings.rfq_urgency || 'normal';
+  settingsRepeatOrders.checked = !!settings.rfq_repeat_orders;
+  settingsVendorDeadline.checked = settings.rfq_vendor_deadline !== false;
+  settingsCasual.checked = !!settings.rfq_casual;
+  const requirements = new Set(settings.rfq_requirements || []);
+  settingsRequirementInputs().forEach(input => { input.checked = requirements.has(input.dataset.rfqRequirement); });
+  settingsBuyerNotes.value = settings.rfq_buyer_notes || settings.rfq_extra_instructions || '';
   settingsSignature.value = settings.rfq_signature || '';
   settingsPrompt.value = settings.rfq_prompt_template || '';
-  settingsExtra.value = settings.rfq_extra_instructions || '';
+  renderSettingsRules(settings.rfq_category_rules || []);
+  updateSettingsPreview();
 }
 
 async function loadSettings(force) {
@@ -821,6 +941,7 @@ async function loadSettings(force) {
     const res = await fetch(API_URL + '/api/settings');
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || 'Settings unavailable');
+    settingsDefaults = data.defaults || null;
     fillSettingsForm(data.settings || {});
     settingsLoaded = true;
     hideStatus(settingsStatus);
@@ -829,19 +950,73 @@ async function loadSettings(force) {
   }
 }
 
+function updateSettingsPreview() {
+  if (!settingsPreviewOutput || !settingsForm) return;
+  const settings = collectSettingsPayload();
+  const supplier = settingsPreviewSupplier.value.trim() || 'Brooks Instrument';
+  const part = settingsPreviewPart.value.trim() || 'mass flow controller';
+  const qty = settingsPreviewQty.value.trim();
+  const notes = settingsPreviewNotes.value.trim();
+  const company = settings.buyer_company || 'our company';
+  const intro = settings.rfq_company_intro || `I'm sourcing this for ${company}.`;
+  const requirements = settings.rfq_requirements
+    .map(key => SETTINGS_REQUIREMENT_LABELS[key])
+    .filter(Boolean);
+  const asks = requirements.length ? requirements.join(', ') : 'pricing, lead time, and availability';
+  const tone = SETTINGS_TONE_LABELS[settings.rfq_tone] || SETTINGS_TONE_LABELS.direct;
+  const urgency = settings.rfq_vendor_deadline ? (SETTINGS_URGENCY_LABELS[settings.rfq_urgency] || SETTINGS_URGENCY_LABELS.normal) : '';
+  const qtyText = qty ? `${qty} units of ` : '';
+  const noteText = notes ? ` for ${notes}` : '';
+  const repeatText = settings.rfq_repeat_orders ? ' This could turn into repeat orders if the fit is good.' : '';
+  const urgencyText = urgency ? ` ${urgency.charAt(0).toUpperCase() + urgency.slice(1)}, so a ballpark quote is fine.` : '';
+  const detailText = settings.rfq_length === 'detailed' ? ' If there are relevant datasheets, certifications, or alternatives, please include those too.' : '';
+  const body = [
+    `Subject: ${part} - quick quote request`,
+    '',
+    `Hi ${supplier},`,
+    '',
+    `${intro} I need ${qtyText}${part}${noteText}. Could you send over ${asks} when you get a chance?${urgencyText}${repeatText}${detailText}`,
+    '',
+    settings.rfq_signature || `${settings.buyer_name || ''}\n${company}`.trim(),
+  ].join('\n');
+  settingsPreviewOutput.textContent = `Tone: ${tone}\n\n${body}`;
+}
+
 if (!DEMO_MODE && settingsForm) {
+  settingsForm.addEventListener('input', updateSettingsPreview);
+  settingsForm.addEventListener('change', updateSettingsPreview);
+
+  if (settingsAddRuleBtn) {
+    settingsAddRuleBtn.addEventListener('click', () => {
+      addSettingsRuleRow({category: '', instructions: ''});
+      updateSettingsPreview();
+    });
+  }
+
+  if (settingsCategoryRules) {
+    settingsCategoryRules.addEventListener('click', (e) => {
+      const btn = e.target.closest('.settings-rule-remove');
+      if (!btn) return;
+      btn.closest('.settings-rule-row')?.remove();
+      if (!settingsCategoryRules.querySelector('.settings-rule-row')) addSettingsRuleRow({category: '', instructions: ''});
+      updateSettingsPreview();
+    });
+  }
+
+  if (settingsResetBtn) {
+    settingsResetBtn.addEventListener('click', () => {
+      if (settingsDefaults) fillSettingsForm(settingsDefaults);
+      showStatus(settingsStatus, 'success', 'Defaults restored. Save to apply.');
+      setTimeout(() => hideStatus(settingsStatus), 2500);
+    });
+  }
+
   settingsForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     settingsSaveBtn.disabled = true;
     showStatus(settingsStatus, 'loading', 'Saving settings...');
     try {
-      const payload = {
-        rfq_tone: settingsTone.value.trim(),
-        rfq_default_deadline: settingsDeadline.value.trim(),
-        rfq_signature: settingsSignature.value.trim(),
-        rfq_prompt_template: settingsPrompt.value.trim(),
-        rfq_extra_instructions: settingsExtra.value.trim(),
-      };
+      const payload = collectSettingsPayload();
       const res = await fetch(API_URL + '/api/settings', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},

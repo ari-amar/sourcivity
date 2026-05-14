@@ -13,7 +13,7 @@
   <meta property="og:description" content="AI-powered supplier search and procurement">
   <meta property="og:image" content="sourcivity-logo.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="style.css?v=121">
+  <link rel="stylesheet" href="style.css?v=122">
 </head>
 <body>
   <header>
@@ -133,27 +133,131 @@
     <!-- SETTINGS TAB -->
     <section id="tab-settings" class="tab hidden">
       <div class="settings-header">
-        <h2>Email Settings</h2>
+        <h2>Email Preferences</h2>
       </div>
       <form id="settings-form" class="settings-panel">
-        <div class="settings-grid">
-          <label class="settings-field" for="settings-rfq-tone">
-            <span>Tone</span>
-            <input type="text" id="settings-rfq-tone" maxlength="160">
+        <div class="settings-section">
+          <h3>Buyer Profile</h3>
+          <div class="settings-grid">
+            <label class="settings-field" for="settings-buyer-name">
+              <span>Name</span>
+              <input type="text" id="settings-buyer-name" maxlength="160">
+            </label>
+            <label class="settings-field" for="settings-buyer-title">
+              <span>Title</span>
+              <input type="text" id="settings-buyer-title" maxlength="160">
+            </label>
+            <label class="settings-field" for="settings-buyer-company">
+              <span>Company</span>
+              <input type="text" id="settings-buyer-company" maxlength="180">
+            </label>
+            <label class="settings-field" for="settings-company-intro">
+              <span>Company Intro</span>
+              <input type="text" id="settings-company-intro" maxlength="300">
+            </label>
+            <label class="settings-field full-width" for="settings-rfq-signature">
+              <span>Signature</span>
+              <textarea id="settings-rfq-signature" rows="4" maxlength="500"></textarea>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Writing Style</h3>
+          <div class="settings-grid">
+            <label class="settings-field" for="settings-rfq-tone">
+              <span>Tone</span>
+              <select id="settings-rfq-tone">
+                <option value="direct">Direct</option>
+                <option value="friendly">Friendly</option>
+                <option value="formal">Formal</option>
+                <option value="technical">Technical</option>
+              </select>
+            </label>
+            <label class="settings-field" for="settings-rfq-length">
+              <span>Length</span>
+              <select id="settings-rfq-length">
+                <option value="very_short">Very Short</option>
+                <option value="short">Short</option>
+                <option value="standard">Standard</option>
+                <option value="detailed">Detailed</option>
+              </select>
+            </label>
+            <label class="settings-field" for="settings-rfq-urgency">
+              <span>Urgency</span>
+              <select id="settings-rfq-urgency">
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+            <div class="settings-checks">
+              <label><input type="checkbox" id="settings-repeat-orders"> Repeat orders</label>
+              <label><input type="checkbox" id="settings-vendor-deadline"> Vendor deadline</label>
+              <label><input type="checkbox" id="settings-casual"> Casual voice</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Ask For By Default</h3>
+          <div class="settings-requirements">
+            <label><input type="checkbox" data-rfq-requirement="pricing"> Pricing</label>
+            <label><input type="checkbox" data-rfq-requirement="lead_time"> Lead time</label>
+            <label><input type="checkbox" data-rfq-requirement="availability"> Availability</label>
+            <label><input type="checkbox" data-rfq-requirement="moq"> MOQ</label>
+            <label><input type="checkbox" data-rfq-requirement="payment_terms"> Payment terms</label>
+            <label><input type="checkbox" data-rfq-requirement="shipping_terms"> Shipping terms</label>
+            <label><input type="checkbox" data-rfq-requirement="datasheet"> Datasheet</label>
+            <label><input type="checkbox" data-rfq-requirement="certifications"> Certifications</label>
+            <label><input type="checkbox" data-rfq-requirement="volume_discounts"> Volume discounts</label>
+            <label><input type="checkbox" data-rfq-requirement="alternatives"> Alternatives</label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Buyer Notes</h3>
+          <label class="settings-field" for="settings-buyer-notes">
+            <textarea id="settings-buyer-notes" rows="5" maxlength="1200"></textarea>
           </label>
-          <label class="settings-field" for="settings-rfq-deadline">
-            <span>Deadline</span>
-            <input type="text" id="settings-rfq-deadline" maxlength="240">
+        </div>
+
+        <div class="settings-section">
+          <h3>Category Rules</h3>
+          <div id="settings-category-rules" class="settings-rule-list"></div>
+          <button type="button" id="settings-add-rule-btn" class="btn-secondary">Add Rule</button>
+        </div>
+
+        <div class="settings-section">
+          <h3>Preview</h3>
+          <div class="settings-preview-grid">
+            <label class="settings-field" for="settings-preview-supplier">
+              <span>Supplier</span>
+              <input type="text" id="settings-preview-supplier" value="Brooks Instrument">
+            </label>
+            <label class="settings-field" for="settings-preview-part">
+              <span>Part</span>
+              <input type="text" id="settings-preview-part" value="mass flow controller">
+            </label>
+            <label class="settings-field" for="settings-preview-qty">
+              <span>Quantity</span>
+              <input type="text" id="settings-preview-qty" value="2">
+            </label>
+            <label class="settings-field" for="settings-preview-notes">
+              <span>Notes</span>
+              <input type="text" id="settings-preview-notes" value="0-5 SLPM nitrogen">
+            </label>
+          </div>
+          <pre id="settings-preview-output" class="settings-preview-output"></pre>
+        </div>
+
+        <details class="settings-section settings-advanced">
+          <summary>Advanced Template</summary>
+          <label class="settings-field" for="settings-rfq-prompt">
+            <span>Template</span>
+            <textarea id="settings-rfq-prompt" rows="8" maxlength="3000"></textarea>
           </label>
-          <label class="settings-field full-width" for="settings-rfq-signature">
-            <span>Signature</span>
-            <textarea id="settings-rfq-signature" rows="4" maxlength="500"></textarea>
-          </label>
-          <label class="settings-field full-width" for="settings-rfq-prompt">
-            <span>Standard Prompt</span>
-            <textarea id="settings-rfq-prompt" rows="9" maxlength="3000"></textarea>
-          </label>
-          <div class="settings-blanks full-width">
+          <div class="settings-blanks">
             <span>{{supplier_name}}</span>
             <span>{{supplier_email}}</span>
             <span>{{supplier_website}}</span>
@@ -163,17 +267,18 @@
             <span>{{customer_name}}</span>
             <span>{{customer_company}}</span>
             <span>{{customer_title}}</span>
+            <span>{{company_intro}}</span>
+            <span>{{selected_requirements}}</span>
+            <span>{{buyer_notes}}</span>
             <span>{{tone}}</span>
             <span>{{deadline}}</span>
             <span>{{signature}}</span>
           </div>
-          <label class="settings-field full-width" for="settings-rfq-extra">
-            <span>Extra Instructions</span>
-            <textarea id="settings-rfq-extra" rows="5" maxlength="1200"></textarea>
-          </label>
-        </div>
+        </details>
+
         <div id="settings-status" class="status-msg hidden"></div>
         <div class="settings-actions">
+          <button type="button" id="settings-reset-btn" class="btn-secondary">Reset Defaults</button>
           <button type="submit" id="settings-save-btn" class="btn-primary">Save Settings</button>
         </div>
       </form>
@@ -275,6 +380,6 @@
     </div>
   </main>
 
-  <script src="app.js?v=122"></script>
+  <script src="app.js?v=123"></script>
 </body>
 </html>
