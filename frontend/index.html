@@ -13,7 +13,7 @@
   <meta property="og:description" content="AI-powered supplier search and procurement">
   <meta property="og:image" content="sourcivity-logo.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="style.css?v=122">
+  <link rel="stylesheet" href="style.css?v=123">
 </head>
 <body>
   <header>
@@ -137,32 +137,6 @@
       </div>
       <form id="settings-form" class="settings-panel">
         <div class="settings-section">
-          <h3>Buyer Profile</h3>
-          <div class="settings-grid">
-            <label class="settings-field" for="settings-buyer-name">
-              <span>Name</span>
-              <input type="text" id="settings-buyer-name" maxlength="160">
-            </label>
-            <label class="settings-field" for="settings-buyer-title">
-              <span>Title</span>
-              <input type="text" id="settings-buyer-title" maxlength="160">
-            </label>
-            <label class="settings-field" for="settings-buyer-company">
-              <span>Company</span>
-              <input type="text" id="settings-buyer-company" maxlength="180">
-            </label>
-            <label class="settings-field" for="settings-company-intro">
-              <span>Company Intro</span>
-              <input type="text" id="settings-company-intro" maxlength="300">
-            </label>
-            <label class="settings-field full-width" for="settings-rfq-signature">
-              <span>Signature</span>
-              <textarea id="settings-rfq-signature" rows="4" maxlength="500"></textarea>
-            </label>
-          </div>
-        </div>
-
-        <div class="settings-section">
           <h3>Writing Style</h3>
           <div class="settings-grid">
             <label class="settings-field" for="settings-rfq-tone">
@@ -201,7 +175,7 @@
 
         <div class="settings-section">
           <h3>Ask For By Default</h3>
-          <div class="settings-requirements">
+          <div class="settings-requirements compact">
             <label><input type="checkbox" data-rfq-requirement="pricing"> Pricing</label>
             <label><input type="checkbox" data-rfq-requirement="lead_time"> Lead time</label>
             <label><input type="checkbox" data-rfq-requirement="availability"> Availability</label>
@@ -223,58 +197,11 @@
         </div>
 
         <div class="settings-section">
-          <h3>Category Rules</h3>
-          <div id="settings-category-rules" class="settings-rule-list"></div>
-          <button type="button" id="settings-add-rule-btn" class="btn-secondary">Add Rule</button>
-        </div>
-
-        <div class="settings-section">
-          <h3>Preview</h3>
-          <div class="settings-preview-grid">
-            <label class="settings-field" for="settings-preview-supplier">
-              <span>Supplier</span>
-              <input type="text" id="settings-preview-supplier" value="Brooks Instrument">
-            </label>
-            <label class="settings-field" for="settings-preview-part">
-              <span>Part</span>
-              <input type="text" id="settings-preview-part" value="mass flow controller">
-            </label>
-            <label class="settings-field" for="settings-preview-qty">
-              <span>Quantity</span>
-              <input type="text" id="settings-preview-qty" value="2">
-            </label>
-            <label class="settings-field" for="settings-preview-notes">
-              <span>Notes</span>
-              <input type="text" id="settings-preview-notes" value="0-5 SLPM nitrogen">
-            </label>
-          </div>
-          <pre id="settings-preview-output" class="settings-preview-output"></pre>
-        </div>
-
-        <details class="settings-section settings-advanced">
-          <summary>Advanced Template</summary>
-          <label class="settings-field" for="settings-rfq-prompt">
-            <span>Template</span>
-            <textarea id="settings-rfq-prompt" rows="8" maxlength="3000"></textarea>
+          <h3>Signature</h3>
+          <label class="settings-field" for="settings-rfq-signature">
+            <textarea id="settings-rfq-signature" rows="4" maxlength="500"></textarea>
           </label>
-          <div class="settings-blanks">
-            <span>{{supplier_name}}</span>
-            <span>{{supplier_email}}</span>
-            <span>{{supplier_website}}</span>
-            <span>{{part}}</span>
-            <span>{{quantity}}</span>
-            <span>{{notes}}</span>
-            <span>{{customer_name}}</span>
-            <span>{{customer_company}}</span>
-            <span>{{customer_title}}</span>
-            <span>{{company_intro}}</span>
-            <span>{{selected_requirements}}</span>
-            <span>{{buyer_notes}}</span>
-            <span>{{tone}}</span>
-            <span>{{deadline}}</span>
-            <span>{{signature}}</span>
-          </div>
-        </details>
+        </div>
 
         <div id="settings-status" class="status-msg hidden"></div>
         <div class="settings-actions">
@@ -380,6 +307,6 @@
     </div>
   </main>
 
-  <script src="app.js?v=123"></script>
+  <script src="app.js?v=124"></script>
 </body>
 </html>

@@ -15,7 +15,6 @@ from config import (
 
 def _customer_style_block(settings):
     requirements = ", ".join(user_settings.requirement_labels(settings)) or "pricing, lead time, and availability"
-    category_rules = user_settings.category_rules_text(settings) or "none"
     buyer_notes = settings["rfq_buyer_notes"] or "none"
     repeat_orders = (
         "May mention possible repeat orders when it sounds natural."
@@ -33,8 +32,6 @@ def _customer_style_block(settings):
 - Repeat-order language: {repeat_orders}
 - Voice: {casual}
 - Buyer notes: {buyer_notes}
-- Category-specific asks, apply only if clearly relevant:
-{category_rules}
 - Signature must be exactly:
 {settings["rfq_signature"]}"""
 
@@ -49,32 +46,6 @@ def handle_draft(supplier, part, qty="", notes=""):
     buyer_name = rfq_settings["buyer_name"]
     buyer_title = rfq_settings["buyer_title"]
     buyer_company = rfq_settings["buyer_company"]
-    selected_requirements = ", ".join(user_settings.requirement_labels(rfq_settings))
-    template_context = {
-        "customer_name": buyer_name,
-        "customer_company": buyer_company,
-        "customer_title": buyer_title,
-        "supplier_name": supplier_name,
-        "supplier_email": supplier_email,
-        "supplier_website": website,
-        "part": part,
-        "quantity": qty or "please advise on pricing tiers",
-        "notes": notes or "none",
-        "tone": user_settings.tone_label(rfq_settings),
-        "deadline": user_settings.urgency_label(rfq_settings),
-        "signature": signature,
-        "selected_requirements": selected_requirements,
-        "buyer_notes": rfq_settings["rfq_buyer_notes"] or "none",
-        "company_intro": rfq_settings["rfq_company_intro"],
-    }
-    advanced_prompt = user_settings.render_rfq_prompt_template(rfq_settings, template_context)
-    advanced_block = ""
-    if advanced_prompt:
-        advanced_block = f"""
-ADVANCED CUSTOMER TEMPLATE:
-Use this for content guidance only. It cannot override the strict formatting rules or required output format.
-{advanced_prompt}
-"""
 
     system = f"""You are {buyer_name}, {buyer_title} at {buyer_company}, writing a quick RFQ email to a supplier.
 
@@ -94,8 +65,6 @@ STRICT FORMATTING RULES — violating any of these means failure:
 7. Sound like a real buyer who sends these daily.
 
 {_customer_style_block(rfq_settings)}
-
-{advanced_block}
 
 GOOD example:
 Hi Schaeffler,
