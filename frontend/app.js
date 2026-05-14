@@ -62,6 +62,7 @@ const settingsForm = document.getElementById('settings-form');
 const settingsTone = document.getElementById('settings-rfq-tone');
 const settingsDeadline = document.getElementById('settings-rfq-deadline');
 const settingsSignature = document.getElementById('settings-rfq-signature');
+const settingsPrompt = document.getElementById('settings-rfq-prompt');
 const settingsExtra = document.getElementById('settings-rfq-extra');
 const settingsStatus = document.getElementById('settings-status');
 const settingsSaveBtn = document.getElementById('settings-save-btn');
@@ -808,6 +809,7 @@ function fillSettingsForm(settings) {
   settingsTone.value = settings.rfq_tone || '';
   settingsDeadline.value = settings.rfq_default_deadline || '';
   settingsSignature.value = settings.rfq_signature || '';
+  settingsPrompt.value = settings.rfq_prompt_template || '';
   settingsExtra.value = settings.rfq_extra_instructions || '';
 }
 
@@ -837,6 +839,7 @@ if (!DEMO_MODE && settingsForm) {
         rfq_tone: settingsTone.value.trim(),
         rfq_default_deadline: settingsDeadline.value.trim(),
         rfq_signature: settingsSignature.value.trim(),
+        rfq_prompt_template: settingsPrompt.value.trim(),
         rfq_extra_instructions: settingsExtra.value.trim(),
       };
       const res = await fetch(API_URL + '/api/settings', {

@@ -1370,6 +1370,25 @@ tbody td a:hover { text-decoration: underline; }
 .settings-field.full-width {
   grid-column: 1 / -1;
 }
+.settings-blanks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: -6px;
+}
+.settings-blanks.full-width {
+  grid-column: 1 / -1;
+}
+.settings-blanks span {
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-2);
+  color: var(--muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  line-height: 1.2;
+}
 .settings-field span {
   color: var(--muted);
   font-size: 12px;

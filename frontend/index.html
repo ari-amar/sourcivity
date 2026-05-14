@@ -13,7 +13,7 @@
   <meta property="og:description" content="AI-powered supplier search and procurement">
   <meta property="og:image" content="sourcivity-logo.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="style.css?v=120">
+  <link rel="stylesheet" href="style.css?v=121">
 </head>
 <body>
   <header>
@@ -149,6 +149,24 @@
             <span>Signature</span>
             <textarea id="settings-rfq-signature" rows="4" maxlength="500"></textarea>
           </label>
+          <label class="settings-field full-width" for="settings-rfq-prompt">
+            <span>Standard Prompt</span>
+            <textarea id="settings-rfq-prompt" rows="9" maxlength="3000"></textarea>
+          </label>
+          <div class="settings-blanks full-width">
+            <span>{{supplier_name}}</span>
+            <span>{{supplier_email}}</span>
+            <span>{{supplier_website}}</span>
+            <span>{{part}}</span>
+            <span>{{quantity}}</span>
+            <span>{{notes}}</span>
+            <span>{{customer_name}}</span>
+            <span>{{customer_company}}</span>
+            <span>{{customer_title}}</span>
+            <span>{{tone}}</span>
+            <span>{{deadline}}</span>
+            <span>{{signature}}</span>
+          </div>
           <label class="settings-field full-width" for="settings-rfq-extra">
             <span>Extra Instructions</span>
             <textarea id="settings-rfq-extra" rows="5" maxlength="1200"></textarea>
@@ -257,6 +275,6 @@
     </div>
   </main>
 
-  <script src="app.js?v=121"></script>
+  <script src="app.js?v=122"></script>
 </body>
 </html>

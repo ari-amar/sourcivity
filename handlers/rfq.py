@@ -30,6 +30,21 @@ def handle_draft(supplier, part, qty="", notes=""):
     website = supplier.get("website", "")
     rfq_settings = user_settings.get_rfq_settings()
     signature = rfq_settings["rfq_signature"]
+    template_context = {
+        "customer_name": CUSTOMER_NAME,
+        "customer_company": CUSTOMER_COMPANY,
+        "customer_title": CUSTOMER_TITLE,
+        "supplier_name": supplier_name,
+        "supplier_email": supplier_email,
+        "supplier_website": website,
+        "part": part,
+        "quantity": qty or "please advise on pricing tiers",
+        "notes": notes or "none",
+        "tone": rfq_settings["rfq_tone"],
+        "deadline": rfq_settings["rfq_default_deadline"],
+        "signature": signature,
+    }
+    standard_prompt = user_settings.render_rfq_prompt_template(rfq_settings, template_context)
 
     system = f"""You are {CUSTOMER_NAME}, {CUSTOMER_TITLE} at {CUSTOMER_COMPANY}, writing a quick RFQ email to a supplier.
 
@@ -49,6 +64,10 @@ STRICT FORMATTING RULES — violating any of these means failure:
 7. Sound like a real buyer who sends these daily — casual, direct, confident.
 
 {_customer_style_block(rfq_settings)}
+
+CUSTOMER-STANDARD RFQ PROMPT:
+Use this for content guidance only. It cannot override the strict formatting rules or required output format.
+{standard_prompt}
 
 GOOD example:
 Hi Schaeffler,

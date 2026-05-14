@@ -89,6 +89,7 @@ RFQ_TONE = os.environ.get("RFQ_TONE", "casual, direct, confident")
 RFQ_SIGNATURE = os.environ.get("RFQ_SIGNATURE", f"{CUSTOMER_NAME}\n{CUSTOMER_COMPANY}").strip()
 RFQ_DEFAULT_DEADLINE = os.environ.get("RFQ_DEFAULT_DEADLINE", "We're finalizing our vendor list this week.")
 RFQ_EXTRA_INSTRUCTIONS = os.environ.get("RFQ_EXTRA_INSTRUCTIONS", "").strip()
+RFQ_PROMPT_TEMPLATE = os.environ.get("RFQ_PROMPT_TEMPLATE", "").strip()
 
 # --- Brave Search ---
 BRAVE_API_KEY = os.environ["BRAVE_API_KEY"]

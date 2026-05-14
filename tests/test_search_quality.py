@@ -145,6 +145,7 @@ class SearchQualityTests(unittest.TestCase):
                     "rfq_signature": "Ari\nSourcivity",
                     "rfq_default_deadline": "We are selecting vendors this week.",
                     "rfq_extra_instructions": "Do not promise repeat orders.\r\nAsk for availability.",
+                    "rfq_prompt_template": "Ask {{supplier_name}} about {{part}}.\r\nUse {{signature}}.",
                 })
                 loaded = user_settings.get_rfq_settings()
             finally:
@@ -153,6 +154,15 @@ class SearchQualityTests(unittest.TestCase):
         self.assertEqual(updated["rfq_tone"], "technical and concise")
         self.assertEqual(loaded["rfq_signature"], "Ari\nSourcivity")
         self.assertEqual(loaded["rfq_extra_instructions"], "Do not promise repeat orders.\nAsk for availability.")
+        self.assertEqual(loaded["rfq_prompt_template"], "Ask {{supplier_name}} about {{part}}.\nUse {{signature}}.")
+        self.assertEqual(
+            user_settings.render_rfq_prompt_template(loaded, {
+                "supplier_name": "Brooks Instrument",
+                "part": "mass flow controller",
+                "signature": "Ari\nSourcivity",
+            }),
+            "Ask Brooks Instrument about mass flow controller.\nUse Ari\nSourcivity.",
+        )
 
 
 if __name__ == "__main__":
