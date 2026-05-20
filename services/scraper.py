@@ -125,6 +125,30 @@ def _normalize_email_candidate(email):
     return email.strip().strip('.,;:)]}>"\'').lower()
 
 
+def _host_from_url(url):
+    if not url:
+        return ''
+    candidate = url.strip()
+    if not candidate.startswith(('http://', 'https://')):
+        candidate = 'https://' + candidate
+    parsed = urllib.parse.urlparse(candidate)
+    host = (parsed.netloc or parsed.path.split('/')[0]).lower().split(':')[0]
+    return host[4:] if host.startswith('www.') else host
+
+
+def _email_matches_website(email, website):
+    if not website:
+        return True
+    email = _normalize_email_candidate(email)
+    if not _is_valid_email(email):
+        return False
+    domain = email.rsplit('@', 1)[-1]
+    host = _host_from_url(website)
+    if not host:
+        return True
+    return domain == host or domain.endswith('.' + host) or host.endswith('.' + domain)
+
+
 def _is_valid_email(email):
     email = _normalize_email_candidate(email)
     if not EMAIL_RE.fullmatch(email):
@@ -301,12 +325,18 @@ def _find_cert_page_url(html, base_url):
     return ''
 
 
-def _pick_best_email(emails):
+def _pick_best_email(emails, website=''):
     emails = [
         _normalize_email_candidate(e)
         for e in emails
         if _is_valid_email(e)
     ]
+    if website:
+        same_domain = [e for e in emails if _email_matches_website(e, website)]
+        if same_domain:
+            emails = same_domain
+        else:
+            return ''
     if not emails:
         return ''
     for prefix in ('sales@', 'info@', 'contact@', 'inquiry@', 'inquiries@', 'quotes@', 'rfq@'):
@@ -816,7 +846,7 @@ def _enrich_single(supplier, skip_email=False, blocked_sites=None):
         if not skip_email and not _has_valid_email():
             emails = _extract_emails(html)
             if emails:
-                supplier['email'] = _pick_best_email(emails)
+                supplier['email'] = _pick_best_email(emails, base_url)
         if needs_contact and not supplier.get('contactUrl', '').strip():
             contact = _extract_contact_url(html, base_url)
             if contact:
@@ -944,7 +974,7 @@ def _enrich_single(supplier, skip_email=False, blocked_sites=None):
 
                 if not skip_email:
                     if emails:
-                        supplier['email'] = _pick_best_email(list(set(emails)))
+                        supplier['email'] = _pick_best_email(list(set(emails)), base_url)
                     else:
                         # Follow first contact/quote link on rendered page
                         contact_href = page.evaluate("""() => {
@@ -965,7 +995,7 @@ def _enrich_single(supplier, skip_email=False, blocked_sites=None):
                                 contact_html = page.content()
                                 emails = _extract_emails(contact_html)
                                 if emails:
-                                    supplier['email'] = _pick_best_email(emails)
+                                    supplier['email'] = _pick_best_email(emails, base_url)
                                 if not supplier.get('contactUrl', '').strip():
                                     supplier['contactUrl'] = contact_href
                             except Exception:

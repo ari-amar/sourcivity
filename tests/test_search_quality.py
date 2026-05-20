@@ -193,6 +193,14 @@ class SearchQualityTests(unittest.TestCase):
             scraper._extract_emails('mailto:%20customer.service@myssp.com'),
             ["customer.service@myssp.com"],
         )
+        self.assertEqual(
+            scraper._pick_best_email(["sales@measurement-plus.com.au"], "https://www.brooksinstrument.com"),
+            "",
+        )
+        self.assertEqual(
+            scraper._pick_best_email(["customer.service@myssp.com"], "https://www.myssp.com"),
+            "customer.service@myssp.com",
+        )
 
     def test_location_filter_keeps_matching_state_and_pending(self):
         suppliers = [

@@ -1105,7 +1105,10 @@ STRICT RULES:
                 s["products"] = _title_case_product(s["products"])
             if s.get("yearsInBusiness"):
                 s["yearsInBusiness"] = _normalize_years_in_business_value(s["yearsInBusiness"])
-            if s.get("email") and not scraper._is_valid_email(s["email"]):
+            if s.get("email") and (
+                not scraper._is_valid_email(s["email"])
+                or (s.get("website") and not scraper._email_matches_website(s["email"], s["website"]))
+            ):
                 s["email"] = ""
 
         suppliers = _rank_suppliers_for_query(suppliers, safe_query)
