@@ -4,6 +4,7 @@ import json
 import re
 import threading
 import time
+import unicodedata
 import urllib.parse
 import uuid
 from datetime import datetime, timezone
@@ -143,6 +144,7 @@ def _normalize_location_text(location):
 
 
 def _normalize_match_text(text):
+    text = unicodedata.normalize('NFKD', text or '').encode('ascii', 'ignore').decode('ascii')
     return re.sub(r'[^a-z0-9]+', ' ', (text or '').lower()).strip()
 
 
@@ -154,12 +156,30 @@ def _supplier_domain_tokens(supplier):
     website = supplier.get('website', '') or ''
     if not website:
         return []
-    url = website if website.startswith(('http://', 'https://')) else 'https://' + website
-    parsed = urllib.parse.urlparse(url)
-    host = (parsed.netloc or parsed.path.split('/')[0]).lower()
-    if host.startswith('www.'):
-        host = host[4:]
-    return [tok for tok in re.split(r'[^a-z0-9]+', host.split(':')[0]) if tok]
+    host = _url_host(website)
+    return [tok for tok in re.split(r'[^a-z0-9]+', host) if tok]
+
+
+def _url_host(url):
+    if not url:
+        return ''
+    candidate = url.strip()
+    if not candidate.startswith(('http://', 'https://')):
+        candidate = 'https://' + candidate
+    parsed = urllib.parse.urlparse(candidate)
+    host = (parsed.netloc or parsed.path.split('/')[0]).lower().split(':')[0]
+    return host[4:] if host.startswith('www.') else host
+
+
+def _root_url(url):
+    host = _url_host(url)
+    if not host:
+        return ''
+    candidate = url.strip()
+    if not candidate.startswith(('http://', 'https://')):
+        candidate = 'https://' + candidate
+    scheme = urllib.parse.urlparse(candidate).scheme or 'https'
+    return f"{scheme}://{host}"
 
 
 def _supplier_name_tokens(name):
@@ -365,6 +385,284 @@ def _country_from_tld(website):
         if host.endswith(tld):
             return country
     return None
+
+
+_RESELLER_OR_DIRECTORY_DOMAINS = {
+    'amazon.com', 'ebay.com', 'alibaba.com', 'globalspec.com', 'thomasnet.com',
+    'mcmaster.com', 'grainger.com', 'shopbvv.com', 'buyfittingsonline.com',
+    'indiamart.com', 'made-in-china.com', 'directindustry.com', 'tradeindia.com',
+    'kompass.com', 'europages.com', 'motion.com', 'zoro.com', 'radwell.com',
+    'rs-online.com', 'automationdirect.com', 'hydraulic-supply.com',
+    'fcxperformance.com', 'tipcotech.com', 'myerscoinc.com',
+}
+
+_COMPANY_PROFILE_DOMAINS = {
+    'linkedin.com', 'zoominfo.com', 'leadiq.com', 'rocketreach.co', 'wiza.co',
+    'crunchbase.com', 'bloomberg.com', 'pitchbook.com', 'dnb.com',
+    'mapquest.com', 'wikipedia.org', 'facebook.com', 'instagram.com',
+    'x.com', 'twitter.com', 'youtube.com', 'mfg.com', 'qmed.com',
+    'medicaldevicedirectory.com',
+}
+
+_GENERIC_OFFICIAL_DOMAIN_TOKENS = {
+    'stainless', 'steel', 'products', 'product', 'fittings', 'fitting',
+    'valve', 'valves', 'tube', 'tubes', 'hose', 'hoses', 'adapter', 'adapters',
+    'instrumentation', 'compression', 'manufacturing', 'manufacturer',
+    'precision', 'machining', 'machine', 'injection', 'molding', 'plastics',
+    'plastic', 'controller', 'controllers', 'mass', 'flow', 'medical',
+    'custom', 'industrial',
+}
+
+_GENERIC_CONTEXT_TOKENS = _GENERIC_OFFICIAL_DOMAIN_TOKENS | {
+    'supplier', 'suppliers', 'official', 'website', 'company', 'contact',
+    'products', 'product', 'collections', 'pages', 'catalog', 'html',
+}
+
+_OFFICIAL_WEBSITE_MIN_SCORE = 70
+
+
+def _host_matches_domain(host, domain):
+    return host == domain or host.endswith('.' + domain)
+
+
+def _is_reseller_or_directory_host(host):
+    return any(_host_matches_domain(host, domain) for domain in _RESELLER_OR_DIRECTORY_DOMAINS)
+
+
+def _is_profile_host(host):
+    return any(_host_matches_domain(host, domain) for domain in _COMPANY_PROFILE_DOMAINS)
+
+
+def _official_name_tokens(name):
+    tokens = _supplier_name_tokens(name)
+    primary = [tok for tok in tokens if tok not in _GENERIC_OFFICIAL_DOMAIN_TOKENS]
+    return primary or tokens
+
+
+def _compact_alnum(text):
+    return re.sub(r'[^a-z0-9]+', '', (text or '').lower())
+
+
+def _path_context_tokens(url):
+    if not url:
+        return []
+    candidate = url.strip()
+    if not candidate.startswith(('http://', 'https://')):
+        candidate = 'https://' + candidate
+    path = urllib.parse.urlparse(candidate).path
+    tokens = [
+        tok for tok in _tokenize_match_text(path)
+        if len(tok) >= 4 and tok not in _GENERIC_CONTEXT_TOKENS
+    ]
+    return tokens[:5]
+
+
+def _distinctive_context_tokens(supplier, query=''):
+    text = ' '.join([
+        query or '',
+        supplier.get('products', '') or '',
+        ' '.join(_path_context_tokens(supplier.get('website', '') or '')),
+    ])
+    tokens = []
+    for tok in _tokenize_match_text(text):
+        if len(tok) < 4 or tok in _GENERIC_CONTEXT_TOKENS:
+            continue
+        if tok not in tokens:
+            tokens.append(tok)
+    return tokens[:8]
+
+
+def _needs_official_website_resolution(supplier, region='north_america'):
+    website = (supplier.get('website') or '').strip()
+    if not website:
+        return True
+
+    host = _url_host(website)
+    if not host:
+        return True
+    if _is_reseller_or_directory_host(host) or _is_profile_host(host):
+        return True
+
+    candidate_country = _country_from_tld(website)
+    if region == 'north_america' and candidate_country:
+        return True
+
+    tokens = _official_name_tokens(supplier.get('name', '') or '')
+    compact_host = _compact_alnum(host)
+    host_matches_name = any(tok in compact_host for tok in tokens)
+    if host_matches_name:
+        return False
+
+    candidate = website if website.startswith(('http://', 'https://')) else 'https://' + website
+    path = urllib.parse.urlparse(candidate).path.lower()
+    if re.search(r'/(product|products|shop|catalog|collections|item|part|p/)', path):
+        return True
+
+    return True
+
+
+def _score_official_website_candidate(supplier, result, query='', region='north_america'):
+    url = result.get('url', '') or ''
+    host = _url_host(url)
+    if not host:
+        return -999
+
+    root = _root_url(url)
+    path = urllib.parse.urlparse(url if url.startswith(('http://', 'https://')) else 'https://' + url).path.lower()
+    title = result.get('title', '') or ''
+    description = result.get('description', '') or ''
+    profile = result.get('profile_name', '') or ''
+    text = _normalize_match_text(' '.join([title, description, profile]))
+    compact_host = _compact_alnum(host)
+
+    score = 0
+    if _is_reseller_or_directory_host(host):
+        score -= 90
+    if _is_profile_host(host):
+        score -= 55
+    if host.endswith(('.gov', '.edu')):
+        score -= 60
+    if region == 'north_america' and _country_from_tld(root):
+        score -= 90
+
+    name_tokens = _official_name_tokens(supplier.get('name', '') or '')
+    host_name_matches = [tok for tok in name_tokens if tok in compact_host]
+    if name_tokens:
+        if name_tokens[0] in compact_host:
+            score += 45
+        for tok in name_tokens:
+            if tok in compact_host:
+                score += 32
+            elif tok in text:
+                score += 9
+        compact_name = ''.join(name_tokens)
+        if len(compact_name) >= 4 and compact_name in compact_host:
+            score += 35
+
+    context_matches = 0
+    for tok in _distinctive_context_tokens(supplier, query):
+        if tok in text or tok in path:
+            context_matches += 1
+            score += 18
+        elif tok in compact_host:
+            context_matches += 1
+            score += 10
+
+    if any(word in text for word in ('official', 'manufacturer', 'manufactured', 'company', 'contact us', 'about us')):
+        score += 10
+    if any(word in text for word in ('distributor', 'dealer', 'reseller', 'marketplace', 'authorized distributor')):
+        score -= 18
+    if any(word in text for word in ('overview', 'competitors', 'company profile', 'employees')):
+        score -= 18
+
+    product_path = re.search(r'/(product|products|shop|catalog|collections|item|part|p/)', path)
+    if product_path:
+        score -= 10 if host_name_matches else 35
+
+    if not host_name_matches and not context_matches:
+        score -= 25
+
+    return score
+
+
+def _build_official_website_queries(supplier, query=''):
+    name = re.sub(r'[()]+', ' ', supplier.get('name', '') or '').strip()
+    products = supplier.get('products', '') or ''
+    product_context = re.sub(r'\s+', ' ', f"{query or ''} {products}".strip())
+    path_context = ' '.join(_path_context_tokens(supplier.get('website', '') or ''))
+    primary_tokens = _official_name_tokens(name)
+
+    queries = [
+        f"{name} {product_context} manufacturer official website",
+        f"{name} official website",
+    ]
+    if path_context:
+        queries.append(f"{name} {path_context} manufacturer official website")
+    elif primary_tokens and len(primary_tokens[0]) <= 4 and product_context:
+        queries.append(f"{primary_tokens[0]} {product_context} manufacturer")
+
+    cleaned = []
+    seen = set()
+    for q in queries:
+        q = re.sub(r'\s+', ' ', q).strip()[:240]
+        key = q.lower()
+        if q and key not in seen:
+            cleaned.append(q)
+            seen.add(key)
+    return cleaned[:3]
+
+
+def _resolve_official_website_for_supplier(supplier, query='', region='north_america'):
+    if not _needs_official_website_resolution(supplier, region):
+        return supplier, False
+
+    best = None
+    seen_hosts = set()
+    for lookup_query in _build_official_website_queries(supplier, query):
+        try:
+            results, _, _ = brave.search(lookup_query, 5, region)
+        except Exception as e:
+            print(f"[search] Official website lookup failed for {supplier.get('name', '')}: {e}")
+            continue
+        for result in results:
+            host = _url_host(result.get('url', '') or '')
+            if not host or host in seen_hosts:
+                continue
+            seen_hosts.add(host)
+            score = _score_official_website_candidate(supplier, result, query, region)
+            if best is None or score > best[0]:
+                best = (score, _root_url(result.get('url', '') or ''), host)
+
+    if not best or best[0] < _OFFICIAL_WEBSITE_MIN_SCORE or not best[1]:
+        return supplier, False
+
+    old_host = _url_host(supplier.get('website', '') or '')
+    new_host = best[2]
+    if old_host == new_host:
+        supplier['website'] = best[1]
+        return supplier, False
+
+    supplier['website'] = best[1]
+    supplier['contactUrl'] = ''
+
+    email = (supplier.get('email') or '').strip()
+    if email:
+        domain = email.rsplit('@', 1)[-1].lower() if '@' in email else ''
+        if not domain or not (domain == new_host or new_host.endswith('.' + domain) or domain.endswith('.' + new_host)):
+            supplier['email'] = ''
+    return supplier, True
+
+
+def _resolve_official_websites(suppliers, query='', region='north_america'):
+    if not suppliers:
+        return suppliers, {"checked": 0, "changed": 0}
+
+    resolved = list(suppliers)
+    indexes = [
+        idx for idx, supplier in enumerate(resolved)
+        if _needs_official_website_resolution(supplier, region)
+    ]
+    if not indexes:
+        return suppliers, {"checked": 0, "changed": 0}
+
+    changed = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {
+            pool.submit(_resolve_official_website_for_supplier, dict(resolved[idx]), query, region): idx
+            for idx in indexes[:6]
+        }
+        for future in concurrent.futures.as_completed(futures):
+            idx = futures[future]
+            try:
+                supplier, did_change = future.result()
+            except Exception as e:
+                print(f"[search] Official website resolution failed: {e}")
+                continue
+            resolved[idx] = supplier
+            if did_change:
+                changed += 1
+
+    return resolved, {"checked": len(indexes[:6]), "changed": changed}
 
 
 def _normalize_supplier_location(supplier, region='north_america'):
@@ -807,6 +1105,8 @@ STRICT RULES:
                 s["products"] = _title_case_product(s["products"])
             if s.get("yearsInBusiness"):
                 s["yearsInBusiness"] = _normalize_years_in_business_value(s["yearsInBusiness"])
+            if s.get("email") and not scraper._is_valid_email(s["email"]):
+                s["email"] = ""
 
         suppliers = _rank_suppliers_for_query(suppliers, safe_query)
 
@@ -965,7 +1265,19 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
         enrichment_started = time.monotonic()
         blocked_sites = []
 
-        # Phase 1: Reputation enrichment — fills years, employees, revenue, certs gaps (~3-5s)
+        # Phase 1: Resolve official domains for missing/suspicious websites before
+        # reputation lookup and scraper enrichment trust those URLs.
+        official_started = time.monotonic()
+        suppliers, official_stats = _resolve_official_websites(suppliers, query, region)
+        _log_search_metric(
+            search_id,
+            "official_websites",
+            elapsed_s=_elapsed(official_started),
+            checked=official_stats["checked"],
+            changed=official_stats["changed"],
+        )
+
+        # Phase 2: Reputation enrichment — fills years, employees, revenue, certs gaps (~3-5s)
         reputation_started = time.monotonic()
         suppliers = _enrich_reputation(suppliers)
         _log_search_metric(search_id, "reputation", elapsed_s=_elapsed(reputation_started), suppliers=len(suppliers))
@@ -980,7 +1292,7 @@ def _background_enrich(search_id, suppliers, skip_emails=False):
             "ts": time.time(),
         })
 
-        # Phase 2: Match reasons + website scraping in parallel
+        # Phase 3: Match reasons + website scraping in parallel
         current_suppliers = list(suppliers)
 
         def _on_supplier_enriched(idx, enriched_supplier):

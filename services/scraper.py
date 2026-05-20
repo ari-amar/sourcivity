@@ -23,6 +23,10 @@ CONTACT_HREF_RE = re.compile(
 JUNK_EMAILS = {'example.com', 'sentry.io', 'yourcompany.com', 'domain.com', 'email.com',
                'wixpress.com', 'w3.org', 'schema.org', 'googleapis.com', 'google.com',
                'facebook.com', 'twitter.com', 'cloudflare.com'}
+NON_EMAIL_TLDS = {
+    'png', 'jpg', 'jpeg', 'svg', 'webp', 'gif', 'bmp', 'ico', 'pdf', 'css', 'js',
+    'json', 'xml', 'woff', 'woff2', 'ttf', 'eot', 'map',
+}
 
 _BROWSER_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
@@ -116,6 +120,31 @@ def _is_honeypot(tag_context):
     return bool(style and _HIDDEN_STYLE_RE.search(style.group(1)))
 
 
+def _normalize_email_candidate(email):
+    email = urllib.parse.unquote(email or '')
+    return email.strip().strip('.,;:)]}>"\'').lower()
+
+
+def _is_valid_email(email):
+    email = _normalize_email_candidate(email)
+    if not EMAIL_RE.fullmatch(email):
+        return False
+    lower = email.lower()
+    local, domain = lower.rsplit('@', 1)
+    if not local or not domain:
+        return False
+    if any(domain == junk or domain.endswith('.' + junk) for junk in JUNK_EMAILS):
+        return False
+    suffix = domain.rsplit('.', 1)[-1]
+    if suffix in NON_EMAIL_TLDS:
+        return False
+    if re.search(r'\b\d{2,}x\d{2,}', domain):
+        return False
+    if '/' in lower or '..' in domain:
+        return False
+    return True
+
+
 def _extract_emails(raw_html):
     """Extract real email addresses from HTML, defeating 14 obfuscation methods."""
     found = set()
@@ -123,16 +152,16 @@ def _extract_emails(raw_html):
     # 1. Cloudflare email protection
     for m in re.findall(r'(?:data-cfemail|email-protection)(?:=["\'"]|#)([a-fA-F0-9]{6,})', raw_html):
         decoded = _decode_cf_email(m)
-        if decoded and EMAIL_RE.fullmatch(decoded):
-            found.add(decoded.lower())
+        if decoded and _is_valid_email(decoded):
+            found.add(_normalize_email_candidate(decoded))
 
     html = _preprocess_html(raw_html)
 
     # 6. URL-encoded mailto
     for m in re.findall(r'mailto:([^"\'>\s]+)', html):
         decoded = urllib.parse.unquote(m).split('?')[0]
-        if EMAIL_RE.fullmatch(decoded):
-            found.add(decoded.lower())
+        if _is_valid_email(decoded):
+            found.add(_normalize_email_candidate(decoded))
 
     # 7. String.fromCharCode()
     for m in re.findall(r'String\.fromCharCode\(([0-9,\s]+)\)', html):
@@ -140,7 +169,8 @@ def _extract_emails(raw_html):
             chars = [int(c.strip()) for c in m.split(',') if c.strip()]
             decoded = ''.join(chr(c) for c in chars)
             for e in EMAIL_RE.findall(decoded):
-                found.add(e.lower())
+                if _is_valid_email(e):
+                    found.add(_normalize_email_candidate(e))
         except (ValueError, OverflowError):
             pass
 
@@ -149,7 +179,8 @@ def _extract_emails(raw_html):
         try:
             decoded = base64.b64decode(m).decode('utf-8', errors='ignore')
             for e in EMAIL_RE.findall(decoded):
-                found.add(e.lower())
+                if _is_valid_email(e):
+                    found.add(_normalize_email_candidate(e))
         except Exception:
             pass
 
@@ -157,8 +188,8 @@ def _extract_emails(raw_html):
     rot13_encoded = set()
     for m in re.findall(r'(?:rot13|data-rot13)\s*[\(=]\s*["\']([^"\']+)["\']', html, re.I):
         decoded = codecs.decode(m, 'rot_13')
-        if EMAIL_RE.fullmatch(decoded):
-            found.add(decoded.lower())
+        if _is_valid_email(decoded):
+            found.add(_normalize_email_candidate(decoded))
             rot13_encoded.add(m.lower())
 
     # 10. data-user / data-domain
@@ -167,39 +198,42 @@ def _extract_emails(raw_html):
         r'data-(?:domain|host)\s*=\s*["\']([^"\']+)["\']', html, re.I
     ):
         addr = f"{m.group(1)}@{m.group(2)}"
-        if EMAIL_RE.fullmatch(addr):
-            found.add(addr.lower())
+        if _is_valid_email(addr):
+            found.add(_normalize_email_candidate(addr))
     for m in re.finditer(
         r'data-(?:domain|host)\s*=\s*["\']([^"\']+)["\'][^>]*'
         r'data-(?:user|name|local)\s*=\s*["\']([^"\']+)["\']', html, re.I
     ):
         addr = f"{m.group(2)}@{m.group(1)}"
-        if EMAIL_RE.fullmatch(addr):
-            found.add(addr.lower())
+        if _is_valid_email(addr):
+            found.add(_normalize_email_candidate(addr))
 
     # 11. CSS direction:rtl
     for m in re.findall(
         r'(?:direction\s*:\s*rtl|unicode-bidi\s*:\s*bidi-override)[^>]*>([^<]{5,60})<', html, re.I
     ):
         reversed_text = m.strip()[::-1]
-        if EMAIL_RE.fullmatch(reversed_text):
-            found.add(reversed_text.lower())
+        if _is_valid_email(reversed_text):
+            found.add(_normalize_email_candidate(reversed_text))
 
     # 12. JS hex-escaped strings
     for m in re.findall(r'["\']((\\x[0-9a-fA-F]{2}){4,})["\']', html):
         try:
             decoded = bytes.fromhex(m[0].replace('\\x', '')).decode('utf-8', errors='ignore')
             for e in EMAIL_RE.findall(decoded):
-                found.add(e.lower())
+                if _is_valid_email(e):
+                    found.add(_normalize_email_candidate(e))
         except Exception:
             pass
 
     # 14. Standard mailto + plaintext
     for m in re.findall(r'mailto:([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})', html, re.I):
-        found.add(m.lower())
+        if _is_valid_email(m):
+            found.add(_normalize_email_candidate(m))
     for m in EMAIL_RE.findall(html):
         if m.lower() not in rot13_encoded:
-            found.add(m.lower())
+            if _is_valid_email(m):
+                found.add(_normalize_email_candidate(m))
 
     # 13. Honeypot filtering
     honeypot_emails = set()
@@ -211,9 +245,12 @@ def _extract_emails(raw_html):
                     honeypot_emails.add(e.lower())
     found -= honeypot_emails
 
-    return [e for e in found
-            if not any(e.endswith('@' + j) or e.endswith('.' + j) for j in JUNK_EMAILS)
-            and not e.endswith('.png') and not e.endswith('.jpg') and not e.endswith('.svg')]
+    cleaned = []
+    for email in found:
+        normalized = _normalize_email_candidate(email)
+        if _is_valid_email(normalized) and normalized not in cleaned:
+            cleaned.append(normalized)
+    return cleaned
 
 
 def _extract_contact_url(html, base_url):
@@ -265,6 +302,13 @@ def _find_cert_page_url(html, base_url):
 
 
 def _pick_best_email(emails):
+    emails = [
+        _normalize_email_candidate(e)
+        for e in emails
+        if _is_valid_email(e)
+    ]
+    if not emails:
+        return ''
     for prefix in ('sales@', 'info@', 'contact@', 'inquiry@', 'inquiries@', 'quotes@', 'rfq@'):
         for e in emails:
             if e.startswith(prefix):
@@ -719,7 +763,10 @@ def _enrich_single(supplier, skip_email=False, blocked_sites=None):
         return supplier
 
     existing_email = supplier.get('email', '').strip()
-    has_email = bool(EMAIL_RE.fullmatch(existing_email)) if existing_email else False
+    if existing_email and not _is_valid_email(existing_email):
+        supplier['email'] = ''
+        existing_email = ''
+    has_email = bool(_is_valid_email(existing_email)) if existing_email else False
     existing_contact = supplier.get('contactUrl', '').strip()
     has_contact = bool(existing_contact.startswith('http')) if existing_contact else False
 
@@ -744,7 +791,7 @@ def _enrich_single(supplier, skip_email=False, blocked_sites=None):
 
     def _has_valid_email():
         e = supplier.get('email', '').strip()
-        return bool(e and EMAIL_RE.fullmatch(e))
+        return bool(e and _is_valid_email(e))
 
     def _has_contact_url():
         contact = supplier.get('contactUrl', '').strip()

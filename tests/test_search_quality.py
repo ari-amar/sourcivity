@@ -114,6 +114,86 @@ class SearchQualityTests(unittest.TestCase):
 
         self.assertEqual([s["name"] for s in ranked], ["Omega Engineering", "Brooks Instrument"])
 
+    def test_official_website_resolution_only_checks_suspicious_sites(self):
+        self.assertFalse(search._needs_official_website_resolution(
+            {"name": "Brooks Instrument", "website": "https://www.brooksinstrument.com"}
+        ))
+        self.assertFalse(search._needs_official_website_resolution(
+            {"name": "Ultra Precision Machining", "website": "https://ultramachining.com"}
+        ))
+        self.assertTrue(search._needs_official_website_resolution(
+            {"name": "SSP (Stainless Steel Products)", "website": "https://shopbvv.com/products/ssp-duolok"}
+        ))
+        self.assertTrue(search._needs_official_website_resolution(
+            {"name": "Air-Way Manufacturing Company", "website": ""}
+        ))
+
+    def test_official_website_scoring_prefers_source_domain_over_reseller(self):
+        supplier = {
+            "name": "SSP (Stainless Steel Products)",
+            "products": "Duolok stainless steel tube fittings",
+            "website": "https://shopbvv.com/products/ssp-union-elbow-3-8-duolok",
+        }
+        official = search._score_official_website_candidate(
+            supplier,
+            {
+                "url": "https://www.myssp.com/products/fittings/tube-fittings/instrumentation/duolok",
+                "title": "Stainless Steel Tube Fittings | Duolok | SSP",
+                "description": "SSP Corporation manufactures instrumentation valves and fittings.",
+            },
+            "stainless steel compression fittings",
+        )
+        lookalike = search._score_official_website_candidate(
+            supplier,
+            {
+                "url": "https://sspsteel.com/",
+                "title": "Hygienic and Industrial Stainless Steel Products",
+                "description": "Stainless steel products supplier.",
+            },
+            "stainless steel compression fittings",
+        )
+        reseller = search._score_official_website_candidate(
+            supplier,
+            {
+                "url": "https://shopbvv.com/products/ssp-union-elbow-3-8-duolok",
+                "title": "SSP Union Elbow - BVV",
+                "description": "Shop SSP fittings online.",
+            },
+            "stainless steel compression fittings",
+        )
+
+        self.assertGreaterEqual(official, search._OFFICIAL_WEBSITE_MIN_SCORE)
+        self.assertGreater(official, lookalike)
+        self.assertGreater(official, reseller)
+
+    def test_official_website_scoring_rejects_non_us_tld_for_us_search(self):
+        supplier = {
+            "name": "Pacific Plastics Injection Molding",
+            "products": "Plastic Injection Molding",
+            "website": "",
+        }
+        score = search._score_official_website_candidate(
+            supplier,
+            {
+                "url": "https://pacificplastics.com.au/",
+                "title": "Pacific Plastics",
+                "description": "Plastic injection molding company.",
+            },
+            "medical injection molding",
+            "north_america",
+        )
+
+        self.assertLess(score, search._OFFICIAL_WEBSITE_MIN_SCORE)
+
+    def test_invalid_email_rejects_asset_domains(self):
+        self.assertFalse(scraper._is_valid_email("service-prototyping@400x400-150x150.webp"))
+        self.assertFalse(scraper._extract_emails("email service-prototyping@400x400-150x150.webp"))
+        self.assertTrue(scraper._is_valid_email("sales@example-industrial.com"))
+        self.assertEqual(
+            scraper._extract_emails('mailto:%20customer.service@myssp.com'),
+            ["customer.service@myssp.com"],
+        )
+
     def test_location_filter_keeps_matching_state_and_pending(self):
         suppliers = [
             {"name": "CA Supplier", "state": "CA"},
